@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: infrastructure/metallb
+    path: infrastructure/metallb/config
   destination:
     server: https://kubernetes.default.svc
     namespace: metallb-system

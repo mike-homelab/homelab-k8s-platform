@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: infrastructure/metallb/base/crds
+    path: infrastructure/metallb/base
   destination:
     server: https://kubernetes.default.svc
     namespace: default   # ignored for CRDs
