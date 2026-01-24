@@ -25,6 +25,13 @@ spec:
       containers:
       - name: speaker
         image: quay.io/metallb/speaker:v0.14.5
+        args:
+          - --node-name=$(METALLB_NODE_NAME)
+        env:
+          - name: METALLB_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
         resources:
           requests:
             cpu: 20m
