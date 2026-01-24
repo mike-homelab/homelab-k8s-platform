@@ -1,19 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: infrastructure
+  name: metallb
   namespace: argocd
 spec:
   project: platform
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: argocd-apps/infrastructure
+    path: infrastructure/metallb
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: metallb-system
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-
+    syncOptions:
+      - CreateNamespace=true

@@ -1,19 +1,18 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: infrastructure
+  name: platform-crds
   namespace: argocd
 spec:
   project: platform
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: argocd-apps/infrastructure
+    path: infrastructure/metallb/base/crds
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: default   # ignored for CRDs
   syncPolicy:
     automated:
-      prune: true
+      prune: false
       selfHeal: true
-
