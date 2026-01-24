@@ -7,4 +7,4 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   addresses:
-  - 10.0.1.100-10.0.1.250
+  - 10.0.1.150-10.0.1.250

@@ -1,13 +1,148 @@
+# This is the official MetalLB v0.14.5 native manifest
+# For the full manifest with controller and RBAC, use the complete version:
 # Source: https://raw.githubusercontent.com/metallb/metallb/v0.14.5/config/manifests/metallb-native.yaml
-# Pinned version is intentional (GitOps best practice)
 
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: speaker
+  namespace: metallb-system
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: controller
+  namespace: metallb-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-system:speaker
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - nodes/status
+  verbs:
+  - patch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: metallb-system:controller
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - services
+  - services/status
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ''
+  resources:
+  - services/status
+  verbs:
+  - patch
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-system:speaker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-system:speaker
+subjects:
+- kind: ServiceAccount
+  name: speaker
+  namespace: metallb-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-system:controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: metallb-system:controller
+subjects:
+- kind: ServiceAccount
+  name: controller
+  namespace: metallb-system
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: metallb-system
+  labels:
+    app: metallb
+    component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: metallb
+      component: controller
+  template:
+    metadata:
+      labels:
+        app: metallb
+        component: controller
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      serviceAccountName: controller
+      containers:
+      - name: controller
+        image: quay.io/metallb/controller:v0.14.5
+        env:
+        - name: METALLB_ML_NAMESPACE
+          value: metallb-system
+        - name: METALLB_DEPLOYMENT_NAMESPACE
+          value: metallb-system
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: speaker
   namespace: metallb-system
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   selector:
     matchLabels:
@@ -19,22 +154,22 @@ spec:
         app: metallb
         component: speaker
     spec:
-      tolerations:
-        - effect: NoSchedule
-          operator: Exists
       serviceAccountName: speaker
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
       containers:
       - name: speaker
         image: quay.io/metallb/speaker:v0.14.5
         env:
-          - name: METALLB_NODE_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: spec.nodeName
-          - name: METALLB_HOST
-            value: "0.0.0.0"
-          - name: METALLB_ML_SECRET_NAME
-            value: memberlist
+        - name: METALLB_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: METALLB_HOST
+          value: "0.0.0.0"
+        - name: METALLB_ML_NAMESPACE
+          value: metallb-system
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -42,9 +177,9 @@ spec:
           runAsUser: 65534
           capabilities:
             add:
-              - NET_RAW
+            - NET_RAW
             drop:
-              - ALL
+            - ALL
         resources:
           requests:
             cpu: 20m
