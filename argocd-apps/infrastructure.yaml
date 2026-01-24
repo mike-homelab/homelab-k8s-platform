@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: argocd-apps/infrastructure
+    path: argocd-apps
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
