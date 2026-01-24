@@ -4,6 +4,7 @@ metadata:
   name: argocd
   namespace: argocd
 spec:
+  project: default
   source:
     repoURL: git@github.com:mike-homelab/homelab-k8s-platform.git
     targetRevision: main
