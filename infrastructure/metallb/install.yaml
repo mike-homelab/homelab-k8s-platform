@@ -19,6 +19,9 @@ spec:
         app: metallb
         component: speaker
     spec:
+      tolerations:
+        - effect: NoSchedule
+          operator: Exists
       containers:
       - name: speaker
         image: quay.io/metallb/speaker:v0.14.5
