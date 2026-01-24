@@ -22,16 +22,29 @@ spec:
       tolerations:
         - effect: NoSchedule
           operator: Exists
+      serviceAccountName: speaker
       containers:
       - name: speaker
         image: quay.io/metallb/speaker:v0.14.5
-        args:
-          - --node-name=$(METALLB_NODE_NAME)
         env:
           - name: METALLB_NODE_NAME
             valueFrom:
               fieldRef:
                 fieldPath: spec.nodeName
+          - name: METALLB_HOST
+            value: "0.0.0.0"
+          - name: METALLB_ML_SECRET_NAME
+            value: memberlist
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+          capabilities:
+            add:
+              - NET_RAW
+            drop:
+              - ALL
         resources:
           requests:
             cpu: 20m
