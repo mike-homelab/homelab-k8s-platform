@@ -7,15 +7,17 @@ spec:
   project: platform
 
   source:
-    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    repoURL: git@github.com:mike-homelab/homelab-k8s-platform.git
     targetRevision: main
-    path: infrastructure/metallb
+    path: infrastructure/crd
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd   # namespace irrelevant for CRDs
+    namespace: metallb-system
 
   syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
     automated:
       prune: true
       selfHeal: true
