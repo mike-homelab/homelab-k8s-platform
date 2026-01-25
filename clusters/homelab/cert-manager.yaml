@@ -24,19 +24,21 @@ spec:
 
         prometheus:
           enabled: false
-        cert-manager:
-          controller:
-            extraVolumes:
-              - name: vault-ca
-                configMap:
-                  name: vault-ca
-            extraVolumeMounts:
-              - name: vault-ca
-                mountPath: /etc/ssl/certs/vault-ca.crt
-                subPath: vault-ca.crt 
-            extraEnv:
-              - name: SSL_CERT_FILE
-                value: /etc/ssl/certs/vault-ca.crt
+
+        controller:
+          volumes:
+            - name: vault-ca
+              configMap:
+                name: vault-ca
+
+          volumeMounts:
+            - name: vault-ca
+              mountPath: /etc/ssl/certs/vault-ca.crt
+              subPath: vault-ca.crt
+
+          extraEnv:
+            - name: SSL_CERT_FILE
+              value: /etc/ssl/certs/vault-ca.crt
 
   destination:
     server: https://kubernetes.default.svc
