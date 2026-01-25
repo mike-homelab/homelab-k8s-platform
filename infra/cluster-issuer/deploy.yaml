@@ -5,7 +5,7 @@ metadata:
   name: vault-cluster-issuer
 spec:
   vault:
-    server: "http://vault.michaelhomelab.work:8200"
+    server: "https://vault.michaelhomelab.work:8200"
     path: pki_int/issue/michaelhomelab-cluster
     auth:
       kubernetes:
