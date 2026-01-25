@@ -1,0 +1,3 @@
+resources:
+  - base/ipaddresspool.yaml
+  - base/l2advertisement.yaml
