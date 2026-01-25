@@ -32,8 +32,8 @@ spec:
                   name: vault-ca
             extraVolumeMounts:
               - name: vault-ca
-              mountPath: /etc/ssl/certs/vault-ca.crt
-              subPath: vault-ca.crt 
+                mountPath: /etc/ssl/certs/vault-ca.crt
+                subPath: vault-ca.crt 
             extraEnv:
               - name: SSL_CERT_FILE
                 value: /etc/ssl/certs/vault-ca.crt
