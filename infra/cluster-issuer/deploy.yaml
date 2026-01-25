@@ -5,16 +5,14 @@ metadata:
   name: vault-cluster-issuer
 spec:
   vault:
-    server: "https://vault.michaelhomelab.work:8200"
+    server: https://vault.michaelhomelab.work:8200
     path: pki_int/issue/michaelhomelab-cluster
     auth:
-      kubernetes:
-        mountPath: /v1/auth/kubernetes
-        role: cert-manager
-        serviceAccountRef:
-          name: cert-manager
-        audiences:
-          - https://kubernetes.default.svc.cluster.local
+      approle:
+        roleId: "d5f54bf0-0aa2-00e3-329c-02124a70ad77"
+        secretRef:
+          name: vault-approle-secret
+          key: secretId
 
 
 
