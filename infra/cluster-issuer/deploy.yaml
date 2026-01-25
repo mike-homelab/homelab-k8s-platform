@@ -1,17 +1,32 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: cert-manager-issuers
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+#     targetRevision: main
+#     path: infra/cluster-issuer
+#   destination:
+#     server: https://kubernetes.default.svc
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
 metadata:
-  name: cert-manager-issuers
-  namespace: argocd
+  name: vault-cluster-issuer
 spec:
-  project: default
-  source:
-    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
-    targetRevision: main
-    path: infra/cluster-issuer
-  destination:
-    server: https://kubernetes.default.svc
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+  vault:
+    server: https://vault.example.com:8200
+    path: pki_int/issue/michaelhomelab-cluster
+    auth:
+      kubernetes:
+        mountPath: /v1/auth/kubernetes
+        role: michaelhomelab-cluster
+        serviceAccountRef:
+          name: cert-manager
