@@ -26,12 +26,12 @@ spec:
           enabled: false
 
         controller:
-          volumes:
+          extraVolumes:
             - name: vault-ca
               configMap:
                 name: vault-ca
 
-          volumeMounts:
+          extraVolumeMounts:
             - name: vault-ca
               mountPath: /etc/ssl/certs/vault-ca.crt
               subPath: vault-ca.crt
