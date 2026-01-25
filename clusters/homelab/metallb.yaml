@@ -5,6 +5,7 @@ metadata:
   name: metallb
   namespace: argocd
 spec:
+  project: default
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
