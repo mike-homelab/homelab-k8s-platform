@@ -9,10 +9,11 @@ spec:
     path: pki_int/issue/michaelhomelab-cluster
     auth:
       kubernetes:
-        mountPath: auth/kubernetes
+        mountPath: /v1/auth/kubernetes
         role: cert-manager
         serviceAccountRef:
           name: cert-manager
+
 
 
 
