@@ -9,10 +9,12 @@ spec:
     path: pki_int/issue/michaelhomelab-cluster
     auth:
       appRole:
+        path: approle                # <--- REQUIRED
         roleId: "d5f54bf0-0aa2-00e3-329c-02124a70ad77"
         secretRef:
           name: vault-approle-secret
           key: secretId
+
 
 
 
