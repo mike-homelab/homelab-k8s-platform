@@ -1,19 +1,55 @@
-# metallb.yaml
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: cert-manager
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+#     targetRevision: main
+#     path: infra/cert-manager
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: cert-manager
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: cert-manager
   namespace: argocd
+  annotations:
+    # Ensure cert-manager installs before issuers
+    argocd.argoproj.io/sync-wave: "10"
 spec:
   project: default
+
   source:
-    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
-    targetRevision: main
-    path: infra/cert-manager
+    repoURL: https://charts.jetstack.io
+    chart: cert-manager
+    targetRevision: v1.14.4   # pin version (recommended)
+    helm:
+      releaseName: cert-manager
+      values: |
+        installCRDs: true
+
+        global:
+          leaderElection:
+            namespace: cert-manager
+
+        prometheus:
+          enabled: false
+
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
