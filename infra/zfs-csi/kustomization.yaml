@@ -1,0 +1,6 @@
+resources:
+  - namespace.yaml
+  - service_account.yaml
+  - csidriver.yaml
+  - driver-deployment.yaml
+  - storageclasses.yaml

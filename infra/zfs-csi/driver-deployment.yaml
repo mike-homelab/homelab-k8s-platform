@@ -1,0 +1,122 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zfs-csi-controller
+  namespace: zfs-csi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zfs-csi-controller
+  template:
+    metadata:
+      labels:
+        app: zfs-csi-controller
+    spec:
+      serviceAccountName: zfs-csi-sa
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+          args: ["--csi-address=$(ADDRESS)"]
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: csi-attacher
+          image: registry.k8s.io/sig-storage/csi-attacher:v4.2.0
+          args: ["--csi-address=$(ADDRESS)"]
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.9.0
+          args: ["--csi-address=$(ADDRESS)"]
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+        - name: zfs-plugin
+          image: openebs/zfs-driver:2.6.0
+          args: ["--endpoint=$(CSI_ENDPOINT)"]
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: zfs-csi-node
+  namespace: zfs-csi
+spec:
+  selector:
+    matchLabels:
+      app: zfs-csi-node
+  template:
+    metadata:
+      labels:
+        app: zfs-csi-node
+    spec:
+      serviceAccountName: zfs-csi-sa
+      containers:
+        - name: zfs-plugin
+          image: openebs/zfs-driver:2.6.0
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /var/lib/kubelet
+              name: kubelet-dir
+              mountPropagation: Bidirectional
+            - mountPath: /dev
+              name: device-dir
+            - mountPath: /run
+              name: run-dir
+            - mountPath: /etc/udev
+              name: udev-dir
+            - mountPath: /csi
+              name: socket-dir
+        - name: csi-node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.0
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /registration
+              name: registration-dir
+      volumes:
+        - name: kubelet-dir
+          hostPath:
+            path: /var/lib/kubelet
+            type: Directory
+        - name: device-dir
+          hostPath:
+            path: /dev
+        - name: run-dir
+          hostPath:
+            path: /run
+        - name: udev-dir
+          hostPath:
+            path: /etc/udev
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
