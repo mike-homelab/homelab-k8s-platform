@@ -13,9 +13,11 @@ spec:
       parameters:
         - name: operator.defaultRuntime
           value: containerd
-        - name: node-feature-discovery.worker.image.repository
+
+        # --- Node Feature Discovery image override (CORRECT KEY) ---
+        - name: nfd.worker.image.repository
           value: docker.io/kubernetes/node-feature-discovery
-        - name: node-feature-discovery.worker.image.tag
+        - name: nfd.worker.image.tag
           value: v0.18.2
   destination:
     server: https://kubernetes.default.svc
