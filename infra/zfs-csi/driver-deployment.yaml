@@ -21,7 +21,7 @@ spec:
             privileged: true
           args:
             - "--endpoint=unix:///csi/csi.sock"
-            - "--nodeid=$(KUBE_NODE_NAME)"
+            - "--nodename=$(KUBE_NODE_NAME)"
           env:
             - name: KUBE_NODE_NAME
               valueFrom:
