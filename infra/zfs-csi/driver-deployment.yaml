@@ -23,6 +23,7 @@ spec:
             - "--endpoint=unix:///csi/csi.sock"
             - "--nodename=$(KUBE_NODE_NAME)"
             - "--plugin=node"
+            - "--name=zfs.csi.openebs.io"
           env:
             - name: KUBE_NODE_NAME
               valueFrom:
