@@ -1,60 +1,49 @@
----
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Namespace
 metadata:
-  name: zfs-csi-controller
+  name: zfs-csi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: zfs-csi-sa
   namespace: zfs-csi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: zfs-csi-role
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes", "nodes"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "csinodes", "csidrivers", "volumeattachments"]
+    verbs: ["get", "list", "watch", "create", "delete", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: zfs-csi-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: zfs-csi-role
+subjects:
+  - kind: ServiceAccount
+    name: zfs-csi-sa
+    namespace: zfs-csi
+---
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: zfs.csi.openebs.io
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: zfs-csi-controller
-  template:
-    metadata:
-      labels:
-        app: zfs-csi-controller
-    spec:
-      serviceAccountName: zfs-csi-sa
-      containers:
-        - name: csi-provisioner
-          image: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
-          args: ["--csi-address=$(ADDRESS)"]
-          env:
-            - name: ADDRESS
-              value: /csi/csi.sock
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-        - name: csi-attacher
-          image: registry.k8s.io/sig-storage/csi-attacher:v4.2.0
-          args: ["--csi-address=$(ADDRESS)"]
-          env:
-            - name: ADDRESS
-              value: /csi/csi.sock
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-        - name: csi-resizer
-          image: registry.k8s.io/sig-storage/csi-resizer:v1.9.0
-          args: ["--csi-address=$(ADDRESS)"]
-          env:
-            - name: ADDRESS
-              value: /csi/csi.sock
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-        - name: zfs-plugin
-          image: openebs/zfs-driver:2.6.0
-          args: ["--endpoint=$(CSI_ENDPOINT)"]
-          env:
-            - name: CSI_ENDPOINT
-              value: unix:///csi/csi.sock
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-      volumes:
-        - name: socket-dir
-          emptyDir: {}
+  attachRequired: false
+  podInfoOnMount: true
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -120,3 +109,33 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins_registry
             type: Directory
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: zfs-nvme
+provisioner: zfs.csi.openebs.io
+parameters:
+  poolname: nvme-pool
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: kubernetes.io/hostname
+        values: ["kubeworker01","kubeworker02"]
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: zfs-ssd
+provisioner: zfs.csi.openebs.io
+parameters:
+  poolname: ssd-pool
+allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: kubernetes.io/hostname
+        values: ["kubeworker01","kubeworker02","kubeworker03"]
