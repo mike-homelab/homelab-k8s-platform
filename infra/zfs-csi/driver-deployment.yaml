@@ -1,4 +1,3 @@
----
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -19,10 +18,13 @@ spec:
           image: openebs/zfs-driver:2.6.0
           securityContext:
             privileged: true
+          args:
+            - "--endpoint=unix:///csi/csi.sock"
+            - "--nodeid=$(KUBE_NODE_NAME)"
           env:
             - name: KUBE_NODE_NAME
-              valueFrom: 
-                fieldRef: 
+              valueFrom:
+                fieldRef:
                   fieldPath: spec.nodeName
           volumeMounts:
             - mountPath: /var/lib/kubelet
@@ -41,31 +43,15 @@ spec:
           args:
             - "--csi-address=/csi/csi.sock"
             - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
             - mountPath: /registration
               name: registration-dir
       volumes:
-        - name: kubelet-dir
-          hostPath:
-            path: /var/lib/kubelet
-            type: Directory
-        - name: device-dir
-          hostPath:
-            path: /dev
-        - name: run-dir
-          hostPath:
-            path: /run
-        - name: udev-dir
-          hostPath:
-            path: /etc/udev
-        - name: socket-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
-            type: DirectoryOrCreate
-        - name: registration-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins_registry
-            type: Directory
-
+        - name: kube
