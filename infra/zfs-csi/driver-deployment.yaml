@@ -1,4 +1,3 @@
----
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -41,21 +40,6 @@ spec:
               name: udev-dir
             - mountPath: /csi
               name: socket-dir
-        - name: csi-node-driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.0
-          args:
-            - "--csi-address=/csi/csi.sock"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - mountPath: /csi
-              name: socket-dir
-            - mountPath: /registration
-              name: registration-dir
       volumes:
         - name: kubelet-dir
           hostPath:
@@ -74,8 +58,3 @@ spec:
           hostPath:
             path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
             type: DirectoryOrCreate
-        - name: registration-dir
-          hostPath:
-            path: /var/lib/kubelet/plugins_registry
-            type: Directory
-
