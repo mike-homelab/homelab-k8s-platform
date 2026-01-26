@@ -19,6 +19,11 @@ spec:
           image: openebs/zfs-driver:2.6.0
           securityContext:
             privileged: true
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom: 
+                fieldRef: 
+                  fieldPath: spec.nodeName
           volumeMounts:
             - mountPath: /var/lib/kubelet
               name: kubelet-dir
