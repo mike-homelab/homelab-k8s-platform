@@ -11,20 +11,39 @@ spec:
     targetRevision: 25.10.1
     helm:
       parameters:
+        # Runtime
         - name: operator.defaultRuntime
           value: containerd
 
-        # --- Node Feature Discovery image override (CORRECT KEY) ---
+        # --------------------------------------------------
+        # Disable driver installation (drivers preinstalled)
+        # --------------------------------------------------
+        - name: driver.enabled
+          value: "false"
+
+        # --------------------------------------------------
+        # Node Feature Discovery image override
+        # (fixes registry.k8s.io pull issues)
+        # --------------------------------------------------
         - name: nfd.worker.image.repository
           value: docker.io/kubernetes/node-feature-discovery
         - name: nfd.worker.image.tag
           value: v0.18.2
+
+        # --------------------------------------------------
+        # Ensure required components stay enabled
+        # --------------------------------------------------
+        - name: toolkit.enabled
+          value: "true"
+        - name: devicePlugin.enabled
+          value: "true"
+        - name: dcgmExporter.enabled
+          value: "true"
+
   destination:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
+
   syncPolicy:
     automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
+      prune: tru
