@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/openebs/zfs-localpv
     targetRevision: v2.6.0
-    path: deploy/zfs-crds
+    path: clusters/homelab/infra/zfs-crds
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
