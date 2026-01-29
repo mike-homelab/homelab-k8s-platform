@@ -22,6 +22,9 @@ spec:
   vault:
     server: https://vault.michaelhomelab.work:8200
     path: pki_int/sign/michaelhomelab-cluster
+    caBundleSecretRef:
+      name: vault-tls-ca
+      key: ca.crt
     auth:
       tokenSecretRef:
         name: vault-token
