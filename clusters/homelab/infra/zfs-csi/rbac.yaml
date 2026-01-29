@@ -10,15 +10,24 @@ kind: ClusterRole
 metadata:
   name: zfs-csi-role
 rules:
-  - apiGroups: [""]
-    resources: ["persistentvolumes", "nodes"]
-    verbs: ["get", "list", "watch", "create", "delete"]
-  - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "update"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses", "csinodes", "csidrivers", "volumeattachments"]
-    verbs: ["get", "list", "watch", "create", "delete", "update"]
+# Core k8s
+- apiGroups: [""]
+  resources: ["nodes","pods","persistentvolumes","persistentvolumeclaims","events"]
+  verbs: ["get","list","watch","create","delete","update","patch"]
+
+# CSI + Storage
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses","csinodes","csidrivers","volumeattachments"]
+  verbs: ["get","list","watch","create","delete","update","patch"]
+
+# OpenEBS ZFS CRDs  (THIS IS WHAT YOU ARE MISSING)
+- apiGroups: ["zfs.openebs.io"]
+  resources:
+    - zfsnodes
+    - zfsvolumes
+    - zfssnapshots
+  verbs: ["get","list","watch","create","delete","update","patch"]
+
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
