@@ -102,6 +102,8 @@ spec:
     spec:
       serviceAccountName: zfs-csi-sa
       containers:
+
+      # ZFS CSI Node plugin
       - name: zfs-plugin
         image: openebs/zfs-driver:2.6.0
         securityContext:
@@ -134,6 +136,7 @@ spec:
             cpu: 500m
             memory: 512Mi
 
+      # CSI Registrar (THIS WAS YOUR CRASH)
       - name: csi-node-driver-registrar
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
         args:
@@ -144,7 +147,15 @@ spec:
           mountPath: /var/lib/kubelet
         - name: registration-dir
           mountPath: /registration
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
 
+      # CSI Liveness probe
       - name: liveness-probe
         image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
         args:
@@ -152,21 +163,31 @@ spec:
         volumeMounts:
         - name: kubelet-dir
           mountPath: /var/lib/kubelet
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
 
       volumes:
       - name: kubelet-dir
         hostPath:
           path: /var/lib/kubelet
+
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry
+
       - name: device-dir
         hostPath:
           path: /dev
+
       - name: run-dir
         hostPath:
           path: /run
+
       - name: udev-dir
         hostPath:
           path: /etc/udev
-
