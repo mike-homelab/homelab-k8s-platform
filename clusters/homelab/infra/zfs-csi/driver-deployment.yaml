@@ -141,12 +141,12 @@ spec:
       - name: csi-node-driver-registrar
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
         args:
-          - "--csi-address=/csi/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
           - "--registration-path=/registration/zfs.csi.openebs.io-reg.sock"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins_registry/zfs.csi.openebs.io-reg.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
+          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
         - name: registration-dir
           mountPath: /registration
         - name: kubelet-dir
