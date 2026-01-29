@@ -111,7 +111,7 @@ spec:
         args:
           - "--plugin=node"
           - "--name=zfs.csi.openebs.io"
-          - "--endpoint=unix:///csi/csi.sock"
+          - "--endpoint=unix:///var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
           - "--nodename=$(KUBE_NODE_NAME)"
         env:
         - name: KUBE_NODE_NAME
@@ -120,9 +120,7 @@ spec:
               fieldPath: spec.nodeName
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
-        - name: kubelet-dir
-          mountPath: /var/lib/kubelet
+          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
           mountPropagation: Bidirectional
         - name: device-dir
           mountPath: /dev
@@ -141,16 +139,12 @@ spec:
       - name: csi-node-driver-registrar
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
         args:
-          - "--csi-address=/csi/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
           - "--registration-path=/registration/zfs.csi.openebs.io-reg.sock"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
-        - name: plugin-dir
-          mountPath: /csi
         - name: registration-dir
           mountPath: /registration
-        - name: kubelet-dir
-          mountPath: /var/lib/kubelet
         resources:
           requests:
             cpu: 50m
@@ -162,10 +156,10 @@ spec:
       - name: liveness-probe
         image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
         args:
-          - "--csi-address=/csi/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
+          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
 
       volumes:
       - name: plugin-dir
@@ -175,12 +169,8 @@ spec:
 
       - name: registration-dir
         hostPath:
-          path: /var/lib/kubelet/plugins_registry/zfs.csi.openebs.io
+          path: /var/lib/kubelet/plugins_registry
           type: DirectoryOrCreate
-
-      - name: kubelet-dir
-        hostPath:
-          path: /var/lib/kubelet
 
       - name: device-dir
         hostPath:
