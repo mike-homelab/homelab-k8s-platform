@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "13"
+spec:
+  project: monitoring
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: 0.92.0
+    helm:
+      values: |
+        mode: deployment
+        config:
+          exporters:
+            otlp/data-prepper:
+              endpoint: data-prepper.monitoring.svc.cluster.local:21890
+              tls:
+                insecure: true
+          service:
+            pipelines:
+              metrics:
+                exporters: [otlp/data-prepper]
+              logs:
+                exporters: [otlp/data-prepper]
+              traces:
+                exporters: [otlp/data-prepper]
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring

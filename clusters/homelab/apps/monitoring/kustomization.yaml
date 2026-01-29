@@ -1,0 +1,5 @@
+resources:
+  - opensearch-cert.yaml
+  - dataprepper-cert.yaml
+  - dataprepper-config.yaml
+  - namespace.yaml

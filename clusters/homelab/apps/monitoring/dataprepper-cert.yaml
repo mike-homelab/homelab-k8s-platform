@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dataprepper-cert
+  namespace: monitoring
+spec:
+  secretName: dataprepper-tls
+  issuerRef:
+    name: vault-cluster-issuer
+    kind: ClusterIssuer
+  commonName: data-prepper.monitoring.svc.cluster.local
+  dnsNames:
+  - data-prepper
+  - data-prepper.monitoring
+  - data-prepper.monitoring.svc
+  - data-prepper.monitoring.svc.cluster.local

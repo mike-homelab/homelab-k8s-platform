@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dataprepper
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "14"
+spec:
+  project: monitoring
+  source:
+    repoURL: https://opensearch-project.github.io/helm-charts
+    chart: data-prepper
+    targetRevision: 2.6.0
+    helm:
+      values: |
+        replicas: 1
+
+        persistence:
+          enabled: true
+          size: 10Gi
+          storageClass: zfs-ssd
+
+        extraVolumes:
+        - name: tls
+          secret:
+            secretName: dataprepper-tls
+        - name: pipelines
+          configMap:
+            name: dataprepper-pipelines
+
+        extraVolumeMounts:
+        - name: tls
+          mountPath: /tls
+          readOnly: true
+        - name: pipelines
+          mountPath: /usr/share/data-prepper/pipelines
+          readOnly: true
+
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+
+        service:
+          ports:
+          - name: otel
+            port: 21890
+            targetPort: 21890
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

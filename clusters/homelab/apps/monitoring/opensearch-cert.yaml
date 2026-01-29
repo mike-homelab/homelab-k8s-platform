@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: opensearch-cert
+  namespace: monitoring
+spec:
+  secretName: opensearch-tls
+  issuerRef:
+    name: vault-cluster-issuer
+    kind: ClusterIssuer
+  commonName: opensearch.monitoring.svc.cluster.local
+  dnsNames:
+  - opensearch
+  - opensearch.monitoring
+  - opensearch.monitoring.svc
+  - opensearch.monitoring.svc.cluster.local

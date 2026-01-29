@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "11"
+spec:
+  description: Application workloads (all product and service deployments)
+
+  # Which Git repos apps are allowed to come from
+  sourceRepos:
+  - https://github.com/mike-homelab/homelab-k8s-platform
+
+  # Apps can deploy to ANY namespace, but only in THIS cluster
+  destinations:
+  - namespace: '*'
+    server: https://kubernetes.default.svc
+
+  # Apps are NOT allowed to create cluster-level things
+  clusterResourceBlacklist:
+  - group: '*'
+    kind: '*'
+
+  # Apps can create any namespaced resource
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

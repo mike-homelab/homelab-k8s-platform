@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dataprepper-pipelines
+  namespace: monitoring
+data:
+  pipelines.yaml: |
+    otel-metrics:
+      source:
+        otel_metrics_source:
+          ssl: true
+          ssl_certificate_file: /tls/tls.crt
+          ssl_key_file: /tls/tls.key
+      sink:
+        - opensearch:
+            hosts: [ "https://opensearch.monitoring.svc:9200" ]
+            username: "admin"
+            password: "admin"
+            index: "metrics-otel-%{yyyy.MM.dd}"
+            insecure: false
+            cert: "/tls/ca.crt"
+
+    otel-traces:
+      source:
+        otel_trace_source:
+          ssl: true
+          ssl_certificate_file: /tls/tls.crt
+          ssl_key_file: /tls/tls.key
+      sink:
+        - opensearch:
+            hosts: [ "https://opensearch.monitoring.svc:9200" ]
+            username: "admin"
+            password: "admin"
+            index: "traces-otel-%{yyyy.MM.dd}"
+            insecure: false
+            cert: "/tls/ca.crt"
