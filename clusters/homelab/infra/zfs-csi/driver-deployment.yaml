@@ -141,7 +141,7 @@ spec:
       - name: csi-node-driver-registrar
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/csi/csi.sock"
           - "--registration-path=/registration/zfs.csi.openebs.io-reg.sock"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins_registry/zfs.csi.openebs.io-reg.sock"
         volumeMounts:
@@ -166,13 +166,6 @@ spec:
         volumeMounts:
         - name: plugin-dir
           mountPath: /csi
-        resources:
-          requests:
-            cpu: 10m
-            memory: 32Mi
-          limits:
-            cpu: 100m
-            memory: 64Mi
 
       volumes:
       - name: plugin-dir
