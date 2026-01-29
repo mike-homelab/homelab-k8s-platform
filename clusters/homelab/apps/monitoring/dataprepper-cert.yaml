@@ -6,7 +6,7 @@ metadata:
 spec:
   secretName: dataprepper-tls
   issuerRef:
-    name: vault-cluster-issuer
+    name: vault-issuer
     kind: ClusterIssuer
   commonName: data-prepper.monitoring.svc.cluster.local
   dnsNames:

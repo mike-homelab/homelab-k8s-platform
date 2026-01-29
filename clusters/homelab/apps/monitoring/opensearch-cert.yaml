@@ -6,7 +6,7 @@ metadata:
 spec:
   secretName: opensearch-tls
   issuerRef:
-    name: vault-cluster-issuer
+    name: vault-issuer
     kind: ClusterIssuer
   commonName: opensearch.monitoring.svc.cluster.local
   dnsNames:
