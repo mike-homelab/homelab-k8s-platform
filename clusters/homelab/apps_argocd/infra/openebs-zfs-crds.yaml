@@ -6,9 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/openebs/zfs-localpv
-    targetRevision: v2.6.0
-    path: clusters/homelab/infra/zfs-crds
+    repoURL: https://openebs.github.io/openebs
+    chart: zfs-localpv
+    targetRevision: "4.2.0"
   destination:
     server: https://kubernetes.default.svc
   syncPolicy:
