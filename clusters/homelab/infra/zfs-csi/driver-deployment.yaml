@@ -101,9 +101,9 @@ spec:
         app: zfs-csi-node
     spec:
       serviceAccountName: zfs-csi-sa
+
       containers:
 
-      # ZFS CSI Node plugin
       - name: zfs-plugin
         image: openebs/zfs-driver:2.6.0
         securityContext:
@@ -111,7 +111,7 @@ spec:
         args:
           - "--plugin=node"
           - "--name=zfs.csi.openebs.io"
-          - "--endpoint=unix:///var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--endpoint=unix:///csi/csi.sock"
           - "--nodename=$(KUBE_NODE_NAME)"
         env:
         - name: KUBE_NODE_NAME
@@ -119,6 +119,8 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         volumeMounts:
+        - name: plugin-dir
+          mountPath: /csi
         - name: kubelet-dir
           mountPath: /var/lib/kubelet
           mountPropagation: Bidirectional
@@ -136,17 +138,18 @@ spec:
             cpu: 500m
             memory: 512Mi
 
-      # CSI Registrar (THIS WAS YOUR CRASH)
       - name: csi-node-driver-registrar
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/csi/csi.sock"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
-        - name: kubelet-dir
-          mountPath: /var/lib/kubelet
+        - name: plugin-dir
+          mountPath: /csi
         - name: registration-dir
           mountPath: /registration
+        - name: kubelet-dir
+          mountPath: /var/lib/kubelet
         resources:
           requests:
             cpu: 50m
@@ -155,14 +158,13 @@ spec:
             cpu: 200m
             memory: 128Mi
 
-      # CSI Liveness probe
       - name: liveness-probe
         image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/csi/csi.sock"
         volumeMounts:
-        - name: kubelet-dir
-          mountPath: /var/lib/kubelet
+        - name: plugin-dir
+          mountPath: /csi
         resources:
           requests:
             cpu: 10m
@@ -172,13 +174,19 @@ spec:
             memory: 64Mi
 
       volumes:
-      - name: kubelet-dir
+      - name: plugin-dir
         hostPath:
-          path: /var/lib/kubelet
+          path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          type: DirectoryOrCreate
 
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry
+          type: DirectoryOrCreate
+
+      - name: kubelet-dir
+        hostPath:
+          path: /var/lib/kubelet
 
       - name: device-dir
         hostPath:
