@@ -16,45 +16,75 @@ spec:
     spec:
       serviceAccountName: zfs-csi-sa
       containers:
-        - name: zfs-plugin
-          image: openebs/zfs-driver:2.6.0
-          args:
-            - "--endpoint=unix:///csi/csi.sock"
-            - "--plugin=controller"
-            - "--name=zfs.csi.openebs.io"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
 
-        - name: csi-provisioner
-          image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
-          args:
-            - "--csi-address=/csi/csi.sock"
-            - "--leader-election=true"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
+      - name: zfs-plugin
+        image: openebs/zfs-driver:2.6.0
+        args:
+          - "--endpoint=unix:///csi/csi.sock"
+          - "--plugin=controller"
+          - "--name=zfs.csi.openebs.io"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
 
-        - name: csi-resizer
-          image: registry.k8s.io/sig-storage/csi-resizer:v1.11.1
-          args:
-            - "--csi-address=/csi/csi.sock"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
+      - name: csi-provisioner
+        image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
+        args:
+          - "--csi-address=/csi/csi.sock"
+          - "--leader-election=true"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
 
-        - name: liveness-probe
-          image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
-          args:
-            - "--csi-address=/csi/csi.sock"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
+      - name: csi-resizer
+        image: registry.k8s.io/sig-storage/csi-resizer:v1.11.1
+        args:
+          - "--csi-address=/csi/csi.sock"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
+
+      - name: liveness-probe
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+        args:
+          - "--csi-address=/csi/csi.sock"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
 
       volumes:
         - name: socket-dir
-          emptyDir: {}
-
+          hostPath:
+            path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+            type: DirectoryOrCreate
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -72,53 +102,75 @@ spec:
     spec:
       serviceAccountName: zfs-csi-sa
       containers:
-        - name: zfs-plugin
-          image: openebs/zfs-driver:2.6.0
-          securityContext:
-            privileged: true
-          args:
-            - "--endpoint=unix:///csi/csi.sock"
-            - "--nodename=$(KUBE_NODE_NAME)"
-            - "--plugin=node"
-            - "--name=zfs.csi.openebs.io"
-          env:
-            - name: KUBE_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-          volumeMounts:
-            - mountPath: /var/lib/kubelet
-              name: kubelet-dir
-              mountPropagation: Bidirectional
-            - mountPath: /dev
-              name: device-dir
-            - mountPath: /run
-              name: run-dir
-            - mountPath: /etc/udev
-              name: udev-dir
-            - mountPath: /csi
-              name: socket-dir
 
-        - name: csi-node-driver-registrar
-          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
-          args:
-            - "--csi-address=/csi/csi.sock"
-            - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
-            - name: registration-dir
-              mountPath: /registration
-            - name: kubelet-dir
-              mountPath: /var/lib/kubelet
+      - name: zfs-plugin
+        image: openebs/zfs-driver:2.6.0
+        securityContext:
+          privileged: true
+        args:
+          - "--endpoint=unix:///csi/csi.sock"
+          - "--nodename=$(KUBE_NODE_NAME)"
+          - "--plugin=node"
+          - "--name=zfs.csi.openebs.io"
+        env:
+          - name: KUBE_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        volumeMounts:
+          - name: kubelet-dir
+            mountPath: /var/lib/kubelet
+            mountPropagation: Bidirectional
+          - name: device-dir
+            mountPath: /dev
+          - name: run-dir
+            mountPath: /run
+          - name: udev-dir
+            mountPath: /etc/udev
+          - name: socket-dir
+            mountPath: /csi
 
-        - name: liveness-probe
-          image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
-          args:
-            - "--csi-address=/csi/csi.sock"
-          volumeMounts:
-            - name: socket-dir
-              mountPath: /csi
+      - name: csi-node-driver-registrar
+        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
+        args:
+          - "--csi-address=/csi/csi.sock"
+          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
+          - name: registration-dir
+            mountPath: /registration
+          - name: kubelet-dir
+            mountPath: /var/lib/kubelet
+
+      - name: liveness-probe
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+        args:
+          - "--csi-address=/csi/csi.sock"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        volumeMounts:
+          - name: socket-dir
+            mountPath: /csi
 
       volumes:
         - name: kubelet-dir
