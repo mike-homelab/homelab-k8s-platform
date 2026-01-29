@@ -182,7 +182,7 @@ spec:
 
       - name: registration-dir
         hostPath:
-          path: /var/lib/kubelet/plugins_registry
+          path: /var/lib/kubelet/plugins_registry/zfs.csi.openebs.io
           type: DirectoryOrCreate
 
       - name: kubelet-dir
