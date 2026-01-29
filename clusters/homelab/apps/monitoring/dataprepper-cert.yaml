@@ -10,7 +10,4 @@ spec:
     kind: ClusterIssuer
   commonName: data-prepper.monitoring.svc.cluster.local
   dnsNames:
-  - data-prepper
-  - data-prepper.monitoring
-  - data-prepper.monitoring.svc
   - data-prepper.monitoring.svc.cluster.local

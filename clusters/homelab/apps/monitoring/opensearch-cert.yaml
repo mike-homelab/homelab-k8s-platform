@@ -10,7 +10,4 @@ spec:
     kind: ClusterIssuer
   commonName: opensearch.monitoring.svc.cluster.local
   dnsNames:
-  - opensearch
-  - opensearch.monitoring
-  - opensearch.monitoring.svc
   - opensearch.monitoring.svc.cluster.local
