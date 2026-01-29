@@ -4,7 +4,7 @@ metadata:
   name: openebs-zfs-crds
   namespace: argocd
 spec:
-  project: infrastructure
+  project: default
   source:
     repoURL: https://github.com/openebs/zfs-localpv
     targetRevision: v2.6.0
