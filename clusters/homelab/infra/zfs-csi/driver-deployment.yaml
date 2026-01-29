@@ -1,3 +1,61 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zfs-csi-controller
+  namespace: zfs-csi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zfs-csi-controller
+  template:
+    metadata:
+      labels:
+        app: zfs-csi-controller
+    spec:
+      serviceAccountName: zfs-csi-sa
+      containers:
+        - name: zfs-plugin
+          image: openebs/zfs-driver:2.6.0
+          args:
+            - "--endpoint=unix:///csi/csi.sock"
+            - "--plugin=controller"
+            - "--name=zfs.csi.openebs.io"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--leader-election=true"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: csi-resizer
+          image: registry.k8s.io/sig-storage/csi-resizer:v1.11.1
+          args:
+            - "--csi-address=/csi/csi.sock"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+          args:
+            - "--csi-address=/csi/csi.sock"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+
+---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -40,11 +98,35 @@ spec:
               name: udev-dir
             - mountPath: /csi
               name: socket-dir
+
+        - name: csi-node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
+          args:
+            - "--csi-address=/csi/csi.sock"
+            - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+            - name: kubelet-dir
+              mountPath: /var/lib/kubelet
+
+        - name: liveness-probe
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+          args:
+            - "--csi-address=/csi/csi.sock"
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+
       volumes:
         - name: kubelet-dir
           hostPath:
             path: /var/lib/kubelet
-            type: Directory
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
         - name: device-dir
           hostPath:
             path: /dev
