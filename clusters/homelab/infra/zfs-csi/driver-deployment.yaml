@@ -16,46 +16,44 @@ spec:
       serviceAccountName: zfs-csi-sa
       containers:
       - name: zfs-plugin
-        image: openebs/zfs-driver:2.9.0
+        image: openebs/zfs-driver:2.6.0
         args:
           - "--plugin=controller"
           - "--name=zfs-localpv"
-          - "--endpoint=unix:///var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--endpoint=unix:///csi/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs-localpv
+          mountPath: /csi
 
       - name: csi-provisioner
-        image: registry.k8s.io/sig-storage/csi-provisioner:v3.5.0
+        image: registry.k8s.io/sig-storage/csi-provisioner:v3.3.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--csi-address=/csi/csi.sock"
           - "--leader-election=true"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs-localpv
+          mountPath: /csi
 
       - name: csi-resizer
-        image: registry.k8s.io/sig-storage/csi-resizer:v1.8.0
+        image: registry.k8s.io/sig-storage/csi-resizer:v1.5.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--csi-address=/csi/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs-localpv
+          mountPath: /csi
 
       - name: liveness-probe
-        image: registry.k8s.io/sig-storage/livenessprobe:v2.9.0
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.7.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--csi-address=/csi/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs-localpv
+          mountPath: /csi
 
       volumes:
       - name: socket-dir
-        hostPath:
-          path: /var/lib/kubelet/plugins/zfs-localpv
-          type: DirectoryOrCreate
----
+        emptyDir: {}
+
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -73,13 +71,13 @@ spec:
       serviceAccountName: zfs-csi-sa
       containers:
       - name: zfs-plugin
-        image: openebs/zfs-driver:2.9.0
+        image: openebs/zfs-driver:2.6.0
         securityContext:
           privileged: true
         args:
           - "--plugin=node"
           - "--name=zfs-localpv"
-          - "--endpoint=unix:///plugin/csi.sock"
+          - "--endpoint=unix:///csi/csi.sock"
           - "--nodename=$(KUBE_NODE_NAME)"
         env:
         - name: KUBE_NODE_NAME
@@ -88,7 +86,7 @@ spec:
               fieldPath: spec.nodeName
         volumeMounts:
         - name: plugin-dir
-          mountPath: /plugin
+          mountPath: /csi
         - name: device-dir
           mountPath: /dev
         - name: run-dir
@@ -97,24 +95,24 @@ spec:
           mountPath: /etc/udev
 
       - name: csi-node-driver-registrar
-        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.6.0
+        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.1
         args:
-          - "--csi-address=/plugin/csi.sock"
+          - "--csi-address=/csi/csi.sock"
           - "--registration-path=/registration/zfs-localpv-reg.sock"
-          - "--kubelet-registration-path=/plugin/csi.sock"
+          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /plugin
+          mountPath: /csi
         - name: registration-dir
           mountPath: /registration
 
       - name: liveness-probe
-        image: registry.k8s.io/sig-storage/livenessprobe:v2.9.0
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.7.0
         args:
-          - "--csi-address=/plugin/csi.sock"
+          - "--csi-address=/csi/csi.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /plugin
+          mountPath: /csi
 
       volumes:
       - name: plugin-dir

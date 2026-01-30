@@ -7,8 +7,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/openebs/zfs-localpv
-    targetRevision: v2.9.0   # latest stable release tag
-    path: deploy             # directory containing CRDs + operator manifests
+    targetRevision: v2.6.0
+    path: deploy/yamls
   destination:
     server: https://kubernetes.default.svc
     namespace: zfs-csi
