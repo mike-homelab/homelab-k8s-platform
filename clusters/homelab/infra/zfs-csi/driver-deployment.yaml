@@ -19,41 +19,41 @@ spec:
         image: openebs/zfs-driver:2.6.0
         args:
           - "--plugin=controller"
-          - "--name=zfs.csi.openebs.io"
-          - "--endpoint=unix:///var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--name=zfs-localpv"
+          - "--endpoint=unix:///var/lib/kubelet/plugins/zfs-localpv/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          mountPath: /var/lib/kubelet/plugins/zfs-localpv
 
       - name: csi-provisioner
-        image: registry.k8s.io/sig-storage/csi-provisioner:v3.4.0   # compatible with 2.6.0
+        image: registry.k8s.io/sig-storage/csi-provisioner:v3.4.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
           - "--leader-election=true"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          mountPath: /var/lib/kubelet/plugins/zfs-localpv
 
       - name: csi-resizer
-        image: registry.k8s.io/sig-storage/csi-resizer:v1.7.0       # compatible version
+        image: registry.k8s.io/sig-storage/csi-resizer:v1.7.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          mountPath: /var/lib/kubelet/plugins/zfs-localpv
 
       - name: liveness-probe
-        image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0     # aligned version
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
         args:
-          - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
         volumeMounts:
         - name: socket-dir
-          mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          mountPath: /var/lib/kubelet/plugins/zfs-localpv
 
       volumes:
       - name: socket-dir
         hostPath:
-          path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          path: /var/lib/kubelet/plugins/zfs-localpv
           type: DirectoryOrCreate
 ---
 apiVersion: apps/v1
@@ -78,8 +78,8 @@ spec:
           privileged: true
         args:
           - "--plugin=node"
-          - "--name=zfs.csi.openebs.io"
-          - "--endpoint=unix:///csi/csi.sock"
+          - "--name=zfs-localpv"
+          - "--endpoint=unix:///plugin/csi.sock"
           - "--nodename=$(KUBE_NODE_NAME)"
         env:
         - name: KUBE_NODE_NAME
@@ -88,7 +88,7 @@ spec:
               fieldPath: spec.nodeName
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
+          mountPath: /plugin
         - name: device-dir
           mountPath: /dev
         - name: run-dir
@@ -97,33 +97,33 @@ spec:
           mountPath: /etc/udev
 
       - name: csi-node-driver-registrar
-        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.0   # compatible version
+        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.0
         args:
-          - "--csi-address=/csi/csi.sock"
-          - "--registration-path=/registration/zfs.csi.openebs.io-reg.sock"
-          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--csi-address=/plugin/csi.sock"
+          - "--registration-path=/registration/zfs-localpv-reg.sock"
+          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
+          mountPath: /plugin
         - name: registration-dir
           mountPath: /registration
 
       - name: liveness-probe
         image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
         args:
-          - "--csi-address=/csi/csi.sock"
+          - "--csi-address=/plugin/csi.sock"
         volumeMounts:
         - name: plugin-dir
-          mountPath: /csi
+          mountPath: /plugin
 
       volumes:
       - name: plugin-dir
         hostPath:
-          path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
+          path: /var/lib/kubelet/plugins/zfs-localpv
           type: DirectoryOrCreate
       - name: registration-dir
         hostPath:
-          path: /var/lib/kubelet/plugins_registry/zfs.csi.openebs.io
+          path: /var/lib/kubelet/plugins_registry/zfs-localpv
           type: DirectoryOrCreate
       - name: device-dir
         hostPath:
