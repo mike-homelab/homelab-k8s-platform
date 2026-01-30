@@ -8,13 +8,14 @@ spec:
   source:
     repoURL: https://openebs.github.io/openebs
     chart: zfs-localpv
-    targetRevision: "4.2.0"
+    targetRevision: 2.6.0   # Helm chart version, not Git tag
   destination:
     server: https://kubernetes.default.svc
+    namespace: zfs-csi      # ensure this matches your intended namespace
   syncPolicy:
     automated:
       selfHeal: true
     syncOptions:
     - CreateNamespace=true
     - Replace=true
-    - Prune=false   # 🚨 CRDs must never be pruned
+    - Prune=false
