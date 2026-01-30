@@ -101,7 +101,7 @@ spec:
         args:
           - "--csi-address=/plugin/csi.sock"
           - "--registration-path=/registration/zfs-localpv-reg.sock"
-          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--kubelet-registration-path=/plugin/csi.sock"
         volumeMounts:
         - name: plugin-dir
           mountPath: /plugin
