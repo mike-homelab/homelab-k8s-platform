@@ -1,6 +1,3 @@
-############################
-# ZFS CSI CONTROLLER
-############################
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -17,7 +14,6 @@ spec:
         app: zfs-csi-controller
     spec:
       serviceAccountName: zfs-csi-sa
-
       containers:
       - name: zfs-plugin
         image: openebs/zfs-driver:2.6.0
@@ -28,47 +24,26 @@ spec:
         volumeMounts:
         - name: socket-dir
           mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
 
       - name: csi-provisioner
-        image: registry.k8s.io/sig-storage/csi-provisioner:v5.0.1
+        image: registry.k8s.io/sig-storage/csi-provisioner:v3.4.0   # compatible with 2.6.0
         args:
           - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
           - "--leader-election=true"
         volumeMounts:
         - name: socket-dir
           mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
 
       - name: csi-resizer
-        image: registry.k8s.io/sig-storage/csi-resizer:v1.11.1
+        image: registry.k8s.io/sig-storage/csi-resizer:v1.7.0       # compatible version
         args:
           - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
         - name: socket-dir
           mountPath: /var/lib/kubelet/plugins/zfs.csi.openebs.io
-        resources:
-          requests:
-            cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 200m
-            memory: 256Mi
 
       - name: liveness-probe
-        image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0     # aligned version
         args:
           - "--csi-address=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
@@ -80,11 +55,7 @@ spec:
         hostPath:
           path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
           type: DirectoryOrCreate
-
 ---
-############################
-# ZFS CSI NODE
-############################
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -100,7 +71,6 @@ spec:
         app: zfs-csi-node
     spec:
       serviceAccountName: zfs-csi-sa
-
       containers:
       - name: zfs-plugin
         image: openebs/zfs-driver:2.6.0
@@ -125,16 +95,9 @@ spec:
           mountPath: /run
         - name: udev-dir
           mountPath: /etc/udev
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: 500m
-            memory: 512Mi
 
       - name: csi-node-driver-registrar
-        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.10.1
+        image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.0   # compatible version
         args:
           - "--csi-address=/csi/csi.sock"
           - "--registration-path=/registration/zfs.csi.openebs.io-reg.sock"
@@ -146,7 +109,7 @@ spec:
           mountPath: /registration
 
       - name: liveness-probe
-        image: registry.k8s.io/sig-storage/livenessprobe:v2.13.1
+        image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
         args:
           - "--csi-address=/csi/csi.sock"
         volumeMounts:
@@ -154,26 +117,20 @@ spec:
           mountPath: /csi
 
       volumes:
-      # CSI socket location
       - name: plugin-dir
         hostPath:
           path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
           type: DirectoryOrCreate
-
-      # **CRITICAL: kubelet watches THIS exact directory**
       - name: registration-dir
         hostPath:
           path: /var/lib/kubelet/plugins_registry/zfs.csi.openebs.io
           type: DirectoryOrCreate
-
       - name: device-dir
         hostPath:
           path: /dev
-
       - name: run-dir
         hostPath:
           path: /run
-
       - name: udev-dir
         hostPath:
           path: /etc/udev
