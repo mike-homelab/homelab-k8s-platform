@@ -1,6 +1,5 @@
 resources:
   - namespace.yaml
   - rbac.yaml
-  - csidriver.yaml
   - driver-deployment.yaml
   - storageclasses.yaml
