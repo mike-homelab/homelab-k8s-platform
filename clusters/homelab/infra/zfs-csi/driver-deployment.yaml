@@ -98,7 +98,7 @@ spec:
         image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.5.1
         args:
           - "--csi-address=/csi/csi.sock"
-          - "--registration-path=/registration/zfs-localpv-reg.sock"
+          - "--plugin-registration-path=/registration"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
         - name: plugin-dir
