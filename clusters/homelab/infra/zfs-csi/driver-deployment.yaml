@@ -76,7 +76,7 @@ spec:
           privileged: true
         args:
           - "--plugin=node"
-          - "--name=zfs-localpv"
+          - "--name=zfs.csi.openebs.io"
           - "--endpoint=unix:///csi/csi.sock"
           - "--nodename=$(KUBE_NODE_NAME)"
         env:
@@ -99,7 +99,7 @@ spec:
         args:
           - "--csi-address=/csi/csi.sock"
           - "--registration-path=/registration/zfs-localpv-reg.sock"
-          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs-localpv/csi.sock"
+          - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
         volumeMounts:
         - name: plugin-dir
           mountPath: /csi
@@ -117,11 +117,11 @@ spec:
       volumes:
       - name: plugin-dir
         hostPath:
-          path: /var/lib/kubelet/plugins/zfs-localpv
+          path: /var/lib/kubelet/plugins/zfs.csi.openebs.io
           type: DirectoryOrCreate
       - name: registration-dir
         hostPath:
-          path: /var/lib/kubelet/plugins_registry/zfs-localpv
+          path: /var/lib/kubelet/plugins_registry/zfs.csi.openebs.io
           type: DirectoryOrCreate
       - name: device-dir
         hostPath:
