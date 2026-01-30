@@ -6,12 +6,12 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://openebs.github.io/openebs
-    chart: zfs-localpv
-    targetRevision: 2.6.0   # Helm chart version, not Git tag
+    repoURL: https://github.com/openebs/zfs-localpv
+    targetRevision: v2.9.0   # latest stable release tag
+    path: deploy             # directory containing CRDs + operator manifests
   destination:
     server: https://kubernetes.default.svc
-    namespace: zfs-csi      # ensure this matches your intended namespace
+    namespace: zfs-csi
   syncPolicy:
     automated:
       selfHeal: true
