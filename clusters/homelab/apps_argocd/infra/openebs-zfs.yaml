@@ -19,34 +19,39 @@
 #     - CreateNamespace=true
 #     - Replace=true
 #     - Prune=false
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: openebs-zfs
-#   namespace: argocd
-# spec:
-#   project: default
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openebs-zfs
+  namespace: argocd
+spec:
+  project: default
 
-#   source:
-#     repoURL: https://openebs.github.io/charts
-#     chart: zfs-localpv
-#     targetRevision: 2.6.0
-#     helm:
-#       releaseName: openebs-zfs
-#       values: |
-#         zfsLocalPv:
-#           enabled: true
+  source:
+    repoURL: https://openebs.github.io/charts
+    chart: zfs-localpv
+    targetRevision: 2.6.0
+    helm:
+      releaseName: openebs-zfs
+      values: |
+        zfsLocalPv:
+          enabled: true
 
-#         crds:
-#           enabled: true
+        crds:
+          zfsLocalPv:
+            enabled: true
 
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: kube-system
+        analytics:
+          enabled: false
 
-#   syncPolicy:
-#     automated:
-#       prune: true
-#       selfHeal: true
-#     syncOptions:
-#       - CreateNamespace=true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+
+  syncPolicy:
+    automated:
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - Prune=false
+      - Replace=false
