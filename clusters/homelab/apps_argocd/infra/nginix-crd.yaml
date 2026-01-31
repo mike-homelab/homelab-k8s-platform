@@ -8,9 +8,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/nginxinc/nginx-gateway-fabric
-    targetRevision: v1.5.0
-    path: deploy/crds.yaml
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/infra/crds
   destination:
     server: https://kubernetes.default.svc
     namespace: default
