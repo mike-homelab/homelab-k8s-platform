@@ -13,6 +13,8 @@ spec:
     targetRevision: 61.0.0
     helm:
       values: |
+        crds:
+          enabled: false
         prometheus:
           prometheusSpec:
             remoteWrite:
