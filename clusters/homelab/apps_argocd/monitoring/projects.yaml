@@ -3,30 +3,24 @@ kind: AppProject
 metadata:
   name: monitoring
   namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "11"
 spec:
-  description: Application workloads (all product and service deployments)
+  description: Observability & Search Stack
 
-  # Which Git repos apps are allowed to come from
   sourceRepos:
   - https://github.com/mike-homelab/homelab-k8s-platform
-  - https://opensearch-project.github.io/helm-charts
   - https://prometheus-community.github.io/helm-charts
   - https://open-telemetry.github.io/opentelemetry-helm-charts
+  - oci://ghcr.io/opensearch-project/helm-charts
 
-
-  # Apps can deploy to ANY namespace, but only in THIS cluster
   destinations:
   - namespace: '*'
     server: https://kubernetes.default.svc
 
-  # Apps are NOT allowed to create cluster-level things
-  clusterResourceBlacklist:
+  # Allow cluster-scoped resources
+  clusterResourceWhitelist:
   - group: '*'
     kind: '*'
 
-  # Apps can create any namespaced resource
   namespaceResourceWhitelist:
   - group: '*'
     kind: '*'
