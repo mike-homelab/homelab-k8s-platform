@@ -7,6 +7,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "12"
 spec:
   project: monitoring
+
   source:
     repoURL: https://opensearch-project.github.io/helm-charts
     chart: opensearch
@@ -14,40 +15,71 @@ spec:
     helm:
       values: |
         clusterName: homelab-opensearch
-        nodeGroup: data
 
-        replicas: 0
+        ########################################
+        # Dedicated tiny master (no storage)
+        ########################################
+        nodeGroups:
+          master:
+            replicas: 1
+            roles:
+              - master
+            persistence:
+              enabled: false
+            resources:
+              requests:
+                cpu: 100m
+                memory: 400Mi
+              limits:
+                cpu: 500m
+                memory: 1Gi
+            opensearchJavaOpts: "-Xms256m -Xmx256m"
 
-        persistence:
-          enabled: true
-          size: 100Gi
-          storageClass: zfs-nvme
+          ########################################
+          # Two small ZFS-backed data nodes
+          ########################################
+          data:
+            replicas: 2
+            roles:
+              - data
+              - ingest
+            persistence:
+              enabled: true
+              size: 100Gi
+              storageClass: zfs-nvme
 
-        # Ensure one pod per Kubernetes node
-        antiAffinity: hard
+            # Spread across nodes
+            antiAffinity: hard
 
-        # Shard placement awareness
-        config:
-          cluster.routing.allocation.awareness.attributes: k8s_node
-          node.attr.k8s_node: ${NODE_NAME}
+            ########################################
+            # Shard placement awareness
+            ########################################
+            extraEnvs:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
 
-        extraEnvs:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
+            config:
+              cluster.routing.allocation.awareness.attributes: k8s_node
+              node.attr.k8s_node: ${NODE_NAME}
 
-        # JVM heap must be explicitly limited
-        opensearchJavaOpts: "-Xms2g -Xmx2g"
+            ########################################
+            # 1GB heap
+            ########################################
+            opensearchJavaOpts: "-Xms1g -Xmx1g"
 
-        resources:
-          requests:
-            cpu: "500m"
-            memory: "3Gi"
-          limits:
-            cpu: "2"
-            memory: "4Gi"
+            resources:
+              requests:
+                cpu: "300m"
+                memory: "1.5Gi"
+              limits:
+                cpu: "2"
+                memory: "2Gi"
 
+        ########################################
+        # TLS via cert-manager (Vault)
+        ########################################
         securityConfig:
           enabled: true
           tls:
