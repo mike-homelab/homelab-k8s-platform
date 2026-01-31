@@ -1,0 +1,52 @@
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: openebs-zfs-crds
+#   namespace: argocd
+# spec:
+#   project: default
+#   source:
+#     repoURL: https://github.com/openebs/zfs-localpv
+#     targetRevision: v2.6.0
+#     path: deploy/crds
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: zfs-csi
+#   syncPolicy:
+#     automated:
+#       selfHeal: true
+#     syncOptions:
+#     - CreateNamespace=true
+#     - Replace=true
+#     - Prune=false
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openebs-zfs
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://openebs.github.io/charts
+    chart: zfs-localpv
+    targetRevision: 2.6.0
+    helm:
+      releaseName: openebs-zfs
+      values: |
+        zfsLocalPv:
+          enabled: true
+
+        crds:
+          enabled: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
