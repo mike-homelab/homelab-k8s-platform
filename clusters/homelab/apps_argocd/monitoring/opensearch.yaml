@@ -1,92 +1,92 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: opensearch
-  namespace: argocd
-spec:
-  project: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: opensearch
+#   namespace: argocd
+# spec:
+#   project: monitoring
 
-  source:
-    repoURL: https://opensearch-project.github.io/helm-charts
-    chart: opensearch
-    targetRevision: 2.30.0
-    helm:
-      values: |
-        clusterName: homelab-opensearch
-        singleNode: false
+#   source:
+#     repoURL: https://opensearch-project.github.io/helm-charts
+#     chart: opensearch
+#     targetRevision: 2.30.0
+#     helm:
+#       values: |
+#         clusterName: homelab-opensearch
+#         singleNode: false
 
-        ##################################
-        # Master (no PVC)
-        ##################################
-        master:
-          replicas: 1
-          persistence:
-            enabled: false
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
-          opensearchJavaOpts: "-Xms256m -Xmx256m"
+#         ##################################
+#         # Master (no PVC)
+#         ##################################
+#         master:
+#           replicas: 1
+#           persistence:
+#             enabled: false
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
+#             limits:
+#               cpu: 500m
+#               memory: 512Mi
+#           opensearchJavaOpts: "-Xms256m -Xmx256m"
 
-        ##################################
-        # Data nodes (ZFS)
-        ##################################
-        data:
-          replicas: 2
-          persistence:
-            enabled: true
-            size: 100Gi
-            storageClass: zfs-nvme
-          resources:
-            requests:
-              cpu: 300m
-              memory: 1Gi
-            limits:
-              cpu: 2
-              memory: 2Gi
-          opensearchJavaOpts: "-Xms1g -Xmx1g"
+#         ##################################
+#         # Data nodes (ZFS)
+#         ##################################
+#         data:
+#           replicas: 2
+#           persistence:
+#             enabled: true
+#             size: 100Gi
+#             storageClass: zfs-nvme
+#           resources:
+#             requests:
+#               cpu: 300m
+#               memory: 1Gi
+#             limits:
+#               cpu: 2
+#               memory: 2Gi
+#           opensearchJavaOpts: "-Xms1g -Xmx1g"
 
-        ##################################
-        # No extra roles
-        ##################################
-        ingest:
-          replicas: 0
-        coordinating:
-          replicas: 0
+#         ##################################
+#         # No extra roles
+#         ##################################
+#         ingest:
+#           replicas: 0
+#         coordinating:
+#           replicas: 0
 
-        ##################################
-        # TLS (Vault)
-        ##################################
-        securityConfig:
-          enabled: true
-          tls:
-            http:
-              enabled: true
-              secret: opensearch-tls
-            transport:
-              enabled: true
-              secret: opensearch-tls
+#         ##################################
+#         # TLS (Vault)
+#         ##################################
+#         securityConfig:
+#           enabled: true
+#           tls:
+#             http:
+#               enabled: true
+#               secret: opensearch-tls
+#             transport:
+#               enabled: true
+#               secret: opensearch-tls
 
-        ##################################
-        # Mount CA
-        ##################################
-        extraVolumes:
-          - name: vault-ca
-            secret:
-              secretName: opensearch-tls
-        extraVolumeMounts:
-          - name: vault-ca
-            mountPath: /usr/share/opensearch/config/certs
-            readOnly: true
+#         ##################################
+#         # Mount CA
+#         ##################################
+#         extraVolumes:
+#           - name: vault-ca
+#             secret:
+#               secretName: opensearch-tls
+#         extraVolumeMounts:
+#           - name: vault-ca
+#             mountPath: /usr/share/opensearch/config/certs
+#             readOnly: true
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
