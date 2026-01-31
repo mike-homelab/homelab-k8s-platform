@@ -3,4 +3,4 @@ resources:
   - dataprepper-cert.yaml
   - dataprepper-config.yaml
   - namespace.yaml
-  - dashboard-service.yaml
+  - httproute.yaml
