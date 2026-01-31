@@ -12,6 +12,7 @@ spec:
   - https://open-telemetry.github.io/opentelemetry-helm-charts
   - https://opensearch-project.github.io/helm-charts
   - https://opensearch-project.github.io/helm-charts
+  - https://github.com/prometheus-operator/prometheus-operator
 
   destinations:
   - namespace: '*'
