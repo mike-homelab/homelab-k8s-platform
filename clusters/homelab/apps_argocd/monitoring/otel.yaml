@@ -27,6 +27,17 @@ spec:
           limits:
             memory: 1Gi
 
+        # IMPORTANT: disable implicit receivers
+        presets:
+          logsCollection:
+            enabled: false
+          hostMetrics:
+            enabled: false
+          kubeletMetrics:
+            enabled: false
+          kubernetesAttributes:
+            enabled: false
+
         config:
           receivers:
             prometheusremotewrite:
