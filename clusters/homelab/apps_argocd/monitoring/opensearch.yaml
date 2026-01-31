@@ -45,13 +45,13 @@ spec:
             cpu: "200m"
             memory: "1Gi"
           limits:
-            cpu: "1"
+            cpu: "1"soft
             memory: "2Gi"
 
         ##################################
         # Spread across nodes
         ##################################
-        antiAffinity: hard
+        antiAffinity: soft
 
         ##################################
         # Admin password
