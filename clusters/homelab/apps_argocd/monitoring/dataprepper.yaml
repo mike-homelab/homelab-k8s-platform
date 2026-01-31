@@ -1,54 +1,66 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dataprepper
+  name: otel
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "14"
+    argocd.argoproj.io/sync-wave: "13"
 spec:
   project: monitoring
+
   source:
-    repoURL: https://opensearch-project.github.io/helm-charts
-    chart: data-prepper
-    targetRevision: 2.6.0
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: 0.92.0
     helm:
       values: |
-        replicas: 1
+        # CRITICAL: must match the image
+        distribution: contrib
 
-        persistence:
-          enabled: true
-          size: 10Gi
-          storageClass: zfs-ssd
+        image:
+          repository: otel/opentelemetry-collector-contrib
+          tag: 0.93.0
 
-        extraVolumes:
-        - name: tls
-          secret:
-            secretName: dataprepper-tls
-        - name: pipelines
-          configMap:
-            name: dataprepper-pipelines
-
-        extraVolumeMounts:
-        - name: tls
-          mountPath: /tls
-          readOnly: true
-        - name: pipelines
-          mountPath: /usr/share/data-prepper/pipelines
-          readOnly: true
+        mode: deployment
 
         resources:
           requests:
-            cpu: "200m"
-            memory: "256Mi"
+            cpu: 200m
+            memory: 512Mi
           limits:
-            cpu: "500m"
-            memory: "512Mi"
+            memory: 1Gi
 
-        service:
-          ports:
-          - name: otel
-            port: 21890
-            targetPort: 21890
+        # Disable implicit receivers we are not using
+        presets:
+          logsCollection:
+            enabled: false
+          hostMetrics:
+            enabled: false
+          kubeletMetrics:
+            enabled: false
+          kubernetesAttributes:
+            enabled: false
+
+        config:
+          receivers:
+            prometheusremotewrite:
+              endpoint: 0.0.0.0:9201
+
+          processors:
+            batch: {}
+
+          exporters:
+            otlp/data-prepper:
+              endpoint: data-prepper.monitoring.svc.cluster.local:21890
+              tls:
+                insecure: true
+
+          service:
+            pipelines:
+              metrics:
+                receivers: [prometheusremotewrite]
+                processors: [batch]
+                exporters: [otlp/data-prepper]
 
   destination:
     server: https://kubernetes.default.svc
@@ -58,3 +70,5 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
