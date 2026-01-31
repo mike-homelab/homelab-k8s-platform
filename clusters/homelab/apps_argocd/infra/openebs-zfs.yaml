@@ -28,21 +28,9 @@ spec:
   project: default
 
   source:
-    repoURL: https://openebs.github.io/openebs
-    chart: zfs-localpv
-    targetRevision: 2.6.0
-    helm:
-      releaseName: openebs-zfs
-      values: |
-        zfsLocalPv:
-          enabled: true
-
-        crds:
-          zfsLocalPv:
-            enabled: true
-
-        analytics:
-          enabled: false
+    repoURL: https://github.com/openebs/zfs-localpv
+    targetRevision: v2.6.x
+    path: deploy/yamls
 
   destination:
     server: https://kubernetes.default.svc
@@ -53,6 +41,6 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - Prune=false
       - Replace=false
+      - Prune=false
 
