@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/infra/nginx-gateway-fabric/overlay
+    path: clusters/homelab/infra/nginx-gateway-fabric
     kustomize: {}
   destination:
     server: https://kubernetes.default.svc
