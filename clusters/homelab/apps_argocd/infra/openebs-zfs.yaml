@@ -31,6 +31,8 @@ spec:
     repoURL: https://github.com/openebs/zfs-localpv
     targetRevision: v2.6.x
     path: deploy/yamls
+    directory:
+      recurse: true
 
   destination:
     server: https://kubernetes.default.svc
@@ -43,4 +45,5 @@ spec:
       - CreateNamespace=true
       - Replace=false
       - Prune=false
+
 
