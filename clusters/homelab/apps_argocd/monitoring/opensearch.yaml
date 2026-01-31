@@ -16,7 +16,7 @@ spec:
         clusterName: homelab-opensearch
         nodeGroup: data
 
-        replicas: 2
+        replicas: 0
 
         persistence:
           enabled: true
