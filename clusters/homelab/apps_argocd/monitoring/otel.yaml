@@ -13,21 +13,36 @@ spec:
     targetRevision: 0.92.0
     helm:
       values: |
+        image:
+          repository: otel/opentelemetry-collector-contrib
+          tag: 0.93.0
+
         mode: deployment
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            memory: 1Gi
+
         config:
+          receivers:
+            prometheusremotewrite:
+              endpoint: 0.0.0.0:9201
+
           exporters:
             otlp/data-prepper:
               endpoint: data-prepper.monitoring.svc.cluster.local:21890
               tls:
                 insecure: true
+
+          processors:
+            batch: {}
+
           service:
             pipelines:
               metrics:
+                receivers: [prometheusremotewrite]
+                processors: [batch]
                 exporters: [otlp/data-prepper]
-              logs:
-                exporters: [otlp/data-prepper]
-              traces:
-                exporters: [otlp/data-prepper]
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
