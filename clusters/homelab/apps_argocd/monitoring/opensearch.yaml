@@ -1,100 +1,100 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: opensearch
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "12"
-spec:
-  project: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: opensearch
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "12"
+# spec:
+#   project: monitoring
 
-  source:
-    repoURL: https://opensearch-project.github.io/helm-charts
-    chart: opensearch
-    targetRevision: 2.30.0
-    helm:
-      values: |
-        clusterName: homelab-opensearch
+#   source:
+#     repoURL: https://opensearch-project.github.io/helm-charts
+#     chart: opensearch
+#     targetRevision: 2.30.0
+#     helm:
+#       values: |
+#         clusterName: homelab-opensearch
 
-        # REQUIRED to enable nodeGroups
-        singleNode: false
+#         # REQUIRED to enable nodeGroups
+#         singleNode: false
 
-        ##################################
-        # Node group definitions
-        ##################################
-        nodeGroups:
+#         ##################################
+#         # Node group definitions
+#         ##################################
+#         nodeGroups:
 
-          master:
-            replicas: 1
-            roles:
-              - master
-            persistence:
-              enabled: false
+#           master:
+#             replicas: 1
+#             roles:
+#               - master
+#             persistence:
+#               enabled: false
 
-            resources:
-              requests:
-                cpu: 100m
-                memory: 300Mi
-              limits:
-                cpu: 500m
-                memory: 1Gi
+#             resources:
+#               requests:
+#                 cpu: 100m
+#                 memory: 300Mi
+#               limits:
+#                 cpu: 500m
+#                 memory: 1Gi
 
-            opensearchJavaOpts: "-Xms256m -Xmx256m"
+#             opensearchJavaOpts: "-Xms256m -Xmx256m"
 
-          data:
-            replicas: 2
-            roles:
-              - data
-              - ingest
+#           data:
+#             replicas: 2
+#             roles:
+#               - data
+#               - ingest
 
-            persistence:
-              enabled: true
-              size: 100Gi
-              storageClass: zfs-nvme
+#             persistence:
+#               enabled: true
+#               size: 100Gi
+#               storageClass: zfs-nvme
 
-            antiAffinity: hard
+#             antiAffinity: hard
 
-            extraEnvs:
-              - name: NODE_NAME
-                valueFrom:
-                  fieldRef:
-                    fieldPath: spec.nodeName
+#             extraEnvs:
+#               - name: NODE_NAME
+#                 valueFrom:
+#                   fieldRef:
+#                     fieldPath: spec.nodeName
 
-            config:
-              cluster.routing.allocation.awareness.attributes: k8s_node
-              node.attr.k8s_node: ${NODE_NAME}
+#             config:
+#               cluster.routing.allocation.awareness.attributes: k8s_node
+#               node.attr.k8s_node: ${NODE_NAME}
 
-            opensearchJavaOpts: "-Xms1g -Xmx1g"
+#             opensearchJavaOpts: "-Xms1g -Xmx1g"
 
-            resources:
-              requests:
-                cpu: "300m"
-                memory: "1.5Gi"
-              limits:
-                cpu: "2"
-                memory: "2Gi"
+#             resources:
+#               requests:
+#                 cpu: "300m"
+#                 memory: "1.5Gi"
+#               limits:
+#                 cpu: "2"
+#                 memory: "2Gi"
 
-        ##################################
-        # TLS via cert-manager (Vault)
-        ##################################
-        securityConfig:
-          enabled: true
-          tls:
-            http:
-              enabled: true
-              secret: opensearch-tls
-            transport:
-              enabled: true
-              secret: opensearch-tls
+#         ##################################
+#         # TLS via cert-manager (Vault)
+#         ##################################
+#         securityConfig:
+#           enabled: true
+#           tls:
+#             http:
+#               enabled: true
+#               secret: opensearch-tls
+#             transport:
+#               enabled: true
+#               secret: opensearch-tls
 
-        service:
-          type: ClusterIP
+#         service:
+#           type: ClusterIP
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
