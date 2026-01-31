@@ -23,6 +23,13 @@ spec:
 
         service:
           type: ClusterIP
+          ports:
+            - name: http
+              port: 5601
+              targetPort: 5601
+            - name: metrics
+              port: 9601
+              targetPort: 9601
         resources:
           requests:
             cpu: 50m
