@@ -7,18 +7,38 @@ metadata:
     argocd.argoproj.io/sync-wave: "15"
 spec:
   project: monitoring
+
   source:
     repoURL: https://opensearch-project.github.io/helm-charts
     chart: opensearch-dashboards
-    targetRevision: 2.30.0
+    targetRevision: "2.30.0"
     helm:
       values: |
-        opensearchHosts: https://opensearch.monitoring.svc:9200
+        opensearchHosts: https://homelab-opensearch-all:9200
+
         opensearchSSL:
           enabled: true
+          verificationMode: none
           existingCertSecret: opensearch-tls
+
         service:
           type: ClusterIP
+        resources:
+          requests:
+            cpu: 50m
+            memory: 256Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        extraEnvs:
+          - name: NODE_OPTIONS
+            value: "--max-old-space-size=256"
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
