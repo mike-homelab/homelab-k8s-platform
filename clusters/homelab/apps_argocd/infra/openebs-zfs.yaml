@@ -28,7 +28,7 @@ spec:
   project: default
 
   source:
-    repoURL: https://openebs.github.io/charts
+    repoURL: https://openebs.github.io/openebs
     chart: zfs-localpv
     targetRevision: 2.6.0
     helm:
@@ -55,3 +55,4 @@ spec:
       - CreateNamespace=true
       - Prune=false
       - Replace=false
+
