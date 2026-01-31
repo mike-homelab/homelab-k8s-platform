@@ -27,4 +27,4 @@ spec:
   rules:
     - backendRefs:
         - name: opensearch-dashboards
-          port: http
+          port: 5601

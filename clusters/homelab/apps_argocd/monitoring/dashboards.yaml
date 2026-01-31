@@ -27,6 +27,7 @@ spec:
             - name: http
               port: 5601
               targetPort: 5601
+              appProtocol: http
             - name: metrics
               port: 9601
               targetPort: 9601
