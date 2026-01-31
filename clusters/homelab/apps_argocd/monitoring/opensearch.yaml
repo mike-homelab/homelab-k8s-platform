@@ -38,7 +38,7 @@ spec:
             cpu: "400m"
             memory: "2Gi"
 
-        antiAffinity: ""
+        antiAffinity: soft
 
         extraEnvs:
           - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
@@ -48,7 +48,7 @@ spec:
                 key: password
 
         config:
-            discovery.seed_hosts: "homelab-opensearch-all-0"
+          discovery.seed_hosts: "homelab-opensearch-all-0"
           cluster.initial_cluster_manager_nodes: "homelab-opensearch-all-0"
 
         securityConfig:
