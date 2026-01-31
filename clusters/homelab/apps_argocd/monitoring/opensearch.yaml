@@ -16,44 +16,44 @@ spec:
       values: |
         clusterName: homelab-opensearch
 
-        ########################################
-        # Dedicated tiny master (no storage)
-        ########################################
+        # REQUIRED to enable nodeGroups
+        singleNode: false
+
+        ##################################
+        # Node group definitions
+        ##################################
         nodeGroups:
+
           master:
             replicas: 1
             roles:
               - master
             persistence:
               enabled: false
+
             resources:
               requests:
                 cpu: 100m
-                memory: 400Mi
+                memory: 300Mi
               limits:
                 cpu: 500m
                 memory: 1Gi
+
             opensearchJavaOpts: "-Xms256m -Xmx256m"
 
-          ########################################
-          # Two small ZFS-backed data nodes
-          ########################################
           data:
             replicas: 2
             roles:
               - data
               - ingest
+
             persistence:
               enabled: true
               size: 100Gi
               storageClass: zfs-nvme
 
-            # Spread across nodes
             antiAffinity: hard
 
-            ########################################
-            # Shard placement awareness
-            ########################################
             extraEnvs:
               - name: NODE_NAME
                 valueFrom:
@@ -64,9 +64,6 @@ spec:
               cluster.routing.allocation.awareness.attributes: k8s_node
               node.attr.k8s_node: ${NODE_NAME}
 
-            ########################################
-            # 1GB heap
-            ########################################
             opensearchJavaOpts: "-Xms1g -Xmx1g"
 
             resources:
@@ -77,9 +74,9 @@ spec:
                 cpu: "2"
                 memory: "2Gi"
 
-        ########################################
+        ##################################
         # TLS via cert-manager (Vault)
-        ########################################
+        ##################################
         securityConfig:
           enabled: true
           tls:
