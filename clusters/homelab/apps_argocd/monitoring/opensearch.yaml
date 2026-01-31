@@ -13,7 +13,9 @@ spec:
     helm:
       values: |
         clusterName: homelab-opensearch
-        singleNode: false
+
+        # CRITICAL for 1-node homelab
+        singleNode: true
 
         nodeGroup: all
         replicas: 1
@@ -28,6 +30,7 @@ spec:
           size: 100Gi
           storageClass: zfs-nvme
 
+        # Low-memory JVM (safe)
         opensearchJavaOpts: "-Xms512m -Xmx512m"
 
         resources:
@@ -38,8 +41,9 @@ spec:
             cpu: "400m"
             memory: "2Gi"
 
-        antiAffinity: soft
+        antiAffinity: ""
 
+        # Admin password from Vault secret
         extraEnvs:
           - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
             valueFrom:
@@ -47,9 +51,8 @@ spec:
                 name: opensearch-admin
                 key: password
 
-        config:
-          discovery.seed_hosts: "homelab-opensearch-all-0"
-          cluster.initial_cluster_manager_nodes: "homelab-opensearch-all-0"
+        # DO NOT SET discovery or cluster.initial* in singleNode mode
+        config: {}
 
         securityConfig:
           enabled: true
