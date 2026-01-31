@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: monitoring
+  source:
+    repoURL: https://github.com/prometheus-operator/prometheus-operator
+    targetRevision: v0.74.0
+    path: example/prometheus-operator-crd
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - Replace=true
+      - ServerSideApply=true
