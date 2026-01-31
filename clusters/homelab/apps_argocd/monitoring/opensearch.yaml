@@ -13,8 +13,12 @@ spec:
     helm:
       values: |
         clusterName: homelab-opensearch
+
         singleNode: false
 
+        ##################################
+        # One nodeGroup running everything
+        ##################################
         nodeGroup: all
         replicas: 2
 
@@ -23,18 +27,17 @@ spec:
           - data
           - ingest
 
+        ##################################
+        # Storage on OpenEBS ZFS
+        ##################################
         persistence:
           enabled: true
           size: 100Gi
           storageClass: zfs-nvme
 
-        extraEnvs:
-        - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: opensearch-admin
-              key: password
-
+        ##################################
+        # Very memory-efficient JVM
+        ##################################
         opensearchJavaOpts: "-Xms512m -Xmx512m"
 
         resources:
@@ -45,12 +48,31 @@ spec:
             cpu: "1"
             memory: "2Gi"
 
+        ##################################
+        # Spread across nodes
+        ##################################
         antiAffinity: hard
 
-        config:
-          discovery.seed_hosts: homelab-opensearch
-          cluster.initial_cluster_manager_nodes: homelab-opensearch-0,homelab-opensearch-1
+        ##################################
+        # Admin password
+        ##################################
+        extraEnvs:
+          - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin
+                key: password
 
+        ##################################
+        # Cluster discovery (CRITICAL)
+        ##################################
+        config:
+          discovery.seed_hosts: "homelab-opensearch-all-0,homelab-opensearch-all-1"
+          cluster.initial_cluster_manager_nodes: "homelab-opensearch-all-0,homelab-opensearch-all-1"
+
+        ##################################
+        # TLS via cert-manager (Vault)
+        ##################################
         securityConfig:
           enabled: true
           tls:
