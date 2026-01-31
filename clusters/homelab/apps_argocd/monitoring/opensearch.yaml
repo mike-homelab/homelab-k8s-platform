@@ -13,7 +13,6 @@ spec:
     helm:
       values: |
         clusterName: homelab-opensearch
-
         singleNode: false
 
         ##################################
@@ -45,11 +44,11 @@ spec:
             cpu: "200m"
             memory: "1Gi"
           limits:
-            cpu: "1"soft
+            cpu: "1"
             memory: "2Gi"
 
         ##################################
-        # Spread across nodes
+        # Spread across nodes (required for ZFS)
         ##################################
         antiAffinity: soft
 
