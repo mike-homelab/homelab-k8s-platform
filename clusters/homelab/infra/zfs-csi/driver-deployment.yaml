@@ -100,6 +100,7 @@ spec:
           - "--csi-address=/csi/csi.sock"
           - "--plugin-registration-path=/registration"
           - "--kubelet-registration-path=/var/lib/kubelet/plugins/zfs.csi.openebs.io/csi.sock"
+          - "--mode=registration"
         volumeMounts:
         - name: plugin-dir
           mountPath: /csi
