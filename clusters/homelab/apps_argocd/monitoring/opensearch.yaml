@@ -7,46 +7,49 @@ spec:
   project: monitoring
 
   source:
-    repoURL: oci://ghcr.io/opensearch-project/helm-charts
+    repoURL: https://opensearch-project.github.io/helm-charts
     chart: opensearch
-    targetRevision: 2.30.0
+    targetRevision: "2.30.0"
     helm:
       values: |
         clusterName: homelab-opensearch
         singleNode: false
 
-        master:
-          replicas: 1
-          persistence:
-            enabled: false
-          opensearchJavaOpts: "-Xms256m -Xmx256m"
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 512Mi
+        nodeGroup: all
+        replicas: 2
 
-        data:
-          replicas: 2
-          persistence:
-            enabled: true
-            size: 100Gi
-            storageClass: zfs-nvme
-          opensearchJavaOpts: "-Xms1g -Xmx1g"
-          resources:
-            requests:
-              cpu: 300m
-              memory: 1Gi
-            limits:
-              cpu: 2
-              memory: 2Gi
+        roles:
+          - cluster_manager
+          - data
+          - ingest
 
-        ingest:
-          replicas: 0
-        coordinating:
-          replicas: 0
+        persistence:
+          enabled: true
+          size: 100Gi
+          storageClass: zfs-nvme
+
+        extraEnvs:
+        - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opensearch-admin
+              key: password
+
+        opensearchJavaOpts: "-Xms512m -Xmx512m"
+
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+
+        antiAffinity: hard
+
+        config:
+          discovery.seed_hosts: homelab-opensearch
+          cluster.initial_cluster_manager_nodes: homelab-opensearch-0,homelab-opensearch-1
 
         securityConfig:
           enabled: true
