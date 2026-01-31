@@ -1,100 +1,113 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: opensearch
-#   namespace: argocd
-#   annotations:
-#     argocd.argoproj.io/sync-wave: "12"
-# spec:
-#   project: monitoring
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "12"
+spec:
+  project: monitoring
 
-#   source:
-#     repoURL: https://opensearch-project.github.io/helm-charts
-#     chart: opensearch
-#     targetRevision: 2.30.0
-#     helm:
-#       values: |
-#         clusterName: homelab-opensearch
+  source:
+    repoURL: https://opensearch-project.github.io/helm-charts
+    chart: opensearch
+    targetRevision: 2.30.0
+    helm:
+      values: |
+        clusterName: homelab-opensearch
+        singleNode: false
 
-#         # REQUIRED to enable nodeGroups
-#         singleNode: false
+        ##################################
+        # Master node (no disk)
+        ##################################
+        nodeGroups:
+          master:
+            replicas: 1
+            roles: ["master"]
+            persistence:
+              enabled: false
 
-#         ##################################
-#         # Node group definitions
-#         ##################################
-#         nodeGroups:
+            resources:
+              requests:
+                cpu: 100m
+                memory: 256Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi
 
-#           master:
-#             replicas: 1
-#             roles:
-#               - master
-#             persistence:
-#               enabled: false
+            opensearchJavaOpts: "-Xms256m -Xmx256m"
 
-#             resources:
-#               requests:
-#                 cpu: 100m
-#                 memory: 300Mi
-#               limits:
-#                 cpu: 500m
-#                 memory: 1Gi
+          ##################################
+          # Data nodes (ZFS-backed)
+          ##################################
+          data:
+            replicas: 2
+            roles: ["data", "ingest"]
 
-#             opensearchJavaOpts: "-Xms256m -Xmx256m"
+            persistence:
+              enabled: true
+              size: 100Gi
+              storageClass: zfs-nvme
 
-#           data:
-#             replicas: 2
-#             roles:
-#               - data
-#               - ingest
+            antiAffinity: hard
 
-#             persistence:
-#               enabled: true
-#               size: 100Gi
-#               storageClass: zfs-nvme
+            extraEnvs:
+              - name: NODE_NAME
+                valueFrom:
+                  fieldRef:
+                    fieldPath: spec.nodeName
 
-#             antiAffinity: hard
+            config:
+              cluster.routing.allocation.awareness.attributes: k8s_node
+              node.attr.k8s_node: ${NODE_NAME}
 
-#             extraEnvs:
-#               - name: NODE_NAME
-#                 valueFrom:
-#                   fieldRef:
-#                     fieldPath: spec.nodeName
+            resources:
+              requests:
+                cpu: 300m
+                memory: 1Gi
+              limits:
+                cpu: 2
+                memory: 2Gi
 
-#             config:
-#               cluster.routing.allocation.awareness.attributes: k8s_node
-#               node.attr.k8s_node: ${NODE_NAME}
+            opensearchJavaOpts: "-Xms1g -Xmx1g"
 
-#             opensearchJavaOpts: "-Xms1g -Xmx1g"
+        ##################################
+        # TLS via Vault (cert-manager)
+        ##################################
+        securityConfig:
+          enabled: true
+          tls:
+            http:
+              enabled: true
+              secret: opensearch-tls
+            transport:
+              enabled: true
+              secret: opensearch-tls
 
-#             resources:
-#               requests:
-#                 cpu: "300m"
-#                 memory: "1.5Gi"
-#               limits:
-#                 cpu: "2"
-#                 memory: "2Gi"
+        ##################################
+        # CA trust (THIS fixes your crashloops)
+        ##################################
+        extraVolumes:
+          - name: vault-ca
+            secret:
+              secretName: opensearch-tls
 
-#         ##################################
-#         # TLS via cert-manager (Vault)
-#         ##################################
-#         securityConfig:
-#           enabled: true
-#           tls:
-#             http:
-#               enabled: true
-#               secret: opensearch-tls
-#             transport:
-#               enabled: true
-#               secret: opensearch-tls
+        extraVolumeMounts:
+          - name: vault-ca
+            mountPath: /usr/share/opensearch/config/certs
+            readOnly: true
 
-#         service:
-#           type: ClusterIP
+        ##################################
+        # Service
+        ##################################
+        service:
+          type: ClusterIP
 
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
 
-#   syncPolicy:
-#     automated:
-#       prune: true
-#       selfHeal: true
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
