@@ -16,7 +16,7 @@ spec:
         singleNode: false
 
         nodeGroup: all
-        replicas: 2
+        replicas: 1
 
         roles:
           - cluster_manager
@@ -48,8 +48,8 @@ spec:
                 key: password
 
         config:
-          discovery.seed_hosts: "homelab-opensearch-all-0,homelab-opensearch-all-1"
-          cluster.initial_cluster_manager_nodes: "homelab-opensearch-all-0,homelab-opensearch-all-1"
+            discovery.seed_hosts: "homelab-opensearch-all-0"
+          cluster.initial_cluster_manager_nodes: "homelab-opensearch-all-0"
 
         securityConfig:
           enabled: true
