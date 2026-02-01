@@ -20,7 +20,7 @@ spec:
         command: ["java"]
         args: 
           - "-cp"
-          - "/usr/share/data-prepper/lib/*" 
+          - "/usr/share/data-prepper/lib/*:/usr/share/data-prepper/plugins/*" 
           - "org.opensearch.dataprepper.DataPrepperExecute"
           - "/etc/dataprepper/pipelines.yaml"
           - "/usr/share/data-prepper/config/data-prepper-config.yaml"
