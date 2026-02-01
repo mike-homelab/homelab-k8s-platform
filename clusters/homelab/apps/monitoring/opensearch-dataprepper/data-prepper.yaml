@@ -19,7 +19,13 @@ spec:
         image: opensearchproject/data-prepper:2.8.0
         # We use the official entrypoint but pass the explicit file path as an argument.
         # The script is designed to pass trailing arguments directly to the Java process.
-        args: ["/etc/dataprepper/pipelines.yaml"]
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            java -cp "/usr/share/data-prepper/lib/*:/usr/share/data-prepper/plugins/*" \
+            org.opensearch.dataprepper.DataPrepperExecute \
+            /etc/dataprepper/pipelines.yaml \
+            /usr/share/data-prepper/config/data-prepper-config.yaml
         env:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
