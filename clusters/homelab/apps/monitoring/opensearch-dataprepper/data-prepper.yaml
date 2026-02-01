@@ -19,9 +19,6 @@ spec:
         image: opensearchproject/data-prepper:2.8.0
         command: ["java"]
         args: 
-          - "-cp"
-          - "/usr/share/data-prepper/lib/*:/usr/share/data-prepper/plugins/*" 
-          - "org.opensearch.dataprepper.DataPrepperExecute"
           - "/etc/dataprepper/pipelines.yaml"
           - "/usr/share/data-prepper/config/data-prepper-config.yaml"
         env:
@@ -30,6 +27,8 @@ spec:
               secretKeyRef:
                 name: opensearch-admin
                 key: password
+          - name: DATA_PREPPER_PATH
+            value: "/usr/share/data-prepper"
         ports:
           - containerPort: 4900
             name: metrics
