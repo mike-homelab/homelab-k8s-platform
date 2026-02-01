@@ -21,13 +21,40 @@ spec:
             auth_enabled: false
             commonConfig:
               replication_factor: 1
+            storage:
+              type: filesystem
           singleBinary:
             replicas: 1
             persistence:
               storageClass: "zfs-nvme"
               size: 20Gi
+          # Disable distributed microservices explicitly
+          ingester: { replicas: 0 }
+          distributor: { replicas: 0 }
+          querier: { replicas: 0 }
+          queryFrontend: { replicas: 0 }
+          gateway: { replicas: 1 } # The gateway handles the routing
 
-        # 2. TEMPO (Traces)
+        mimir:
+          deploymentMode: SingleBinary
+          mimir:
+            structuredConfig:
+              multitenancy_enabled: false
+              common:
+                replication_factor: 1
+          # Collapse Mimir into one 'backend' pod
+          backend:
+            replicas: 1
+            persistentVolume:
+              storageClass: "zfs-nvme"
+              size: 20Gi
+          # Disable microservices
+          distributor: { replicas: 0 }
+          ingester: { replicas: 0 }
+          querier: { replicas: 0 }
+          store_gateway: { replicas: 0 }
+          compactor: { replicas: 0 }
+
         tempo:
           fullnameOverride: tempo
           tempo:
@@ -35,26 +62,16 @@ spec:
           persistence:
             enabled: true
             storageClass: "zfs-nvme"
+          # Disable Tempo microservices
+          ingester: { enabled: false }
+          distributor: { enabled: false }
+          querier: { enabled: false }
 
-        # 3. MIMIR (Metrics)
-        mimir:
-          mimir:
-            structuredConfig:
-              multitenancy_enabled: false
-              common:
-                replication_factor: 1
-          # In v3.x of the umbrella chart, monolithic is often 'backend' or 'mimir'
-          backend:
-            replicas: 1
-            persistentVolume:
-              storageClass: "zfs-nvme"
-
-        # 4. GRAFANA
         grafana:
           enabled: true
           persistence:
             enabled: true
-            storageClass: "zfs-ssd"
+            storageClass: "zfs-ssd" # Grafana DB doesn't need NVMe speed
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
