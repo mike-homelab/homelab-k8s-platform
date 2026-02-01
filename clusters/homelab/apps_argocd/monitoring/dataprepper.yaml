@@ -14,8 +14,12 @@ spec:
     helm:
       values: |
         replicaCount: 1
-        extraArgs: 
+        command: ["java"]
+        args: 
+          - "-jar"
+          - "/usr/share/data-prepper/lib/data-prepper-core-2.8.0.jar"
           - "/etc/dataprepper/pipelines.yaml"
+          - "/usr/share/data-prepper/config/data-prepper-config.yaml"
 
         # 1. Disable default config to prevent the "hidden file" NullPointerException
         pipelineConfig:
