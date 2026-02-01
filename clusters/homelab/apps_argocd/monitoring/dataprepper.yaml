@@ -39,12 +39,11 @@ spec:
               secretName: opensearch-tls
               items:
                 - key: ca.crt
-                  path: opensearch-ca.crt
+                  path: ca.crt
 
         volumeMounts:
           - name: opensearch-ca
-            mountPath: /usr/share/data-prepper/config/opensearch-ca.crt
-            subPath: opensearch-ca.crt
+            mountPath: /etc/opensearch-certs
             readOnly: true
 
   destination:
