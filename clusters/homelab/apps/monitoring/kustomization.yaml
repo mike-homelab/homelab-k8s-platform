@@ -1,6 +1,5 @@
 resources:
   - opensearch-cert.yaml
-  - dataprepper-cert.yaml
-  - dataprepper-config.yaml
+  - secrets.yaml
   - namespace.yaml
   - httproute.yaml
