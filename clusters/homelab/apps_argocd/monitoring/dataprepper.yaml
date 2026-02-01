@@ -7,7 +7,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "12"
 spec:
   project: monitoring
-
   source:
     repoURL: https://opensearch-project.github.io/helm-charts
     chart: data-prepper
@@ -15,17 +14,12 @@ spec:
     helm:
       values: |
         replicaCount: 1
+
+        # 1. Disable default config to prevent the "hidden file" NullPointerException
         pipelineConfig:
-          enabled: true
-          existingSecret: dataprepper-pipelines
+          enabled: false
 
-        resources:
-          requests:
-            cpu: 250m
-            memory: 512Mi
-          limits:
-            memory: 1Gi
-
+        # 2. Map the OpenSearch password for the sink
         extraEnvs:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
@@ -33,18 +27,38 @@ spec:
                 name: opensearch-admin
                 key: password
 
-        volumes:
-          - name: opensearch-ca
+        # 3. Define the volumes for both Pipelines and CA
+        extraVolumes:
+          - name: pipeline-config-file
+            secret:
+              secretName: dataprepper-pipelines
+              items:
+                - key: pipelines.yaml
+                  path: pipelines.yaml
+          - name: opensearch-ca-file
             secret:
               secretName: opensearch-tls
               items:
                 - key: ca.crt
                   path: ca.crt
 
-        volumeMounts:
-          - name: opensearch-ca
-            mountPath: /etc/opensearch-certs
+        # 4. Mount them using subPath to ensure only the file is visible
+        extraVolumeMounts:
+          - name: pipeline-config-file
+            mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
+            subPath: pipelines.yaml
             readOnly: true
+          - name: opensearch-ca-file
+            mountPath: /etc/opensearch-certs/ca.crt
+            subPath: ca.crt
+            readOnly: true
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 1Gi
 
   destination:
     server: https://kubernetes.default.svc
