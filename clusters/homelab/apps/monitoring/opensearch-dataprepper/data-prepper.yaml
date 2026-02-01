@@ -27,35 +27,30 @@ spec:
         app: data-prepper
     spec:
       containers:
-        - image: opensearchproject/data-prepper:2.8.0
-          name: data-prepper
-          env:
-            - name: OPENSEARCH_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: opensearch-admin
-                  key: password
-          ports:
-            - containerPort: 21890
-              name: otlp-grpc
-            - containerPort: 4900
-              name: metrics
-          volumeMounts:
-            # MOUNT TO THE PATH FROM THE ERROR LOG
-            - name: pipeline-secret-vol
-              mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
-              subPath: pipelines.yaml
-            - name: config-map-vol
-              mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
-              subPath: data-prepper-config.yaml
-            - name: opensearch-ca
-              mountPath: /etc/opensearch-certs/ca.crt
-              subPath: ca.crt
+      - name: data-prepper
+        image: opensearchproject/data-prepper:2.8.0
+        # NO command, NO args. Let it use the same entrypoint as Docker Compose.
+        env:
+          - name: OPENSEARCH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin
+                key: password
+        volumeMounts:
+          # Mount the WHOLE directory, not a subpath
+          - name: pipeline-volume
+            mountPath: /usr/share/data-prepper/pipelines
+          - name: config-volume
+            mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
+            subPath: data-prepper-config.yaml
+          - name: opensearch-ca
+            mountPath: /etc/opensearch-certs/ca.crt
+            subPath: ca.crt
       volumes:
-        - name: pipeline-secret-vol
+        - name: pipeline-volume
           secret:
-            secretName: dataprepper-pipelines
-        - name: config-map-vol
+            secretName: dataprepper-pipelines # Ensure this secret has a key named "pipelines.yaml"
+        - name: config-volume
           configMap:
             name: data-prepper-config
         - name: opensearch-ca
