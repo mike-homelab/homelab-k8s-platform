@@ -14,7 +14,11 @@ spec:
     targetRevision: "0.3.1"
     helm:
       values: |
-        replicas: 1
+        replicaCount: 1
+
+        pipelineConfig:
+          enabled: false
+          existingSecret: dataprepper-pipelines
 
         resources:
           requests:
@@ -22,73 +26,6 @@ spec:
             memory: 512Mi
           limits:
             memory: 1Gi
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 4900
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 2
-          failureThreshold: 3
-
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 4900
-          initialDelaySeconds: 20
-          periodSeconds: 10
-          timeoutSeconds: 2
-          failureThreshold: 3
-
-        service:
-          ports:
-            - name: prom-remote-write
-              port: 2021
-              targetPort: 2021
-            - name: otlp-grpc
-              port: 21890
-              targetPort: 21890
-
-        config:
-          pipelines:
-            # ---------------- METRICS ----------------
-            metrics-pipeline:
-              source:
-                prometheus:
-                  ssl: false
-              processor:
-                - otel_metrics:
-                - batch:
-              sink:
-                - opensearch:
-                    hosts:
-                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
-                    index: metrics-%{yyyy.MM.dd}
-                    username: admin
-                    password: ${OPENSEARCH_PASSWORD}
-                    insecure: false
-                    ssl:
-                      certificate_authorities:
-                        - /usr/share/data-prepper/config/opensearch-ca.crt
-
-            # ---------------- LOGS / TRACES ----------------
-            otlp-pipeline:
-              source:
-                otlp:
-                  ssl: false
-              processor:
-                - batch:
-              sink:
-                - opensearch:
-                    hosts:
-                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
-                    index: observability-%{yyyy.MM.dd}
-                    username: admin
-                    password: ${OPENSEARCH_PASSWORD}
-                    insecure: false
-                    ssl:
-                      certificate_authorities:
-                        - /usr/share/data-prepper/config/opensearch-ca.crt
 
         extraEnvs:
           - name: OPENSEARCH_PASSWORD
@@ -97,12 +34,12 @@ spec:
                 name: opensearch-admin
                 key: password
 
-        extraVolumes:
+        volumes:
           - name: opensearch-ca
             secret:
               secretName: opensearch-tls
 
-        extraVolumeMounts:
+        volumeMounts:
           - name: opensearch-ca
             mountPath: /usr/share/data-prepper/config/opensearch-ca.crt
             subPath: ca.crt
