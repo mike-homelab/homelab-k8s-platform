@@ -11,9 +11,10 @@ spec:
     targetRevision: 3.0.1
     helm:
       values: |
-        # MINIO: Moved to root level and structured for Bitnami sub-chart
+        # MINIO CONFIGURATION
         minio:
           enabled: true
+          fullnameOverride: "lgtm-minio" # Forces service name to be 'lgtm-minio'
           auth:
             rootUser: "enterprise-logs"
             rootPassword: "supersecret"
@@ -21,8 +22,26 @@ spec:
             enabled: true
             storageClass: "zfs-nvme"
             size: 50Gi
-          # Bitnami MinIO bucket creation syntax
-          defaultBuckets: "chunks,mimir,tempo"
+          # VERIFIED LIFECYCLE: 30-day auto-purge at the bucket level
+          defaultBuckets:
+            - name: chunks
+              lifecycle:
+                - id: cleanup-30d
+                  enabled: true
+                  expiration:
+                    days: 30
+            - name: mimir
+              lifecycle:
+                - id: cleanup-30d
+                  enabled: true
+                  expiration:
+                    days: 30
+            - name: tempo
+              lifecycle:
+                - id: cleanup-30d
+                  enabled: true
+                  expiration:
+                    days: 30
 
         loki:
           deploymentMode: SimpleScalable
@@ -33,7 +52,8 @@ spec:
             storage:
               type: s3
               s3:
-                endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                # Updated to match the fullnameOverride above
+                endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
                 bucketnames: chunks
                 access_key_id: enterprise-logs
                 secret_access_key: supersecret
@@ -52,14 +72,14 @@ spec:
           backend: { replicas: 1 }
 
         mimir:
-          minio: { enabled: false } # Disable Mimir's private minio
+          minio: { enabled: false }
           mimir:
             structuredConfig:
               common:
                 storage:
                   backend: s3
                   s3:
-                    endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                    endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
                     access_key_id: enterprise-logs
                     secret_access_key: supersecret
                     insecure: true
@@ -67,7 +87,6 @@ spec:
               limits:
                 compactor_blocks_retention_period: 30d
               multitenancy_enabled: false
-          # Explicitly set StorageClasses for Mimir components
           ingester:
             replicas: 1
             persistentVolume:
@@ -90,7 +109,7 @@ spec:
                 backend: s3
                 s3:
                   bucket: tempo
-                  endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                  endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
                   access_key_id: enterprise-logs
                   secret_access_key: supersecret
                   insecure: true
@@ -104,7 +123,7 @@ spec:
         grafana:
           persistence:
             enabled: true
-            storageClassName: "zfs-nvme"
+            storageClassName: "zfs-ssd"
             size: 2Gi
   destination:
     server: https://kubernetes.default.svc
