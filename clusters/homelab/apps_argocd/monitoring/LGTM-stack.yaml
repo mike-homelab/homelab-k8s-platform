@@ -11,35 +11,18 @@ spec:
     targetRevision: 3.0.1
     helm:
       values: |
-        global:
-          storageClass: "zfs-nvme"
-          minio:
+        # MINIO: Moved to root level and structured for Bitnami sub-chart
+        minio:
+          enabled: true
+          auth:
+            rootUser: "enterprise-logs"
+            rootPassword: "supersecret"
+          persistence:
             enabled: true
-            replicas: 1
-            persistence:
-              size: 50Gi
-            # MINIO LIFECYCLE: Forces 30-day deletion even if apps fail
-            defaultBuckets:
-              - name: chunks
-                policy: none
-                purge: false
-                lifecycle:
-                  - id: cleanup-30d
-                    enabled: true
-                    expiration:
-                      days: 30
-              - name: mimir
-                lifecycle:
-                  - id: cleanup-30d
-                    enabled: true
-                    expiration:
-                      days: 30
-              - name: tempo
-                lifecycle:
-                  - id: cleanup-30d
-                    enabled: true
-                    expiration:
-                      days: 30
+            storageClass: "zfs-nvme"
+            size: 50Gi
+          # Bitnami MinIO bucket creation syntax
+          defaultBuckets: "chunks,mimir,tempo"
 
         loki:
           deploymentMode: SimpleScalable
@@ -57,16 +40,19 @@ spec:
                 s3forcepathstyle: true
                 insecure: true
             limits_config:
-              retention_period: 720h # 30 Days
-          # Required: Compactors handle the logic of "marking" data for deletion
+              retention_period: 720h
           compactor:
             enabled: true
             retention_enabled: true
-          read: { replicas: 1, resources: { requests: { cpu: 10m, memory: 128Mi } } }
-          write: { replicas: 1, resources: { requests: { cpu: 10m, memory: 256Mi } } }
+          write:
+            persistence:
+              size: 10Gi
+              storageClass: "zfs-nvme"
+          read: { replicas: 1 }
           backend: { replicas: 1 }
 
         mimir:
+          minio: { enabled: false } # Disable Mimir's private minio
           mimir:
             structuredConfig:
               common:
@@ -81,13 +67,21 @@ spec:
               limits:
                 compactor_blocks_retention_period: 30d
               multitenancy_enabled: false
+          # Explicitly set StorageClasses for Mimir components
+          ingester:
+            replicas: 1
+            persistentVolume:
+              size: 10Gi
+              storageClass: "zfs-nvme"
+          compactor:
+            persistentVolume:
+              storageClass: "zfs-nvme"
+          store_gateway:
+            persistentVolume:
+              storageClass: "zfs-nvme"
           distributor: { replicas: 1 }
-          ingester: { replicas: 1, persistence: { size: 10Gi } }
           querier: { replicas: 1 }
           query_frontend: { replicas: 1 }
-          compactor: { replicas: 1 }
-          store_gateway: { replicas: 1 }
-          minio: { enabled: false }
 
         tempo:
           tempo:
@@ -101,7 +95,7 @@ spec:
                   secret_access_key: supersecret
                   insecure: true
                 block:
-                  retention: 720h # 30 Days
+                  retention: 720h
           distributor: { replicas: 1 }
           ingester: { replicas: 1 }
           querier: { replicas: 1 }
@@ -110,7 +104,7 @@ spec:
         grafana:
           persistence:
             enabled: true
-            storageClass: "zfs-ssd"
+            storageClassName: "zfs-ssd"
             size: 2Gi
   destination:
     server: https://kubernetes.default.svc
