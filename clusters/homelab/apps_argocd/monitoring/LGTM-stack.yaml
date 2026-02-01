@@ -4,7 +4,7 @@ metadata:
   name: lgtm-stack
   namespace: argocd
 spec:
-  project: monitoring # Matches your 'argocd app get' output
+  project: monitoring
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: lgtm-distributed
@@ -13,47 +13,105 @@ spec:
       values: |
         global:
           storageClass: "zfs-nvme"
-
-        loki:
-          deploymentMode: SingleBinary
-          singleBinary:
+          minio:
+            enabled: true
             replicas: 1
             persistence:
-              enabled: true
-              size: 20Gi
+              size: 50Gi
+            # MINIO LIFECYCLE: Forces 30-day deletion even if apps fail
+            defaultBuckets:
+              - name: chunks
+                policy: none
+                purge: false
+                lifecycle:
+                  - id: cleanup-30d
+                    enabled: true
+                    expiration:
+                      days: 30
+              - name: mimir
+                lifecycle:
+                  - id: cleanup-30d
+                    enabled: true
+                    expiration:
+                      days: 30
+              - name: tempo
+                lifecycle:
+                  - id: cleanup-30d
+                    enabled: true
+                    expiration:
+                      days: 30
+
+        loki:
+          deploymentMode: SimpleScalable
+          loki:
+            auth_enabled: false
+            commonConfig:
+              replication_factor: 1
+            storage:
+              type: s3
+              s3:
+                endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                bucketnames: chunks
+                access_key_id: enterprise-logs
+                secret_access_key: supersecret
+                s3forcepathstyle: true
+                insecure: true
+            limits_config:
+              retention_period: 720h # 30 Days
+          # Required: Compactors handle the logic of "marking" data for deletion
+          compactor:
+            enabled: true
+            retention_enabled: true
+          read: { replicas: 1, resources: { requests: { cpu: 10m, memory: 128Mi } } }
+          write: { replicas: 1, resources: { requests: { cpu: 10m, memory: 256Mi } } }
+          backend: { replicas: 1 }
 
         mimir:
-          deploymentMode: SingleBinary
           mimir:
             structuredConfig:
               common:
                 storage:
-                  backend: filesystem
-              blocks_storage:
-                backend: filesystem
-          # Force disable all microservices
+                  backend: s3
+                  s3:
+                    endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                    access_key_id: enterprise-logs
+                    secret_access_key: supersecret
+                    insecure: true
+                    bucket_name: mimir
+              limits:
+                compactor_blocks_retention_period: 30d
+              multitenancy_enabled: false
+          distributor: { replicas: 1 }
+          ingester: { replicas: 1, persistence: { size: 10Gi } }
+          querier: { replicas: 1 }
+          query_frontend: { replicas: 1 }
+          compactor: { replicas: 1 }
+          store_gateway: { replicas: 1 }
           minio: { enabled: false }
-          ingester: { replicas: 0 }
-          querier: { replicas: 0 }
-          distributor: { replicas: 0 }
-          compactor: { replicas: 0 }
-          store_gateway: { replicas: 0 }
-          alertmanager: { replicas: 0 }
-          backend: { replicas: 1 } # This is the single binary pod
 
         tempo:
-          fullnameOverride: tempo
           tempo:
-            replicas: 1
-          persistence:
-            enabled: true
-            size: 20Gi
+            storage:
+              trace:
+                backend: s3
+                s3:
+                  bucket: tempo
+                  endpoint: lgtm-stack-minio.monitoring.svc.cluster.local:9000
+                  access_key_id: enterprise-logs
+                  secret_access_key: supersecret
+                  insecure: true
+                block:
+                  retention: 720h # 30 Days
+          distributor: { replicas: 1 }
+          ingester: { replicas: 1 }
+          querier: { replicas: 1 }
+          compactor: { replicas: 1 }
 
         grafana:
-          enabled: true
           persistence:
             enabled: true
             storageClass: "zfs-ssd"
+            size: 2Gi
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -62,5 +120,5 @@ spec:
       prune: true
       selfHeal: true
     syncOptions:
+      - CreateNamespace=true
       - Replace=true
-      - PrunePropagationPolicy=foreground
