@@ -3,4 +3,4 @@ resources:
   - secrets.yaml
   - namespace.yaml
   - httproute.yaml
-  - rback.yaml
+  - rbac.yaml
