@@ -11,120 +11,94 @@ spec:
     targetRevision: 3.0.1
     helm:
       values: |
-        # MINIO CONFIGURATION
-        minio:
+        # --- GRAFANA SECTION (Aligned with your snippet) ---
+        grafana:
           enabled: true
-          fullnameOverride: "lgtm-minio" # Forces service name to be 'lgtm-minio'
-          auth:
-            rootUser: "enterprise-logs"
-            rootPassword: "supersecret"
           persistence:
             enabled: true
-            storageClass: "zfs-nvme"
-            size: 50Gi
-          # VERIFIED LIFECYCLE: 30-day auto-purge at the bucket level
-          defaultBuckets:
-            - name: chunks
-              lifecycle:
-                - id: cleanup-30d
-                  enabled: true
-                  expiration:
-                    days: 30
-            - name: mimir
-              lifecycle:
-                - id: cleanup-30d
-                  enabled: true
-                  expiration:
-                    days: 30
-            - name: tempo
-              lifecycle:
-                - id: cleanup-30d
-                  enabled: true
-                  expiration:
-                    days: 30
+            storageClassName: "zfs-ssd"
+            size: 2Gi
+          datasources:
+            datasources.yaml:
+              apiVersion: 1
+              datasources:
+                - name: Loki
+                  uid: loki
+                  type: loki
+                  url: http://{{ .Release.Name }}-loki-gateway
+                - name: Mimir
+                  uid: prom
+                  type: prometheus
+                  url: http://{{ .Release.Name }}-mimir-nginx/prometheus
+                  isDefault: true
+                - name: Tempo
+                  uid: tempo
+                  type: tempo
+                  url: http://{{ .Release.Name }}-tempo-query-frontend:3200
 
+        # --- LOKI SECTION (Added Storage logic to sub-chart) ---
         loki:
-          deploymentMode: SimpleScalable
+          enabled: true
           loki:
-            auth_enabled: false
-            commonConfig:
-              replication_factor: 1
             storage:
               type: s3
               s3:
-                # Updated to match the fullnameOverride above
-                endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
+                endpoint: lgtm-stack-mimir-minio.monitoring.svc.cluster.local:9000
                 bucketnames: chunks
-                access_key_id: enterprise-logs
+                access_key_id: mimir
                 secret_access_key: supersecret
                 s3forcepathstyle: true
                 insecure: true
-            limits_config:
-              retention_period: 720h
-          compactor:
-            enabled: true
-            retention_enabled: true
-          write:
-            persistence:
-              size: 10Gi
-              storageClass: "zfs-nvme"
-          read: { replicas: 1 }
-          backend: { replicas: 1 }
 
+        # --- MIMIR SECTION (Strictly Aligned with your Resources & Replicas) ---
         mimir:
-          minio: { enabled: false }
+          enabled: true
+          alertmanager: { resources: { requests: { cpu: 20m } } }
+          compactor: { resources: { requests: { cpu: 20m } } }
+          distributor: { resources: { requests: { cpu: 20m } } }
+          ingester:
+            replicas: 2
+            zoneAwareReplication: { enabled: false }
+            resources: { requests: { cpu: 20m } }
+            persistentVolume: { storageClass: "zfs-nvme", size: 10Gi }
+          overrides_exporter: { resources: { requests: { cpu: 20m } } }
+          querier: { replicas: 1, resources: { requests: { cpu: 20m } } }
+          query_frontend: { resources: { requests: { cpu: 20m } } }
+          query_scheduler: { replicas: 1, resources: { requests: { cpu: 20m } } }
+          ruler: { resources: { requests: { cpu: 20m } } }
+          store_gateway:
+            zoneAwareReplication: { enabled: false }
+            resources: { requests: { cpu: 20m } }
+          rollout_operator: { resources: { requests: { cpu: 20m } } }
+          
+          # Enabling the minio sub-component from your snippet
+          minio:
+            enabled: true
+            resources: { requests: { cpu: 20m } }
+            persistence: { enabled: true, storageClass: "zfs-nvme", size: 50Gi }
+
+          # Injecting configuration to the Mimir sub-chart binary
           mimir:
             structuredConfig:
               common:
                 storage:
                   backend: s3
                   s3:
-                    endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
-                    access_key_id: enterprise-logs
+                    endpoint: lgtm-stack-mimir-minio.monitoring.svc.cluster.local:9000
+                    access_key_id: mimir
                     secret_access_key: supersecret
                     insecure: true
                     bucket_name: mimir
-              limits:
-                compactor_blocks_retention_period: 30d
               multitenancy_enabled: false
+
+        # --- TEMPO SECTION (Aligned with your snippet) ---
+        tempo:
+          enabled: true
           ingester:
             replicas: 1
-            persistentVolume:
-              size: 10Gi
-              storageClass: "zfs-nvme"
-          compactor:
-            persistentVolume:
-              storageClass: "zfs-nvme"
-          store_gateway:
-            persistentVolume:
-              storageClass: "zfs-nvme"
-          distributor: { replicas: 1 }
-          querier: { replicas: 1 }
-          query_frontend: { replicas: 1 }
 
-        tempo:
-          tempo:
-            storage:
-              trace:
-                backend: s3
-                s3:
-                  bucket: tempo
-                  endpoint: lgtm-minio.monitoring.svc.cluster.local:9000
-                  access_key_id: enterprise-logs
-                  secret_access_key: supersecret
-                  insecure: true
-                block:
-                  retention: 720h
-          distributor: { replicas: 1 }
-          ingester: { replicas: 1 }
-          querier: { replicas: 1 }
-          compactor: { replicas: 1 }
-
-        grafana:
-          persistence:
-            enabled: true
-            storageClassName: "zfs-ssd"
-            size: 2Gi
+        grafana-oncall:
+          enabled: false
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -134,4 +108,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - Replace=true
