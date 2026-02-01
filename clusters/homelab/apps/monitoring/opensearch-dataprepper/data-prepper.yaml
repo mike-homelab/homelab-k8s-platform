@@ -17,21 +17,25 @@ spec:
       containers:
       - name: data-prepper
         image: opensearchproject/data-prepper:2.8.0
-        command: ["java"]
-        args: 
-          - "/etc/dataprepper/pipelines.yaml"
-          - "/usr/share/data-prepper/config/data-prepper-config.yaml"
         env:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
               secretKeyRef:
                 name: opensearch-admin
                 key: password
-          - name: DATA_PREPPER_PATH
-            value: "/usr/share/data-prepper"
+          # CORRECT WAY: The internal script looks for this variable to find your pipelines
+          - name: DATA_PREPPER_PIPELINE_CONFIG_FILE
+            value: "/etc/dataprepper/pipelines.yaml"
+          # OPTIONAL: Recommended to set heap size to prevent OOM based on your 1Gi limit
+          - name: JAVA_OPTS
+            value: "-Xms512m -Xmx512m"
         ports:
           - containerPort: 4900
             name: metrics
+          - containerPort: 21890
+            name: otlp-grpc
+          - containerPort: 21891
+            name: otlp-http
         volumeMounts:
           - name: pipeline-config
             mountPath: /etc/dataprepper/pipelines.yaml
@@ -53,10 +57,19 @@ metadata:
   name: dataprepper
   namespace: monitoring
 spec:
-  ports:
-    - port: 4900
-      targetPort: 4900
-      protocol: TCP
-      name: metrics
+  type: ClusterIP
   selector:
     app: dataprepper
+  ports:
+    - name: otlp-grpc
+      protocol: TCP
+      port: 21890
+      targetPort: 21890
+    - name: otlp-http
+      protocol: TCP
+      port: 21891
+      targetPort: 21891
+    - name: metrics
+      protocol: TCP
+      port: 4900
+      targetPort: 4900
