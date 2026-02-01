@@ -30,11 +30,6 @@ spec:
         - image: opensearchproject/data-prepper:2.8.0
           name: data-prepper
           env:
-            - name: DATA_PREPPER_PIPELINE_CONFIG_FILE
-              value: "/etc/data-prepper/pipelines.yaml"
-            - name: DATA_PREPPER_CONFIG_FILE
-              value: "/etc/data-prepper/data-prepper-config.yaml"
-            # Injects the password from your secret into the environment
             - name: OPENSEARCH_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,12 +41,16 @@ spec:
             - containerPort: 4900
               name: metrics
           volumeMounts:
+            # MOUNT TO THE PATH FROM THE ERROR LOG
             - name: pipeline-secret-vol
-              mountPath: /etc/data-prepper/pipelines.yaml
+              mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
               subPath: pipelines.yaml
             - name: config-map-vol
-              mountPath: /etc/data-prepper/data-prepper-config.yaml
+              mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
               subPath: data-prepper-config.yaml
+            - name: opensearch-ca
+              mountPath: /etc/opensearch-certs/ca.crt
+              subPath: ca.crt
       volumes:
         - name: pipeline-secret-vol
           secret:
@@ -59,6 +58,9 @@ spec:
         - name: config-map-vol
           configMap:
             name: data-prepper-config
+        - name: opensearch-ca
+          secret:
+            secretName: opensearch-tls
 ---
 apiVersion: v1
 kind: Service
