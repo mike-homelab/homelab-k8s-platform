@@ -104,7 +104,7 @@ spec:
         grafana:
           persistence:
             enabled: true
-            storageClassName: "zfs-ssd"
+            storageClassName: "zfs-nvme"
             size: 2Gi
   destination:
     server: https://kubernetes.default.svc
