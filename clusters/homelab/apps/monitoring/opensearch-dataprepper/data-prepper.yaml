@@ -19,8 +19,9 @@ spec:
         image: opensearchproject/data-prepper:2.8.0
         command: ["java"]
         args: 
-          - "-jar"
-          - "/usr/share/data-prepper/lib/data-prepper-core-2.8.0.jar"
+          - "-cp"
+          - "/usr/share/data-prepper/lib/*" 
+          - "org.opensearch.dataprepper.DataPrepper"
           - "/etc/dataprepper/pipelines.yaml"
           - "/usr/share/data-prepper/config/data-prepper-config.yaml"
         env:
