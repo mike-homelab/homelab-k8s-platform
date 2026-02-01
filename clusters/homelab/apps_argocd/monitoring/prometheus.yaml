@@ -13,20 +13,67 @@ spec:
     targetRevision: 61.0.0
     helm:
       values: |
+        # DISABLE UNNECESSARY OVERHEAD
         crds:
           enabled: false
-        prometheus:
-          prometheusSpec:
-            remoteWrite:
-            - url: http://dataprepper-data-prepper.monitoring.svc.cluster.local:2021/api/v1/write
-              queueConfig:
-                capacity: 10000
-                maxShards: 50
-                minShards: 1
-                maxSamplesPerSend: 2000
-                batchSendDeadline: 5s
         grafana:
           enabled: false
+        prometheusOperator:
+          admissionWebhooks:
+            enabled: false # Saves RAM/CPU for a single-user lab
+          tls:
+            enabled: false
+        
+        # PROMETHEUS CORE
+        prometheus:
+          prometheusSpec:
+            replicas: 1
+            # Remote Write to the Monolithic Mimir endpoint
+            remoteWrite:
+            - url: http://lgtm-stack-mimir:8080/api/v1/push
+              queueConfig:
+                capacity: 5000 # Reduced for homelab memory footprint
+                maxSamplesPerSend: 1000
+            
+            # Retention: Keep it small locally since Mimir has the long-term data
+            retention: 2d
+            retentionSize: "15GB"
+
+            # Storage: Use NVME for active WAL (Write Ahead Log) and TSDB
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: zfs-nvme # NVME for speed on active scrapes
+                  accessModes: ["ReadWriteOnce"]
+                  resources:
+                    requests:
+                      storage: 20Gi
+
+        # ALERTMANAGER
+        alertmanager:
+          alertmanagerSpec:
+            replicas: 1
+            storage:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: zfs-ssd # SSD is fine for silence/config storage
+                  resources:
+                    requests:
+                      storage: 1Gi
+
+        # KUBE-STATE-METRICS (Keep it light)
+        kube-state-metrics:
+          resources:
+            limits: { cpu: 100m, memory: 128Mi }
+            requests: { cpu: 10m, memory: 64Mi }
+
+        # NODE EXPORTER
+        nodeExporter:
+          enabled: true
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,5 @@
+resources:
+  - rbac.yaml
+  - configmap.yaml
+  - daemonset.yaml
+  - service.yaml

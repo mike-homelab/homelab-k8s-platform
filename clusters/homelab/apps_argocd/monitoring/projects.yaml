@@ -9,10 +9,7 @@ spec:
   sourceRepos:
   - https://github.com/mike-homelab/homelab-k8s-platform
   - https://prometheus-community.github.io/helm-charts
-  - https://open-telemetry.github.io/opentelemetry-helm-charts
-  - https://opensearch-project.github.io/helm-charts
-  - https://opensearch-project.github.io/helm-charts
-  - https://github.com/prometheus-operator/prometheus-operator
+  - https://grafana.github.io/helm-charts
 
   destinations:
   - namespace: '*'

@@ -1,0 +1,92 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lgtm-stack
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    # We use the specific app charts instead of the 'distributed' umbrella for less overhead
+    chart: lgtm-distributed 
+    targetRevision: 1.2.0
+    helm:
+      values: |
+        # DISABLE HIGH AVAILABILITY (Saves massive CPU/RAM)
+        global:
+          storageClass: "zfs-ssd"
+
+        # 1. LOKI: Single Binary Mode
+        loki:
+          deploymentMode: SingleBinary
+          loki:
+            auth_enabled: false
+            commonConfig:
+              replication_factor: 1
+            storage:
+              type: filesystem
+          singleBinary:
+            replicas: 1
+            persistence:
+              storageClass: "zfs-nvme" # Keep IO on NVMe
+              size: 20Gi
+          # Disable all the extra distributed components
+          ingester: { replicas: 0 }
+          querier: { replicas: 0 }
+          distributor: { replicas: 0 }
+          compactor: { replicas: 0 }
+          indexGateway: { replicas: 0 }
+
+        # 2. TEMPO: Monolithic Mode
+        tempo:
+          fullnameOverride: tempo
+          tempo:
+            replicas: 1
+            storage:
+              trace:
+                backend: local
+                local:
+                  path: /var/tempo/traces
+          persistence:
+            enabled: true
+            storageClass: "zfs-nvme"
+          # Disable distributed microservices
+          ingester: { enabled: false }
+          distributor: { enabled: false }
+          querier: { enabled: false }
+          queryFrontend: { enabled: false }
+          compactor: { enabled: false }
+
+        # 3. MIMIR: Monolithic Mode
+        mimir:
+          mimir:
+            structuredConfig:
+              multitenancy_enabled: false
+              common:
+                replication_factor: 1
+          # Run as a single replica statefulset
+          backend:
+            replicas: 1
+            persistentVolume:
+              storageClass: "zfs-nvme"
+          # Disable the dozens of micro-pods
+          distributor: { replicas: 0 }
+          ingester: { replicas: 0 }
+          querier: { replicas: 0 }
+          query_frontend: { replicas: 0 }
+          store_gateway: { replicas: 0 }
+          compactor: { replicas: 0 }
+
+        # 4. GRAFANA
+        grafana:
+          replicas: 1
+          resources:
+            limits: { cpu: 500m, memory: 512Mi }
+            requests: { cpu: 100m, memory: 256Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
