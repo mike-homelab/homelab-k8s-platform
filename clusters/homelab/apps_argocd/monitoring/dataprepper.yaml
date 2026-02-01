@@ -27,36 +27,6 @@ spec:
           limits:
             memory: 1Gi
 
-<<<<<<< HEAD
-=======
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 4900
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 2
-          failureThreshold: 3
-
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 4900
-          initialDelaySeconds: 20
-          periodSeconds: 10
-          timeoutSeconds: 2
-          failureThreshold: 3
-
-        service:
-          ports:
-            - name: prom-remote-write
-              port: 2021
-              targetPort: 2021
-            - name: otlp-grpc
-              port: 21890
-              targetPort: 21890
-
->>>>>>> e677b84ef3755e2357cdd2feea5a5c0a22a63849
         extraEnvs:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
