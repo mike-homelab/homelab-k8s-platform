@@ -8,13 +8,13 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: lgtm-distributed
-    targetRevision: 3.0.1 # Updated to the latest stable major version
+    targetRevision: 3.0.1
     helm:
       values: |
         global:
-          storageClass: "zfs-ssd"
+          storageClass: "zfs-nvme"
 
-        # 1. LOKI (Logs) - Modern 3.0+ Config
+        # 1. LOKI - Single Binary
         loki:
           deploymentMode: SingleBinary
           loki:
@@ -28,50 +28,61 @@ spec:
             persistence:
               storageClass: "zfs-nvme"
               size: 20Gi
-          # Disable distributed microservices explicitly
-          ingester: { replicas: 0 }
-          distributor: { replicas: 0 }
-          querier: { replicas: 0 }
-          queryFrontend: { replicas: 0 }
-          gateway: { replicas: 1 } # The gateway handles the routing
 
+        # 2. MIMIR - Monolithic Backend Mode
         mimir:
-          deploymentMode: SingleBinary
           mimir:
             structuredConfig:
               multitenancy_enabled: false
               common:
-                replication_factor: 1
-          # Collapse Mimir into one 'backend' pod
+                storage:
+                  backend: filesystem
+              blocks_storage:
+                backend: filesystem
+              alertmanager_storage:
+                backend: filesystem
+              ruler_storage:
+                backend: filesystem
+          minio:
+            enabled: false 
+          # Disable all distributed micro-components
+          ingester: { replicas: 0 }
+          querier: { replicas: 0 }
+          distributor: { replicas: 0 }
+          compactor: { replicas: 0 }
+          store_gateway: { replicas: 0 }
+          # Use the monolithic backend (this replaces all the above)
           backend:
             replicas: 1
             persistentVolume:
               storageClass: "zfs-nvme"
               size: 20Gi
-          # Disable microservices
-          distributor: { replicas: 0 }
-          ingester: { replicas: 0 }
-          querier: { replicas: 0 }
-          store_gateway: { replicas: 0 }
-          compactor: { replicas: 0 }
 
+        # 3. TEMPO - Monolithic
         tempo:
           fullnameOverride: tempo
           tempo:
             replicas: 1
+            storage:
+              trace:
+                backend: local
           persistence:
             enabled: true
             storageClass: "zfs-nvme"
-          # Disable Tempo microservices
+            size: 20Gi
+          # Explicitly disable distributed parts
           ingester: { enabled: false }
           distributor: { enabled: false }
           querier: { enabled: false }
+          queryFrontend: { enabled: false }
+          compactor: { enabled: false }
 
+        # 4. GRAFANA
         grafana:
           enabled: true
           persistence:
             enabled: true
-            storageClass: "zfs-ssd" # Grafana DB doesn't need NVMe speed
+            storageClass: "zfs-ssd"
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
