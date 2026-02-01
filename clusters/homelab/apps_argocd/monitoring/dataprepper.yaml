@@ -15,17 +15,10 @@ spec:
     helm:
       values: |
         replicaCount: 1
-
-        ############################
-        # PIPELINE CONFIG (FIXED)
-        ############################
         pipelineConfig:
           enabled: true
           existingSecret: dataprepper-pipelines
 
-        ############################
-        # RESOURCES
-        ############################
         resources:
           requests:
             cpu: 250m
@@ -33,9 +26,6 @@ spec:
           limits:
             memory: 1Gi
 
-        ############################
-        # OPENSEARCH AUTH
-        ############################
         extraEnvs:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
@@ -43,17 +33,18 @@ spec:
                 name: opensearch-admin
                 key: password
 
-        ############################
-        # OPENSEARCH CA (FIXED)
-        ############################
         volumes:
           - name: opensearch-ca
             secret:
               secretName: opensearch-tls
+              items:
+                - key: ca.crt
+                  path: opensearch-ca.crt
 
         volumeMounts:
           - name: opensearch-ca
-            mountPath: /usr/share/data-prepper/config/opensearch-ca
+            mountPath: /usr/share/data-prepper/config/opensearch-ca.crt
+            subPath: opensearch-ca.crt
             readOnly: true
 
   destination:
