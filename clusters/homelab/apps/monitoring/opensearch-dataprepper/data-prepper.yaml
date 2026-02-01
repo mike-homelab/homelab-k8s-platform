@@ -1,57 +1,84 @@
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-prepper-config
+  namespace: monitoring
+data:
+  pipelines.yaml: |
+    entry-pipeline:
+      source:
+        otlp:
+          grpc:
+            ssl: false
+      sink:
+        - pipeline:
+            name: "raw-pipeline"
+        - pipeline:
+            name: "service-map-pipeline"
+    raw-pipeline:
+      source:
+        pipeline:
+          name: "entry-pipeline"
+      processor:
+        - otel_trace_raw:
+      sink:
+        - stdout:
+    service-map-pipeline:
+      source:
+        pipeline:
+          name: "entry-pipeline"
+      processor:
+        - service_map_stateful:
+      sink:
+        - stdout:
+  data-prepper-config.yaml: |
+    ssl: false
+    peer_forwarder:
+      discovery_mode: dns
+      domain_name: "dataprepper.monitoring.svc.cluster.local"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dataprepper
+  name: data-prepper
   namespace: monitoring
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: dataprepper
+      app: data-prepper
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:
-        app: dataprepper
+        app: data-prepper
     spec:
       containers:
-      - name: data-prepper
-        image: opensearchproject/data-prepper:2.8.0
-        # We use the official entrypoint but pass the explicit file path as an argument.
-        # The script is designed to pass trailing arguments directly to the Java process.
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            java -cp "/usr/share/data-prepper/lib/*:/usr/share/data-prepper/plugins/*" \
-            org.opensearch.dataprepper.DataPrepperExecute \
-            /etc/dataprepper/pipelines.yaml \
-            /usr/share/data-prepper/config/data-prepper-config.yaml
-        env:
-          - name: OPENSEARCH_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: opensearch-admin
-                key: password
-          # We keep this as a backup
-          - name: DATA_PREPPER_PIPELINE_CONFIG_FILE
-            value: "/etc/dataprepper/pipelines.yaml"
-        ports:
-          - containerPort: 4900
-            name: metrics
-        volumeMounts:
-          - name: pipeline-config
-            mountPath: /etc/dataprepper/pipelines.yaml
-            subPath: pipelines.yaml
-          - name: opensearch-ca
-            mountPath: /etc/opensearch-certs/ca.crt
-            subPath: ca.crt
+        - image: opensearchproject/data-prepper:2.8.0
+          name: data-prepper
+          env:
+            - name: DATA_PREPPER_PIPELINE_CONFIG_FILE
+              value: "/etc/data-prepper/pipelines.yaml"
+            - name: DATA_PREPPER_CONFIG_FILE
+              value: "/etc/data-prepper/data-prepper-config.yaml"
+          ports:
+            - containerPort: 21890
+              name: otlp-grpc
+            - containerPort: 4900
+              name: metrics
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/data-prepper/pipelines.yaml
+              subPath: pipelines.yaml
+            - name: config-volume
+              mountPath: /etc/data-prepper/data-prepper-config.yaml
+              subPath: data-prepper-config.yaml
       volumes:
-        - name: pipeline-config
-          secret:
-            secretName: dataprepper-pipelines
-        - name: opensearch-ca
-          secret:
-            secretName: opensearch-tls
+        - name: config-volume
+          configMap:
+            name: data-prepper-config
 ---
 apiVersion: v1
 kind: Service
@@ -61,7 +88,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: dataprepper
+    app: data-prepper # MATCHES Deployment label
   ports:
     - name: otlp-grpc
       protocol: TCP
