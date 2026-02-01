@@ -5,33 +5,6 @@ metadata:
   name: data-prepper-config
   namespace: monitoring
 data:
-  pipelines.yaml: |
-    entry-pipeline:
-      source:
-        otlp:
-          grpc:
-            ssl: false
-      sink:
-        - pipeline:
-            name: "raw-pipeline"
-        - pipeline:
-            name: "service-map-pipeline"
-    raw-pipeline:
-      source:
-        pipeline:
-          name: "entry-pipeline"
-      processor:
-        - otel_trace_raw:
-      sink:
-        - stdout:
-    service-map-pipeline:
-      source:
-        pipeline:
-          name: "entry-pipeline"
-      processor:
-        - service_map_stateful:
-      sink:
-        - stdout:
   data-prepper-config.yaml: |
     ssl: false
     peer_forwarder:
@@ -48,8 +21,6 @@ spec:
   selector:
     matchLabels:
       app: data-prepper
-  strategy:
-    type: Recreate
   template:
     metadata:
       labels:
@@ -63,20 +34,29 @@ spec:
               value: "/etc/data-prepper/pipelines.yaml"
             - name: DATA_PREPPER_CONFIG_FILE
               value: "/etc/data-prepper/data-prepper-config.yaml"
+            # Injects the password from your secret into the environment
+            - name: OPENSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: opensearch-admin
+                  key: password
           ports:
             - containerPort: 21890
               name: otlp-grpc
             - containerPort: 4900
               name: metrics
           volumeMounts:
-            - name: config-volume
+            - name: pipeline-secret-vol
               mountPath: /etc/data-prepper/pipelines.yaml
               subPath: pipelines.yaml
-            - name: config-volume
+            - name: config-map-vol
               mountPath: /etc/data-prepper/data-prepper-config.yaml
               subPath: data-prepper-config.yaml
       volumes:
-        - name: config-volume
+        - name: pipeline-secret-vol
+          secret:
+            secretName: dataprepper-pipelines
+        - name: config-map-vol
           configMap:
             name: data-prepper-config
 ---
@@ -88,17 +68,11 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: data-prepper # MATCHES Deployment label
+    app: data-prepper
   ports:
     - name: otlp-grpc
-      protocol: TCP
       port: 21890
       targetPort: 21890
-    - name: otlp-http
-      protocol: TCP
-      port: 21891
-      targetPort: 21891
     - name: metrics
-      protocol: TCP
       port: 4900
       targetPort: 4900
