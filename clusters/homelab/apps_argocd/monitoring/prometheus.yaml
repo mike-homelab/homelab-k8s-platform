@@ -18,7 +18,13 @@ spec:
         prometheus:
           prometheusSpec:
             remoteWrite:
-            - url: http://dataprepper.monitoring.svc.cluster.local:2021/api/v1/write
+            - url: http://dataprepper-data-prepper.monitoring.svc.cluster.local:2021/api/v1/write
+              queueConfig:
+                capacity: 10000
+                maxShards: 50
+                minShards: 1
+                maxSamplesPerSend: 2000
+                batchSendDeadline: 5s
         grafana:
           enabled: false
   destination:
