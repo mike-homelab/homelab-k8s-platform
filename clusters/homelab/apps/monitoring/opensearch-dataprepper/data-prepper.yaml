@@ -21,7 +21,7 @@ spec:
         args: 
           - "-cp"
           - "/usr/share/data-prepper/lib/*" 
-          - "org.opensearch.dataprepper.DataPrepper"
+          - "org.opensearch.dataprepper.DataPrepperExecute"
           - "/etc/dataprepper/pipelines.yaml"
           - "/usr/share/data-prepper/config/data-prepper-config.yaml"
         env:
