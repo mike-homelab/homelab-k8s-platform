@@ -1,0 +1,30 @@
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: opensearch-dashboards-lb
+#   namespace: monitoring
+# spec:
+#   type: LoadBalancer
+#   selector:
+#     app: opensearch-dashboards
+#   ports:
+#     - name: http
+#       port: 5601
+#       targetPort: 5601
+# Opensearch Dashboards HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: opensearch-dashboards
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: nginx-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - opensearch.michaelhomelab.work
+  rules:
+    - backendRefs:
+        - name: opensearch-dashboards
+          port: 5601

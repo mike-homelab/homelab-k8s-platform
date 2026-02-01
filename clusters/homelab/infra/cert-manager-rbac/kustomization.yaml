@@ -1,0 +1,2 @@
+resources:
+  - cert-manager-vault-token-rbac.yaml

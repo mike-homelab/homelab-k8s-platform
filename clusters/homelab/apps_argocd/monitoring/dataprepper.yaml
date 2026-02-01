@@ -1,0 +1,120 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dataprepper
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "12"
+spec:
+  project: monitoring
+
+  source:
+    repoURL: https://opensearch-project.github.io/helm-charts
+    chart: data-prepper
+    targetRevision: "0.3.1"
+    helm:
+      values: |
+        replicas: 1
+
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            memory: 1Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4900
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4900
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 2
+          failureThreshold: 3
+
+        service:
+          ports:
+            - name: prom-remote-write
+              port: 2021
+              targetPort: 2021
+            - name: otlp-grpc
+              port: 21890
+              targetPort: 21890
+
+        config:
+          pipelines:
+            # ---------------- METRICS ----------------
+            metrics-pipeline:
+              source:
+                prometheus:
+                  ssl: false
+              processor:
+                - otel_metrics:
+                - batch:
+              sink:
+                - opensearch:
+                    hosts:
+                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
+                    index: metrics-%{yyyy.MM.dd}
+                    username: admin
+                    password: ${OPENSEARCH_PASSWORD}
+                    insecure: false
+                    ssl:
+                      certificate_authorities:
+                        - /usr/share/data-prepper/config/opensearch-ca.crt
+
+            # ---------------- LOGS / TRACES ----------------
+            otlp-pipeline:
+              source:
+                otlp:
+                  ssl: false
+              processor:
+                - batch:
+              sink:
+                - opensearch:
+                    hosts:
+                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
+                    index: observability-%{yyyy.MM.dd}
+                    username: admin
+                    password: ${OPENSEARCH_PASSWORD}
+                    insecure: false
+                    ssl:
+                      certificate_authorities:
+                        - /usr/share/data-prepper/config/opensearch-ca.crt
+
+        extraEnvs:
+          - name: OPENSEARCH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin
+                key: password
+
+        extraVolumes:
+          - name: opensearch-ca
+            secret:
+              secretName: opensearch-tls
+
+        extraVolumeMounts:
+          - name: opensearch-ca
+            mountPath: /usr/share/data-prepper/config/opensearch-ca.crt
+            subPath: ca.crt
+            readOnly: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

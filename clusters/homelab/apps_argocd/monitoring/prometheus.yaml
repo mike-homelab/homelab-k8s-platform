@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "11"
+spec:
+  project: monitoring
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 61.0.0
+    helm:
+      values: |
+        crds:
+          enabled: false
+        prometheus:
+          prometheusSpec:
+            remoteWrite:
+            - url: http://dataprepper.monitoring.svc.cluster.local:2021/api/v1/write
+        grafana:
+          enabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring

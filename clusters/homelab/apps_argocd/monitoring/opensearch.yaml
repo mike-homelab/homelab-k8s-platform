@@ -1,0 +1,76 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opensearch
+  namespace: argocd
+spec:
+  project: monitoring
+
+  source:
+    repoURL: https://opensearch-project.github.io/helm-charts
+    chart: opensearch
+    targetRevision: "2.30.0"
+    helm:
+      values: |
+        image:
+          tag: 2.18.0
+        clusterName: homelab-opensearch
+
+        # CRITICAL for 1-node homelab
+        singleNode: true
+
+        nodeGroup: all
+        replicas: 1
+
+        roles:
+          - cluster_manager
+          - data
+          - ingest
+
+        persistence:
+          enabled: true
+          size: 100Gi
+          storageClass: zfs-nvme
+
+        # Low-memory JVM (safe)
+        opensearchJavaOpts: "-Xms512m -Xmx512m"
+
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
+
+        antiAffinity: ""
+
+        # Admin password from Vault secret
+        extraEnvs:
+          - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin
+                key: password
+
+        # DO NOT SET discovery or cluster.initial* in singleNode mode
+        config: {}
+
+        securityConfig:
+          enabled: true
+          tls:
+            http:
+              enabled: true
+              secret: opensearch-tls
+            transport:
+              enabled: true
+              secret: opensearch-tls
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

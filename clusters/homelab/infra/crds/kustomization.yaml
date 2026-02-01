@@ -1,0 +1,2 @@
+resources:
+  - nginix/nginix-gateway-crd.yaml

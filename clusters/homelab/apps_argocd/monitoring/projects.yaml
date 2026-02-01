@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  description: Observability & Search Stack
+
+  sourceRepos:
+  - https://github.com/mike-homelab/homelab-k8s-platform
+  - https://prometheus-community.github.io/helm-charts
+  - https://open-telemetry.github.io/opentelemetry-helm-charts
+  - https://opensearch-project.github.io/helm-charts
+  - https://opensearch-project.github.io/helm-charts
+  - https://github.com/prometheus-operator/prometheus-operator
+
+  destinations:
+  - namespace: '*'
+    server: https://kubernetes.default.svc
+
+  # Allow cluster-scoped resources
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

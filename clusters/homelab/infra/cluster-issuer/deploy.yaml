@@ -1,0 +1,36 @@
+---
+# apiVersion: cert-manager.io/v1
+# kind: ClusterIssuer
+# metadata:
+#   name: vault-cluster-issuer
+# spec:
+#   vault:
+#     server: https://vault.michaelhomelab.work:8200
+#     path: pki_int/issue/michaelhomelab-cluster
+#     auth:
+#       appRole:
+#         path: approle                # <--- REQUIRED
+#         roleId: "d5f54bf0-0aa2-00e3-329c-02124a70ad77"
+#         secretRef:
+#           name: vault-approle-secret
+#           key: secretId
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-issuer
+spec:
+  vault:
+    server: https://vault.michaelhomelab.work:8200
+    path: pki_int/sign/michaelhomelab-cluster
+    caBundleSecretRef:
+      name: vault-tls-ca
+      key: ca.crt
+    auth:
+      tokenSecretRef:
+        name: vault-token
+        key: token
+
+
+
+
+
