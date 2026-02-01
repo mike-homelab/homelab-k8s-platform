@@ -1,16 +1,3 @@
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: data-prepper-config
-  namespace: monitoring
-data:
-  data-prepper-config.yaml: |
-    ssl: false
-    peer_forwarder:
-      discovery_mode: dns
-      domain_name: "dataprepper.monitoring.svc.cluster.local"
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,7 +16,6 @@ spec:
       containers:
       - name: data-prepper
         image: opensearchproject/data-prepper:2.8.0
-        # NO command, NO args. Let it use the same entrypoint as Docker Compose.
         env:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
@@ -37,39 +23,21 @@ spec:
                 name: opensearch-admin
                 key: password
         volumeMounts:
-          # Mount the WHOLE directory, not a subpath
-          - name: pipeline-volume
+          # Mounts the 'pipelines.yaml' key as a file into the /pipelines/ directory
+          - name: pipelines-vol
             mountPath: /usr/share/data-prepper/pipelines
-          - name: config-volume
-            mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
-            subPath: data-prepper-config.yaml
-          - name: opensearch-ca
-            mountPath: /etc/opensearch-certs/ca.crt
-            subPath: ca.crt
+          # Mounts the 'data-prepper-config.yaml' key into the /config/ directory
+          - name: config-vol
+            mountPath: /usr/share/data-prepper/config
+          - name: ca-vol
+            mountPath: /etc/opensearch-certs
       volumes:
-        - name: pipeline-volume
+        - name: pipelines-vol
           secret:
-            secretName: dataprepper-pipelines # Ensure this secret has a key named "pipelines.yaml"
-        - name: config-volume
+            secretName: dataprepper-pipelines
+        - name: config-vol
           configMap:
             name: data-prepper-config
-        - name: opensearch-ca
+        - name: ca-vol
           secret:
             secretName: opensearch-tls
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dataprepper
-  namespace: monitoring
-spec:
-  type: ClusterIP
-  selector:
-    app: data-prepper
-  ports:
-    - name: otlp-grpc
-      port: 21890
-      targetPort: 21890
-    - name: metrics
-      port: 4900
-      targetPort: 4900
