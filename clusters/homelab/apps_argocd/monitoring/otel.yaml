@@ -18,7 +18,7 @@ spec:
           repository: otel/opentelemetry-collector-contrib
           tag: 0.93.0
 
-        # REQUIRED for pod log collection
+        # REQUIRED: node-level log collection
         mode: daemonset
 
         resources:
@@ -28,7 +28,7 @@ spec:
           limits:
             memory: 512Mi
 
-        # Disable presets – explicit config only
+        # Disable presets – explicit pipelines only
         presets:
           logsCollection:
             enabled: false
@@ -39,31 +39,47 @@ spec:
           kubernetesAttributes:
             enabled: false
 
-        # Host access to pod logs
+        ############################
+        # Volumes (containerd-safe)
+        ############################
         extraVolumes:
           - name: varlogpods
             hostPath:
               path: /var/log/pods
-          - name: varlibdockercontainers
+          - name: varlogcontainers
             hostPath:
-              path: /var/lib/docker/containers
+              path: /var/log/containers
 
         extraVolumeMounts:
           - name: varlogpods
             mountPath: /var/log/pods
             readOnly: true
-          - name: varlibdockercontainers
-            mountPath: /var/lib/docker/containers
+          - name: varlogcontainers
+            mountPath: /var/log/containers
             readOnly: true
 
+        ############################
+        # OpenTelemetry Config
+        ############################
         config:
           receivers:
+            # Pod logs
             filelog:
               include:
                 - /var/log/pods/*/*/*.log
               start_at: end
               include_file_path: true
-              include_file_name: false
+              operators:
+                - type: json_parser
+                  id: containerd
+                  parse_from: body
+                  if: 'body matches "^\\{"'
+
+            # Traces from apps (OTLP)
+            otlp:
+              protocols:
+                grpc: {}
+                http: {}
 
           processors:
             k8sattributes:
@@ -74,11 +90,13 @@ spec:
                   - k8s.pod.name
                   - k8s.container.name
                   - k8s.node.name
-            batch: {}
+            batch:
+              timeout: 5s
+              send_batch_size: 1024
 
           exporters:
-            otlp/data-prepper:
-              endpoint: dataprepper.monitoring.svc.cluster.local:21890
+            otlp/dataprepper:
+              endpoint: dataprepper-data-prepper.monitoring.svc.cluster.local:21890
               tls:
                 insecure: true
 
@@ -87,7 +105,12 @@ spec:
               logs:
                 receivers: [filelog]
                 processors: [k8sattributes, batch]
-                exporters: [otlp/data-prepper]
+                exporters: [otlp/dataprepper]
+
+              traces:
+                receivers: [otlp]
+                processors: [k8sattributes, batch]
+                exporters: [otlp/dataprepper]
 
   destination:
     server: https://kubernetes.default.svc

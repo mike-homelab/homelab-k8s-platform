@@ -1,17 +1,3 @@
-# apiVersion: v1
-# kind: Service
-# metadata:
-#   name: opensearch-dashboards-lb
-#   namespace: monitoring
-# spec:
-#   type: LoadBalancer
-#   selector:
-#     app: opensearch-dashboards
-#   ports:
-#     - name: http
-#       port: 5601
-#       targetPort: 5601
-# Opensearch Dashboards HTTPRoute
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -28,3 +14,24 @@ spec:
     - backendRefs:
         - name: opensearch-dashboards
           port: 5601
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: prometheus-ui
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: nginx-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - prometheus.michaelhomelab.work
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: prometheus-kube-prometheus-prometheus
+          port: 9090

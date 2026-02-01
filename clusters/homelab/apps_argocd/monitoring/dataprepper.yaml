@@ -22,6 +22,7 @@ spec:
             memory: 512Mi
           limits:
             memory: 1Gi
+
         livenessProbe:
           httpGet:
             path: /health
@@ -48,47 +49,6 @@ spec:
             - name: otlp-grpc
               port: 21890
               targetPort: 21890
-
-        config:
-          pipelines:
-            # ---------------- METRICS ----------------
-            metrics-pipeline:
-              source:
-                prometheus:
-                  ssl: false
-              processor:
-                - otel_metrics:
-                - batch:
-              sink:
-                - opensearch:
-                    hosts:
-                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
-                    index: metrics-%{yyyy.MM.dd}
-                    username: admin
-                    password: ${OPENSEARCH_PASSWORD}
-                    insecure: false
-                    ssl:
-                      certificate_authorities:
-                        - /usr/share/data-prepper/config/opensearch-ca.crt
-
-            # ---------------- LOGS / TRACES ----------------
-            otlp-pipeline:
-              source:
-                otlp:
-                  ssl: false
-              processor:
-                - batch:
-              sink:
-                - opensearch:
-                    hosts:
-                      - https://homelab-opensearch.monitoring.svc.cluster.local:9200
-                    index: observability-%{yyyy.MM.dd}
-                    username: admin
-                    password: ${OPENSEARCH_PASSWORD}
-                    insecure: false
-                    ssl:
-                      certificate_authorities:
-                        - /usr/share/data-prepper/config/opensearch-ca.crt
 
         extraEnvs:
           - name: OPENSEARCH_PASSWORD
