@@ -1,0 +1,62 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataprepper
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dataprepper
+  template:
+    metadata:
+      labels:
+        app: dataprepper
+    spec:
+      containers:
+      - name: data-prepper
+        image: opensearchproject/data-prepper:2.8.0
+        command: ["java"]
+        args: 
+          - "-jar"
+          - "/usr/share/data-prepper/lib/data-prepper-core-2.8.0.jar"
+          - "/etc/dataprepper/pipelines.yaml"
+          - "/usr/share/data-prepper/config/data-prepper-config.yaml"
+        env:
+          - name: OPENSEARCH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: opensearch-admin
+                key: password
+        ports:
+          - containerPort: 4900
+            name: metrics
+        volumeMounts:
+          - name: pipeline-config
+            mountPath: /etc/dataprepper/pipelines.yaml
+            subPath: pipelines.yaml
+          - name: opensearch-ca
+            mountPath: /etc/opensearch-certs/ca.crt
+            subPath: ca.crt
+      volumes:
+        - name: pipeline-config
+          secret:
+            secretName: dataprepper-pipelines
+        - name: opensearch-ca
+          secret:
+            secretName: opensearch-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataprepper
+  namespace: monitoring
+spec:
+  ports:
+    - port: 4900
+      targetPort: 4900
+      protocol: TCP
+      name: metrics
+  selector:
+    app: dataprepper

@@ -1,79 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: dataprepper
+  name: opensearch-dataprepper
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "12"
+    argocd.argoproj.io/sync-wave: "10"  # after cert-manager helm install
 spec:
   project: monitoring
   source:
-    repoURL: https://opensearch-project.github.io/helm-charts
-    chart: data-prepper
-    targetRevision: "0.3.1"
-    helm:
-      values: |
-        replicaCount: 1
-        command: ["/bin/sh"]
-        args: 
-          - "-c"
-          - >
-            java -jar /usr/share/data-prepper/lib/data-prepper-core-2.8.0.jar 
-            /etc/dataprepper/pipelines.yaml 
-            /usr/share/data-prepper/config/data-prepper-config.yaml
-
-        # 1. Disable default config to prevent the "hidden file" NullPointerException
-        pipelineConfig:
-          enabled: false
-
-        # 2. Map the OpenSearch password for the sink
-        extraEnvs:
-          - name: OPENSEARCH_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: opensearch-admin
-                key: password
-
-        # 3. Define the volumes for both Pipelines and CA
-        extraVolumes:
-          - name: custom-pipeline-config
-            secret:
-              secretName: dataprepper-pipelines
-              items:
-                - key: pipelines.yaml
-                  path: pipelines.yaml
-          - name: opensearch-ca-file
-            secret:
-              secretName: opensearch-tls
-              items:
-                - key: ca.crt
-                  path: ca.crt
-
-        # 4. Mount them using subPath to ensure only the file is visible
-        extraVolumeMounts:
-          - name: custom-pipeline-config
-            mountPath: /etc/dataprepper/pipelines.yaml
-            subPath: pipelines.yaml
-            readOnly: true
-          - name: opensearch-ca-file
-            mountPath: /etc/opensearch-certs/ca.crt
-            subPath: ca.crt
-            readOnly: true
-
-        resources:
-          requests:
-            cpu: 250m
-            memory: 512Mi
-          limits:
-            memory: 1Gi
-
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/apps/monitoring/opensearch-dataprepper
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true

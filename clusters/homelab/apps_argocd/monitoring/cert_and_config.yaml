@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/monitoring
+    path: clusters/homelab/apps/monitoring/monitoring-configs
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
