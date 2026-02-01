@@ -14,6 +14,8 @@ spec:
     helm:
       values: |
         replicaCount: 1
+        extraArgs: 
+          - "/etc/dataprepper/pipelines.yaml"
 
         # 1. Disable default config to prevent the "hidden file" NullPointerException
         pipelineConfig:
@@ -29,7 +31,7 @@ spec:
 
         # 3. Define the volumes for both Pipelines and CA
         extraVolumes:
-          - name: pipeline-config-file
+          - name: custom-pipeline-config
             secret:
               secretName: dataprepper-pipelines
               items:
@@ -44,8 +46,8 @@ spec:
 
         # 4. Mount them using subPath to ensure only the file is visible
         extraVolumeMounts:
-          - name: pipeline-config-file
-            mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
+          - name: custom-pipeline-config
+            mountPath: /etc/dataprepper/pipelines.yaml
             subPath: pipelines.yaml
             readOnly: true
           - name: opensearch-ca-file
