@@ -4,7 +4,7 @@ metadata:
   name: lgtm-stack
   namespace: argocd
 spec:
-  project: monitoring
+  project: monitoring # Matches your 'argocd app get' output
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: lgtm-distributed
@@ -14,70 +14,41 @@ spec:
         global:
           storageClass: "zfs-nvme"
 
-        # 1. LOKI - Single Binary
         loki:
           deploymentMode: SingleBinary
-          loki:
-            auth_enabled: false
-            commonConfig:
-              replication_factor: 1
-            storage:
-              type: filesystem
           singleBinary:
             replicas: 1
             persistence:
-              storageClass: "zfs-nvme"
+              enabled: true
               size: 20Gi
 
-        # 2. MIMIR - Monolithic Backend Mode
         mimir:
+          deploymentMode: SingleBinary
           mimir:
             structuredConfig:
-              multitenancy_enabled: false
               common:
                 storage:
                   backend: filesystem
               blocks_storage:
                 backend: filesystem
-              alertmanager_storage:
-                backend: filesystem
-              ruler_storage:
-                backend: filesystem
-          minio:
-            enabled: false 
-          # Disable all distributed micro-components
+          # Force disable all microservices
+          minio: { enabled: false }
           ingester: { replicas: 0 }
           querier: { replicas: 0 }
           distributor: { replicas: 0 }
           compactor: { replicas: 0 }
           store_gateway: { replicas: 0 }
-          # Use the monolithic backend (this replaces all the above)
-          backend:
-            replicas: 1
-            persistentVolume:
-              storageClass: "zfs-nvme"
-              size: 20Gi
+          alertmanager: { replicas: 0 }
+          backend: { replicas: 1 } # This is the single binary pod
 
-        # 3. TEMPO - Monolithic
         tempo:
           fullnameOverride: tempo
           tempo:
             replicas: 1
-            storage:
-              trace:
-                backend: local
           persistence:
             enabled: true
-            storageClass: "zfs-nvme"
             size: 20Gi
-          # Explicitly disable distributed parts
-          ingester: { enabled: false }
-          distributor: { enabled: false }
-          querier: { enabled: false }
-          queryFrontend: { enabled: false }
-          compactor: { enabled: false }
 
-        # 4. GRAFANA
         grafana:
           enabled: true
           persistence:
@@ -90,3 +61,6 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - Replace=true
+      - PrunePropagationPolicy=foreground
