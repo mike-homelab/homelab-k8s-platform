@@ -16,6 +16,8 @@ spec:
       containers:
       - name: data-prepper
         image: opensearchproject/data-prepper:2.8.0
+        # NO 'command' or 'args' override. 
+        # We let the image run its native /usr/local/bin/data-prepper script.
         env:
           - name: OPENSEARCH_PASSWORD
             valueFrom:
@@ -23,14 +25,17 @@ spec:
                 name: opensearch-admin
                 key: password
         volumeMounts:
-          # Mounts the 'pipelines.yaml' key as a file into the /pipelines/ directory
+          # IMPORTANT: We use subPath so we don't overwrite the whole directory
+          # and hide the internal plugin jar files.
           - name: pipelines-vol
-            mountPath: /usr/share/data-prepper/pipelines
-          # Mounts the 'data-prepper-config.yaml' key into the /config/ directory
+            mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
+            subPath: pipelines.yaml
           - name: config-vol
-            mountPath: /usr/share/data-prepper/config
+            mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
+            subPath: data-prepper-config.yaml
           - name: ca-vol
-            mountPath: /etc/opensearch-certs
+            mountPath: /etc/opensearch-certs/ca.crt
+            subPath: ca.crt
       volumes:
         - name: pipelines-vol
           secret:
