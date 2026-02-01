@@ -1,6 +1,3 @@
 resources:
-  - opensearch-cert.yaml
-  - secrets.yaml
   - namespace.yaml
   - httproute.yaml
-  - rbac.yaml
