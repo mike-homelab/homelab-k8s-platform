@@ -5,6 +5,11 @@ metadata:
   namespace: argocd
 spec:
   project: monitoring
+  ignoreDifferences:
+    - group: ""
+      kind: PersistentVolumeClaim
+      jsonPointers:
+        - /spec/volumeName
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: lgtm-distributed
