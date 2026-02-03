@@ -41,7 +41,7 @@ spec:
                   type: tempo
                   url: http://{{ .Release.Name }}-tempo-query-frontend:3200
 
-        # --- LOKI SECTION (Pointing to Garage) ---
+        # --- LOKI SECTION ---
         loki:
           enabled: true
           loki:
@@ -55,7 +55,7 @@ spec:
                 s3forcepathstyle: true
                 insecure: true
 
-        # --- MIMIR SECTION (MinIO Disabled) ---
+        # --- MIMIR SECTION ---
         mimir:
           enabled: true
           minio:
@@ -88,10 +88,21 @@ spec:
                     access_key_id: GKa978bde4134534803e5dcf2d
                     secret_access_key: e48a7520f58171007fd47b89f66ab8d029d60e0bcf7411e336091af0fc029e39
                     insecure: true
-                    bucket_name: lgtm-mimir
+              blocks_storage:
+                backend: s3
+                s3:
+                  bucket_name: lgtm-mimir
+              alertmanager_storage:
+                backend: s3
+                s3:
+                  bucket_name: lgtm-mimir
+              ruler_storage:
+                backend: s3
+                s3:
+                  bucket_name: lgtm-mimir
               multitenancy_enabled: false
 
-        # --- TEMPO SECTION (Pointing to Garage) ---
+        # --- TEMPO SECTION ---
         tempo:
           enabled: true
           ingester:
