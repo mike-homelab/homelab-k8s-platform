@@ -9,6 +9,7 @@ spec:
   sourceRepos:
   - https://github.com/mike-homelab/homelab-k8s-platform
   - https://prometheus-community.github.io/helm-charts
+  - https://github.com/prometheus-operator/prometheus-operator
   - https://grafana.github.io/helm-charts
 
   destinations:
