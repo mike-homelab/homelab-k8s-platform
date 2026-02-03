@@ -1,40 +1,40 @@
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: prometheus-ui
-  namespace: monitoring
-spec:
-  parentRefs:
-    - name: nginx-gateway
-      namespace: nginx-gateway
-  hostnames:
-    - prometheus.michaelhomelab.work
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
-        - name: prometheus-kube-prometheus-prometheus
-          port: 9090
----
-apiVersion: gateway.networking.k8s.io/v1
-kind: HTTPRoute
-metadata:
-  name: grafana-ui
-  namespace: monitoring
-spec:
-  parentRefs:
-    - name: nginx-gateway
-      namespace: nginx-gateway
-  hostnames:
-    - grafana.michaelhomelab.work
-  rules:
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /
-      backendRefs:
-        - name: lgtm-stack-grafana
-          port: 80
+# ---
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: HTTPRoute
+# metadata:
+#   name: prometheus-ui
+#   namespace: monitoring
+# spec:
+#   parentRefs:
+#     - name: nginx-gateway
+#       namespace: nginx-gateway
+#   hostnames:
+#     - prometheus.michaelhomelab.work
+#   rules:
+#     - matches:
+#         - path:
+#             type: PathPrefix
+#             value: /
+#       backendRefs:
+#         - name: prometheus-kube-prometheus-prometheus
+#           port: 9090
+# ---
+# apiVersion: gateway.networking.k8s.io/v1
+# kind: HTTPRoute
+# metadata:
+#   name: grafana-ui
+#   namespace: monitoring
+# spec:
+#   parentRefs:
+#     - name: nginx-gateway
+#       namespace: nginx-gateway
+#   hostnames:
+#     - grafana.michaelhomelab.work
+#   rules:
+#     - matches:
+#         - path:
+#             type: PathPrefix
+#             value: /
+#       backendRefs:
+#         - name: lgtm-stack-grafana
+#           port: 80
