@@ -12,10 +12,12 @@ spec:
     helm:
       values: |
         deploymentMode: SingleBinary
+        
         loki:
           auth_enabled: false
           commonConfig:
             replication_factor: 1
+          
           storage:
             type: s3
             s3:
@@ -24,21 +26,17 @@ spec:
               secret_access_key: e48a7520f58171007fd47b89f66ab8d029d60e0bcf7411e336091af0fc029e39
               s3forcepathstyle: true
               insecure: true
-            # This is the part that was causing the Helm 'nil pointer' error:
+            
+            # This is the exact block required to pass Helm validation
+            # without forcing custom logic.
             bucketNames:
               chunks: lgtm-loki
               ruler: lgtm-loki
               admin: lgtm-loki
-          
-          schemaConfig:
-            configs:
-              - from: "2024-04-01"
-                store: tsdb
-                object_store: s3
-                schema: v13
-                index:
-                  prefix: index_
-                  period: 24h
+
+        # 100% supported: disable internal Minio to use Garage
+        minio:
+          enabled: false
 
         singleBinary:
           replicas: 1
@@ -46,19 +44,6 @@ spec:
             enabled: true
             storageClass: "zfs-ssd"
             size: 10Gi
-
-        # Promtail collects the logs from your nodes and sends them to Loki
-        promtail:
-          enabled: true
-          config:
-            clients:
-              - url: http://{{ .Release.Name }}-gateway/loki/api/v1/push
-
-        # We need the gateway enabled for Promtail to talk to Loki easily
-        gateway:
-          enabled: true
-        minio:
-          enabled: false
   
   destination:
     server: https://kubernetes.default.svc
