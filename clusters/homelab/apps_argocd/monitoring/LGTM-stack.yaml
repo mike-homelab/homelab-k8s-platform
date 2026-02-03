@@ -11,7 +11,7 @@ spec:
     targetRevision: 3.0.1
     helm:
       values: |
-        # --- GRAFANA SECTION (Aligned with your snippet) ---
+        # --- GRAFANA SECTION ---
         grafana:
           enabled: true
           persistence:
@@ -36,23 +36,25 @@ spec:
                   type: tempo
                   url: http://{{ .Release.Name }}-tempo-query-frontend:3200
 
-        # --- LOKI SECTION (Added Storage logic to sub-chart) ---
+        # --- LOKI SECTION (Pointing to Garage) ---
         loki:
           enabled: true
           loki:
             storage:
               type: s3
               s3:
-                endpoint: lgtm-stack-mimir-minio.monitoring.svc.cluster.local:9000
-                bucketnames: chunks
-                access_key_id: mimir
-                secret_access_key: supersecret
+                endpoint: 10.0.0.13:3900
+                bucketnames: lgtm-loki
+                access_key_id: GKa978bde4134534803e5dcf2d
+                secret_access_key: e48a7520f58171007fd47b89f66ab8d029d60e0bcf7411e336091af0fc029e39
                 s3forcepathstyle: true
                 insecure: true
 
-        # --- MIMIR SECTION (Strictly Aligned with your Resources & Replicas) ---
+        # --- MIMIR SECTION (MinIO Disabled) ---
         mimir:
           enabled: true
+          minio:
+            enabled: false
           alertmanager: { resources: { requests: { cpu: 20m } } }
           compactor: { resources: { requests: { cpu: 20m } } }
           distributor: { resources: { requests: { cpu: 20m } } }
@@ -71,34 +73,38 @@ spec:
             resources: { requests: { cpu: 20m } }
           rollout_operator: { resources: { requests: { cpu: 20m } } }
           
-          # Enabling the minio sub-component from your snippet
-          minio:
-            enabled: true
-            resources: { requests: { cpu: 20m } }
-            persistence: { enabled: true, storageClass: "zfs-nvme", size: 50Gi }
-
-          # Injecting configuration to the Mimir sub-chart binary
           mimir:
             structuredConfig:
               common:
                 storage:
                   backend: s3
                   s3:
-                    endpoint: lgtm-stack-mimir-minio.monitoring.svc.cluster.local:9000
-                    access_key_id: mimir
-                    secret_access_key: supersecret
+                    endpoint: 10.0.0.13:3900
+                    access_key_id: GKa978bde4134534803e5dcf2d
+                    secret_access_key: e48a7520f58171007fd47b89f66ab8d029d60e0bcf7411e336091af0fc029e39
                     insecure: true
-                    bucket_name: mimir
+                    bucket_name: lgtm-mimir
               multitenancy_enabled: false
 
-        # --- TEMPO SECTION (Aligned with your snippet) ---
+        # --- TEMPO SECTION (Pointing to Garage) ---
         tempo:
           enabled: true
           ingester:
             replicas: 1
+          storage:
+            trace:
+              backend: s3
+              s3:
+                endpoint: 10.0.0.13:3900
+                bucket: lgtm-tempo
+                access_key: GKa978bde4134534803e5dcf2d
+                secret_key: e48a7520f58171007fd47b89f66ab8d029d60e0bcf7411e336091af0fc029e39
+                insecure: true
+                forcepathstyle: true
 
         grafana-oncall:
           enabled: false
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
