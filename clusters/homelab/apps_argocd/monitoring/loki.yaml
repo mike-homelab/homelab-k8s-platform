@@ -1,3 +1,4 @@
+---
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -7,36 +8,59 @@ metadata:
     argocd.argoproj.io/sync-wave: "12"
 spec:
   project: monitoring
-
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: loki
     targetRevision: "6.24.0"
+  source:
     helm:
       values: |
-        minio:
-          enabled: false
-
+        deploymentMode: SingleBinary
+        
         loki:
+          auth_enabled: false
+          
+          # This section is mandatory in Chart 6.x
+          schemaConfig:
+            configs:
+              - from: "2024-01-01"
+                store: tsdb
+                object_store: s3
+                schema: v13
+                index:
+                  prefix: index_
+                  period: 24h
+
           storage:
             type: s3
-            bucketNames:
-              chunks: loki-chunks
-              ruler: loki-ruler
-              admin: loki-admin
             s3:
               endpoint: minio.monitoring.svc:9000
               accessKeyId: m67h762Pb9OkmQUpEAam
               secretAccessKey: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
               s3ForcePathStyle: true
               insecure: true
+            # Defining bucket names here satisfies the validation checks
+            bucketNames:
+              chunks: loki
+              ruler: loki
+              admin: loki
 
-        # Only resource tuning
+          commonConfig:
+            replication_factor: 1
+
+        # Disable internal minio as we use our own
+        minio:
+          enabled: false
+
+        # Tune the single binary pod
         singleBinary:
+          replicas: 1
+          persistence:
+            enabled: true
+            size: 10Gi
           resources:
             requests:
               cpu: 200m
