@@ -18,7 +18,6 @@ spec:
       values: |
         minio:
           enabled: false
-
         mimir:
           structuredConfig:
             common:
@@ -30,16 +29,12 @@ spec:
                   access_key_id: m67h762Pb9OkmQUpEAam
                   secret_access_key: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
                   insecure: true
-            
-            # These prefixes prevent the "S3 bucket name and storage prefix" error
             alertmanager_storage:
               s3:
                 prefix: alertmanager
             ruler_storage:
               s3:
                 prefix: ruler
-
-        # Only allowed modification
         resources:
           requests:
             cpu: 200m
@@ -47,7 +42,6 @@ spec:
           limits:
             cpu: 500m
             memory: 1Gi
-
   syncPolicy:
     automated:
       prune: true

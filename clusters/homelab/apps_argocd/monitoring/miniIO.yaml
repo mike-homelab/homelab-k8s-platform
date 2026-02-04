@@ -17,15 +17,9 @@ spec:
     helm:
       values: |
         mode: standalone
-
-        # MANDATORY: Fix for ZFS/RWO volumes
         deployment:
           strategy:
             type: Recreate
-
-        # Tell K8s to kill the pod faster so it releases the NVMe lock
-        terminationGracePeriodSeconds: 5
-
         resources:
           requests:
             cpu: 200m
@@ -33,15 +27,11 @@ spec:
           limits:
             cpu: 500m
             memory: 1Gi
-
         persistence:
           enabled: true
           storageClass: zfs-nvme
           size: 100Gi
-
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
