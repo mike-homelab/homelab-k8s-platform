@@ -30,7 +30,7 @@ spec:
 
         persistence:
           enabled: true
-          storageClass: nfs
+          storageClass: zfs-nvme
           size: 100Gi
 
   syncPolicy:
