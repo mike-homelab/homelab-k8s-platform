@@ -7,11 +7,9 @@ metadata:
     argocd.argoproj.io/sync-wave: "11"
 spec:
   project: monitoring
-
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: mimir-distributed
@@ -29,9 +27,17 @@ spec:
                 s3:
                   endpoint: minio.monitoring.svc:9000
                   bucket_name: mimir
-                  access_key_id: pifu2sbv5zC5Ln9q4OIU
-                  secret_access_key: cbfpsCNBlrM8ZNoUBpBPwqTPq5LwX7O3RoNvjhCt
+                  access_key_id: m67h762Pb9OkmQUpEAam
+                  secret_access_key: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
                   insecure: true
+            
+            # These prefixes prevent the "S3 bucket name and storage prefix" error
+            alertmanager_storage:
+              s3:
+                prefix: alertmanager
+            ruler_storage:
+              s3:
+                prefix: ruler
 
         # Only allowed modification
         resources:
