@@ -29,8 +29,8 @@ spec:
                 s3:
                   endpoint: minio.monitoring.svc:9000
                   bucket_name: mimir
-                  access_key_id: minio
-                  secret_access_key: minio123
+                  access_key_id: pifu2sbv5zC5Ln9q4OIUm
+                  secret_access_key: cbfpsCNBlrM8ZNoUBpBPwqTPq5LwX7O3RoNvjhCt
                   insecure: true
 
         # Only allowed modification

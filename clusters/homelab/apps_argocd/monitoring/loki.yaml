@@ -15,7 +15,7 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: loki
-    targetRevision: "*"
+    targetRevision: "6.24.0"
     helm:
       values: |
         minio:
@@ -24,14 +24,14 @@ spec:
         loki:
           storage:
             type: s3
+            bucketNames:
+              chunks: loki-chunks
+              ruler: loki-ruler
+              admin: loki-admin
             s3:
               endpoint: minio.monitoring.svc:9000
-              bucketNames:
-                chunks: loki-chunks
-                ruler: loki-ruler
-                admin: loki-admin
-              accessKeyId: minio
-              secretAccessKey: minio123
+              accessKeyId: pifu2sbv5zC5Ln9q4OIUm
+              secretAccessKey: cbfpsCNBlrM8ZNoUBpBPwqTPq5LwX7O3RoNvjhCt
               s3ForcePathStyle: true
               insecure: true
 
