@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mimir
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "11"
+spec:
+  project: monitoring
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: mimir-distributed
+    targetRevision: "*"
+    helm:
+      values: |
+        minio:
+          enabled: false
+
+        mimir:
+          structuredConfig:
+            common:
+              storage:
+                backend: s3
+                s3:
+                  endpoint: minio.monitoring.svc:9000
+                  bucket_name: mimir
+                  access_key_id: minio
+                  secret_access_key: minio123
+                  insecure: true
+
+        # Only allowed modification
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

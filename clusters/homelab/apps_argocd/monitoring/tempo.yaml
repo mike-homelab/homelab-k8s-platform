@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "12"
+spec:
+  project: monitoring
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: tempo-distributed
+    targetRevision: "*"
+    helm:
+      values: |
+        storage:
+          trace:
+            backend: s3
+            s3:
+              endpoint: minio.monitoring.svc:9000
+              bucket: tempo
+              access_key: minio
+              secret_key: minio123
+              insecure: true
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 500m
+            memory: 1Gi
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
