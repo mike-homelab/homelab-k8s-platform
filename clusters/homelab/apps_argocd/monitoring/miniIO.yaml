@@ -18,11 +18,13 @@ spec:
       values: |
         mode: standalone
 
-        # Fix for RWO Storage (ZFS-NVMe):
-        # Kill the old pod before starting the new one to release the volume lock.
+        # MANDATORY: Fix for ZFS/RWO volumes
         deployment:
           strategy:
             type: Recreate
+
+        # Tell K8s to kill the pod faster so it releases the NVMe lock
+        terminationGracePeriodSeconds: 5
 
         resources:
           requests:
