@@ -11,7 +11,7 @@ spec:
   - https://prometheus-community.github.io/helm-charts
   - https://github.com/prometheus-operator/prometheus-operator
   - https://grafana.github.io/helm-charts
-  -  https://charts.min.io
+  - https://charts.min.io
 
   destinations:
   - namespace: '*'
