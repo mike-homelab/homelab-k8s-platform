@@ -47,8 +47,8 @@ spec:
               admin: loki-admin
             s3:
               endpoint: minio.monitoring.svc:9000
-              accessKeyId: qXbN98xI92GQTGY5yP7W
-              secretAccessKey: SgHf0RzfMYhEyQNsiAFcczCrNQnyxDThGbNQq1kf
+              accessKeyId: QNm0d2hHLBGhjKVS28N3
+              secretAccessKey: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               s3ForcePathStyle: true
               insecure: true
 

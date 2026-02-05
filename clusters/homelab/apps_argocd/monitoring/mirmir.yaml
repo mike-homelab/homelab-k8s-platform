@@ -27,8 +27,8 @@ spec:
                 backend: s3
                 s3:
                   endpoint: minio.monitoring.svc:9000
-                  access_key_id: qXbN98xI92GQTGY5yP7W
-                  secret_access_key: SgHf0RzfMYhEyQNsiAFcczCrNQnyxDThGbNQq1kf
+                  access_key_id: QNm0d2hHLBGhjKVS28N3
+                  secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
                   insecure: true
             
             blocks_storage:
