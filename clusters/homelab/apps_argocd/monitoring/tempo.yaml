@@ -1,3 +1,5 @@
+# 
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -7,15 +9,13 @@ metadata:
     argocd.argoproj.io/sync-wave: "12"
 spec:
   project: monitoring
-
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: tempo-distributed
-    targetRevision: "*"
+    targetRevision: "1.20.1"
     helm:
       values: |
         storage:
@@ -28,13 +28,54 @@ spec:
               secret_key: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
               insecure: true
 
-        resources:
-          requests:
-            cpu: 200m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
+        # Component-specific resource definitions as per chart defaults
+        ingester:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
+        querier:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+
+        queryFrontend:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+
+        distributor:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+
+        compactor:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 200m
+              memory: 512Mi
+
+        metricsGenerator:
+          enabled: false
 
   syncPolicy:
     automated:
