@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: mimir-distributed
-    targetRevision: "*"
+    targetRevision: "6.0.2"
     helm:
       values: |
         minio:

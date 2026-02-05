@@ -13,19 +13,28 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: loki
-    targetRevision: "6.24.0"
+    targetRevision: "6.51.0"
     helm:
       values: |
-        deploymentMode: SingleBinary
+        deploymentMode: SimpleScalable
         
         loki:
           auth_enabled: false
-          
-          # Mandatory for Loki 3.x
           commonConfig:
             replication_factor: 1
+          
+          # 1. Define the Global Retention Period
+          limits_config:
+            retention_period: 168h # 7 days (7 * 24h)
+            allow_deletes: true
 
-          # Mandatory: Defines how to write to your buckets
+          # 2. Enable the Compactor to enforce the limits
+          compactor:
+            retention_enabled: true
+            delete_request_store: s3
+            working_directory: /var/loki/compactor
+            compaction_interval: 10m
+
           schemaConfig:
             configs:
               - from: "2024-01-01"
@@ -35,7 +44,7 @@ spec:
                 index:
                   prefix: index_
                   period: 24h
-
+          
           storage:
             type: s3
             bucketNames:
@@ -49,19 +58,43 @@ spec:
               s3ForcePathStyle: true
               insecure: true
 
-        minio:
-          enabled: false
-
-        # Resource tuning for Single Binary mode
-        singleBinary:
+        # Component Resources & Scaling
+        backend:
+          replicas: 1
+          persistence:
+            size: 10Gi
+            storageClass: "zfs-nvme"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+        read:
           replicas: 1
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 100m
+              memory: 256Mi
+        write:
+          replicas: 1
+          persistence:
+            size: 10Gi
+            storageClass: "zfs-nvme"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+
+        gateway:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+
+        minio:
+          enabled: false
+        singleBinary:
+          replicas: 0
 
   syncPolicy:
     automated:

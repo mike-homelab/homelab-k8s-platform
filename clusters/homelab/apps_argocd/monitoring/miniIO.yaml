@@ -13,7 +13,7 @@ spec:
   source:
     repoURL: https://charts.min.io/
     chart: minio
-    targetRevision: "*"
+    targetRevision: "5.4.0"
     helm:
       values: |
         mode: standalone
