@@ -51,8 +51,8 @@ spec:
               secretAccessKey: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               s3ForcePathStyle: true
               insecure: true
+              region: us-east-1
 
-        # REDUCE CACHE RESOURCES (Official keys)
         chunksCache:
           allocatedMemory: 512
           resources:
