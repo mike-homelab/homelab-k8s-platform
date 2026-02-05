@@ -10,37 +10,21 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: loki
     targetRevision: "6.51.0"
+
     helm:
       values: |
         deploymentMode: SimpleScalable
-        
+
         loki:
           auth_enabled: false
-          # commonConfig is the official path to share storage config across all components
+
           commonConfig:
             replication_factor: 1
-            storage:
-              s3:
-                endpoint: minio.monitoring.svc:9000
-                access_key_id: QNm0d2hHLBGhjKVS28N3
-                secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
-                s3_force_path_style: true
-                insecure: true
-                region: us-east-1
-
-          limits_config:
-            retention_period: 168h
-            deletion_mode: filter-and-delete
-
-          compactor:
-            retention_enabled: true
-            delete_request_store: s3
-            working_directory: /var/loki/compactor
-            compaction_interval: 10m
 
           schemaConfig:
             configs:
@@ -52,52 +36,67 @@ spec:
                   prefix: index_
                   period: 24h
 
-          storage:
-            type: s3
-            s3:
+          # CRITICAL — runtime storage backend used by compactor
+          storage_config:
+            aws:
               endpoint: minio.monitoring.svc:9000
               access_key_id: QNm0d2hHLBGhjKVS28N3
               secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
-              s3_force_path_style: true
+              s3forcepathstyle: true
               insecure: true
-              region: us-east-1
+
+          # Helm abstraction layer (bucket mapping)
+          storage:
+            type: s3
             bucketNames:
               chunks: loki-chunks
               ruler: loki-ruler
               admin: loki-admin
 
-        # Standardizing resource blocks for SimpleScalable components
+          limits_config:
+            retention_period: 168h
+            deletion_mode: filter-and-delete
+
+          compactor:
+            retention_enabled: true
+            delete_request_store: s3
+            working_directory: /var/loki/compactor
+            compaction_interval: 10m
+
         backend:
           replicas: 1
           persistence:
             size: 10Gi
-            storageClass: "zfs-nvme"
+            storageClass: zfs-nvme
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
+
         read:
           replicas: 1
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
+
         write:
           replicas: 1
           persistence:
             size: 10Gi
-            storageClass: "zfs-nvme"
+            storageClass: zfs-nvme
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
-        
+
         chunksCache:
           allocatedMemory: 512
           resources:
             requests:
               cpu: 100m
               memory: 512Mi
+
         resultsCache:
           allocatedMemory: 512
           resources:
@@ -107,10 +106,13 @@ spec:
 
         gateway:
           replicas: 1
+
         minio:
           enabled: false
+
         singleBinary:
           replicas: 0
+
   syncPolicy:
     automated:
       prune: true
