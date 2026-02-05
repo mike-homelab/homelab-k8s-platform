@@ -22,17 +22,14 @@ spec:
           auth_enabled: false
           commonConfig:
             replication_factor: 1
-          
           limits_config:
             retention_period: 168h
             allow_deletes: true
-
           compactor:
             retention_enabled: true
             delete_request_store: s3
             working_directory: /var/loki/compactor
             compaction_interval: 10m
-
           schemaConfig:
             configs:
               - from: "2024-01-01"
@@ -42,7 +39,6 @@ spec:
                 index:
                   prefix: index_
                   period: 24h
-          
           storage:
             type: s3
             bucketNames:
@@ -56,28 +52,20 @@ spec:
               s3ForcePathStyle: true
               insecure: true
 
-        # FIX: Override the 8GB default memory allocation for caches
+        # REDUCE CACHE RESOURCES (Official keys)
         chunksCache:
           allocatedMemory: 512
           resources:
             requests:
               cpu: 100m
               memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
-
         resultsCache:
           allocatedMemory: 512
           resources:
             requests:
               cpu: 100m
               memory: 512Mi
-            limits:
-              cpu: 500m
-              memory: 1Gi
 
-        # Component Resources & Scaling
         backend:
           replicas: 1
           persistence:
@@ -102,19 +90,12 @@ spec:
             requests:
               cpu: 100m
               memory: 256Mi
-
         gateway:
           replicas: 1
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-
         minio:
           enabled: false
         singleBinary:
           replicas: 0
-
   syncPolicy:
     automated:
       prune: true
