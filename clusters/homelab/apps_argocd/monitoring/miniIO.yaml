@@ -33,5 +33,5 @@ spec:
           size: 100Gi
   syncPolicy:
     automated:
-      prune: true
+      prune: false
       selfHeal: true
