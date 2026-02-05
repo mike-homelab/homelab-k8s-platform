@@ -31,7 +31,6 @@ spec:
           enabled: true
           storageClass: zfs-nvme
           size: 100Gi
-  syncPolicy:
-    automated:
-      prune: false
-      selfHeal: true
+  
+  # Manual Sync Only: This disables auto-sync, prune, and self-heal
+  syncPolicy: {}

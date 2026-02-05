@@ -16,6 +16,7 @@ spec:
     targetRevision: "6.0.2"
     helm:
       values: |
+        # 1. Official Storage Config (External MinIO)
         minio:
           enabled: false
 
@@ -26,30 +27,70 @@ spec:
                 backend: s3
                 s3:
                   endpoint: minio.monitoring.svc:9000
-                  access_key_id: m67h762Pb9OkmQUpEAam
-                  secret_access_key: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
+                  access_key_id: qXbN98xI92GQTGY5yP7W
+                  secret_access_key: SgHf0RzfMYhEyQNsiAFcczCrNQnyxDThGbNQq1kf
                   insecure: true
-
-            # Separate buckets for each component to avoid validation errors
+            
             blocks_storage:
               s3:
                 bucket_name: mimir-blocks
-            
             alertmanager_storage:
               s3:
                 bucket_name: mimir-alertmanager
-            
             ruler_storage:
               s3:
                 bucket_name: mimir-ruler
 
-        resources:
-          requests:
-            cpu: 200m
-            memory: 512Mi
-          limits:
-            cpu: 500m
-            memory: 1Gi
+        # 2. Official Resource Controls (Scaling for 3-Worker setup)
+        # We use 'replicas: 3' to match your 3 worker nodes.
+        ingester:
+          replicas: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          persistence:
+            size: 10Gi
+            storageClass: "zfs-nvme"
+
+        store_gateway:
+          replicas: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+          persistence:
+            size: 10Gi
+            storageClass: "zfs-nvme"
+
+        distributor:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+
+        querier:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+
+        compactor:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+
+        # 3. Disable internal dependencies you aren't using
+        continuous-test:
+          enabled: false
+        mimir-proxies:
+          enabled: false
 
   syncPolicy:
     automated:

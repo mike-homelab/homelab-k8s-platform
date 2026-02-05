@@ -24,7 +24,7 @@ spec:
             replication_factor: 1
           limits_config:
             retention_period: 168h
-            allow_deletes: true
+            deletion_mode: filter-and-delete
           compactor:
             retention_enabled: true
             delete_request_store: s3
@@ -47,8 +47,8 @@ spec:
               admin: loki-admin
             s3:
               endpoint: minio.monitoring.svc:9000
-              accessKeyId: m67h762Pb9OkmQUpEAam
-              secretAccessKey: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
+              accessKeyId: qXbN98xI92GQTGY5yP7W
+              secretAccessKey: SgHf0RzfMYhEyQNsiAFcczCrNQnyxDThGbNQq1kf
               s3ForcePathStyle: true
               insecure: true
 

@@ -1,5 +1,3 @@
-# 
-
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -18,63 +16,73 @@ spec:
     targetRevision: "1.20.1"
     helm:
       values: |
+        # 1. Official S3 Storage Config
         storage:
           trace:
             backend: s3
             s3:
               endpoint: minio.monitoring.svc:9000
               bucket: tempo
-              access_key: m67h762Pb9OkmQUpEAam
-              secret_key: ics2xjKfIyoWl5i0I54iSeRw8apYbi9XvnefKcse
+              access_key: qXbN98xI92GQTGY5yP7W
+              secret_key: SgHf0RzfMYhEyQNsiAFcczCrNQnyxDThGbNQq1kf
               insecure: true
 
-        # Component-specific resource definitions as per chart defaults
+        # 2. Component Scaling & Resources (3-Node Worker Layout)
         ingester:
+          replicas: 3
+          persistence:
+            enabled: true
+            size: 10Gi
+            storageClass: "zfs-nvme"
           resources:
             requests:
-              cpu: 200m
+              cpu: 100m
               memory: 512Mi
             limits:
-              cpu: 500m
               memory: 1Gi
 
         querier:
+          replicas: 2
           resources:
             requests:
-              cpu: 200m
+              cpu: 100m
               memory: 512Mi
             limits:
-              cpu: 500m
               memory: 1Gi
 
         queryFrontend:
+          replicas: 1
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 200m
               memory: 512Mi
 
         distributor:
+          replicas: 2
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 200m
               memory: 512Mi
 
         compactor:
+          replicas: 1
           resources:
             requests:
               cpu: 100m
               memory: 256Mi
             limits:
-              cpu: 200m
               memory: 512Mi
 
+        # 3. Disable unneeded features for Homelab
         metricsGenerator:
+          enabled: false
+        
+        # MinIO is external, so ensure the internal one is off
+        minio:
           enabled: false
 
   syncPolicy:
