@@ -1,81 +1,85 @@
-helm:
-  values: |
-    mode: deployment
-    replicaCount: 1
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opentelemetry-collector
+  namespace: argocd
+spec:
+  project: monitoring
 
-    image:
-      repository: otel/opentelemetry-collector-k8s
-      tag: latest
-      pullPolicy: IfNotPresent
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chart: opentelemetry-collector
+    targetRevision: 0.111.0
 
-    resources:
-      requests:
-        cpu: 10m
-        memory: 64Mi
-      limits:
-        cpu: 100m
-        memory: 128Mi
+    helm:
+      values: |
+        mode: deployment
+        replicaCount: 1
 
-    config:
-      receivers:
-        otlp:
-          protocols:
-            grpc:
-            http:
+        image:
+          # upstream otel-collector image
+          repository: otel/opentelemetry-collector-contrib
+          tag: latest
+          pullPolicy: IfNotPresent
 
-      processors:
-        memory_limiter:
-          check_interval: 1s
-          limit_percentage: 75
-          spike_limit_percentage: 15
-        batch:
-        k8sattributes:
-          extract:
-            metadata:
-              - k8s.pod.name
-              - k8s.namespace.name
-              - k8s.node.name
-          pod_association:
-            - sources:
-                - from: resource_attribute
-                  name: k8s.pod.ip
-            - sources:
-                - from: connection
-
-      exporters:
-        otlphttp/loki:
-          endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
-
-        otlphttp/mimir:
-          endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
-
-        otlp/tempo:
-          endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
-          tls:
-            insecure: true
-
-      service:
+        # Don't enable the legacy telemetry fields
         telemetry:
-          metrics:
-            readers:
-              - pull:
-                  exporter:
-                    prometheus:
-                      host: 0.0.0.0
-                      port: 8888
+          enabled: false
 
-        pipelines:
-          logs:
-            receivers: [otlp]
-            processors: [k8sattributes, memory_limiter, batch]
-            exporters: [otlphttp/loki]
+        config:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                http:
 
-          metrics:
-            receivers: [otlp]
-            processors: [k8sattributes, memory_limiter, batch]
-            exporters: [otlphttp/mimir]
+          processors:
+            # Put your processors here if needed
+            batch:
 
-          traces:
-            receivers: [otlp]
-            processors: [k8sattributes, memory_limiter, batch]
-            exporters: [otlp/tempo]
+          exporters:
+            # Send logs to Loki using the OTLP HTTP endpoint
+            otlphttp/loki:
+              endpoint: "http://loki-gateway.monitoring.svc.cluster.local/otlp"
+              tls:
+                insecure: true
+
+            # Send metrics to Mimir using OTLP HTTP
+            otlphttp/mimir:
+              endpoint: "http://mimir-gateway.monitoring.svc.cluster.local/otlp"
+              tls:
+                insecure: true
+
+            # Send traces to Tempo
+            otlp/tempo:
+              endpoint: "tempo-distributor.monitoring.svc.cluster.local:4317"
+              tls:
+                insecure: true
+
+          service:
+            pipelines:
+              logs:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlphttp/loki]
+
+              metrics:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlphttp/mimir]
+
+              traces:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlp/tempo]
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
