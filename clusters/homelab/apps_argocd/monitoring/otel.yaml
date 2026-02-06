@@ -14,12 +14,11 @@ spec:
         mode: deployment
         replicaCount: 1
 
-        # REQUIRED: Setting the image repository explicitly
         image:
-          repository: otel/opentelemetry-collector-k8s
+          repository: "otel/opentelemetry-collector-k8s"
+          tag: "latest"
           pullPolicy: IfNotPresent
 
-        # Homelab Minimum Stable Resources
         resources:
           requests:
             cpu: 10m
@@ -33,24 +32,18 @@ spec:
             otlp:
               protocols:
                 grpc:
-                  endpoint: 0.0.0.0:4317
                 http:
-                  endpoint: 0.0.0.0:4318
-          
+
           processors:
             memory_limiter:
               check_interval: 1s
               limit_percentage: 75
               spike_limit_percentage: 15
             batch:
-              send_batch_size: 1000
-              timeout: 10s
-            # This adds Pod names/namespaces to your logs and traces automatically
             k8sattributes:
               extract:
                 metadata:
                   - k8s.pod.name
-                  - k8s.pod.uid
                   - k8s.namespace.name
                   - k8s.node.name
               pod_association:
@@ -61,17 +54,14 @@ spec:
                     - from: connection
 
           exporters:
-            # 1. Logs to Loki Gateway
             otlphttp/loki:
-              endpoint: "http://loki-gateway.monitoring.svc.cluster.local:80/otlp"
-            
-            # 2. Metrics to Mimir Gateway
+              endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
+
             otlphttp/mimir:
-              endpoint: "http://mimir-gateway.monitoring.svc.cluster.local:80/otlp"
-            
-            # 3. Traces to Tempo Distributor
+              endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
+
             otlp/tempo:
-              endpoint: "tempo-distributor.monitoring.svc.cluster.local:4317"
+              endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
               tls:
                 insecure: true
 
@@ -81,14 +71,17 @@ spec:
                 receivers: [otlp]
                 processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlphttp/loki]
+
               metrics:
                 receivers: [otlp]
                 processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlphttp/mimir]
+
               traces:
                 receivers: [otlp]
                 processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlp/tempo]
+
 
   destination:
     server: https://kubernetes.default.svc
