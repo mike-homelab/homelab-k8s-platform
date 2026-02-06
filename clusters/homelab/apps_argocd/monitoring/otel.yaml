@@ -8,22 +8,26 @@ spec:
   source:
     repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
     chart: opentelemetry-collector
-    targetRevision: 0.111.0 # Uses the latest stable version for 2026
+    targetRevision: 0.111.0 
     helm:
       values: |
         mode: deployment
         replicaCount: 1
-        
-        # Homelab Optimized Resources (Minimum Stable)
+
+        # REQUIRED: Setting the image repository explicitly
+        image:
+          repository: otel/opentelemetry-collector-k8s
+          pullPolicy: IfNotPresent
+
+        # Homelab Minimum Stable Resources
         resources:
           requests:
-            cpu: 50m
-            memory: 128Mi
+            cpu: 10m
+            memory: 64Mi
           limits:
-            cpu: 200m
-            memory: 256Mi
+            cpu: 100m
+            memory: 128Mi
 
-        # Unified Frontend Configuration
         config:
           receivers:
             otlp:
@@ -33,39 +37,57 @@ spec:
                 http:
                   endpoint: 0.0.0.0:4318
           
-          exporters:
-            # 1. Logs to Loki (via Loki Gateway Port 80)
-            otlphttp/loki:
-              endpoint: "http://loki-gateway.monitoring.svc:80/otlp"
-            
-            # 2. Metrics to Mimir (via Mimir Gateway Port 80)
-            otlphttp/mimir:
-              endpoint: "http://mimir-gateway.monitoring.svc:80/otlp"
-            
-            # 3. Traces to Tempo (via Tempo Distributor)
-            otlp/tempo:
-              endpoint: "tempo-distributor.monitoring.svc:4317"
-              tls:
-                insecure: true
-
           processors:
+            memory_limiter:
+              check_interval: 1s
+              limit_percentage: 75
+              spike_limit_percentage: 15
             batch:
               send_batch_size: 1000
               timeout: 10s
+            # This adds Pod names/namespaces to your logs and traces automatically
+            k8sattributes:
+              extract:
+                metadata:
+                  - k8s.pod.name
+                  - k8s.pod.uid
+                  - k8s.namespace.name
+                  - k8s.node.name
+              pod_association:
+                - sources:
+                    - from: resource_attribute
+                      name: k8s.pod.ip
+                - sources:
+                    - from: connection
+
+          exporters:
+            # 1. Logs to Loki Gateway
+            otlphttp/loki:
+              endpoint: "http://loki-gateway.monitoring.svc.cluster.local:80/otlp"
+            
+            # 2. Metrics to Mimir Gateway
+            otlphttp/mimir:
+              endpoint: "http://mimir-gateway.monitoring.svc.cluster.local:80/otlp"
+            
+            # 3. Traces to Tempo Distributor
+            otlp/tempo:
+              endpoint: "tempo-distributor.monitoring.svc.cluster.local:4317"
+              tls:
+                insecure: true
 
           service:
             pipelines:
               logs:
                 receivers: [otlp]
-                processors: [batch]
+                processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlphttp/loki]
               metrics:
                 receivers: [otlp]
-                processors: [batch]
+                processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlphttp/mimir]
               traces:
                 receivers: [otlp]
-                processors: [batch]
+                processors: [k8sattributes, memory_limiter, batch]
                 exporters: [otlp/tempo]
 
   destination:
