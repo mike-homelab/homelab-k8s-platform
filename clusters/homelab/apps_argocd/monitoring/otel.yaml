@@ -6,7 +6,7 @@ metadata:
 spec:
   project: monitoring
   source:
-    repoURL: https://open-telemetry.github.io/opentelemetry-helm
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
     chart: opentelemetry-collector
     targetRevision: 0.111.0 # Uses the latest stable version for 2026
     helm:
