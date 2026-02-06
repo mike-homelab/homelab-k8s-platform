@@ -1,85 +1,20 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: opentelemetry-collector
+  name: otel-collector
   namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "13"  # after cert-manager helm install
 spec:
   project: monitoring
-
   source:
-    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
-    chart: opentelemetry-collector
-    targetRevision: 0.111.0
-
-    helm:
-      values: |
-        mode: deployment
-        replicaCount: 1
-
-        image:
-          # upstream otel-collector image
-          repository: otel/opentelemetry-collector-contrib
-          tag: latest
-          pullPolicy: IfNotPresent
-
-        # Don't enable the legacy telemetry fields
-        telemetry:
-          enabled: false
-
-        config:
-          receivers:
-            otlp:
-              protocols:
-                grpc:
-                http:
-
-          processors:
-            # Put your processors here if needed
-            batch:
-
-          exporters:
-            # Send logs to Loki using the OTLP HTTP endpoint
-            otlphttp/loki:
-              endpoint: "http://loki-gateway.monitoring.svc.cluster.local/otlp"
-              tls:
-                insecure: true
-
-            # Send metrics to Mimir using OTLP HTTP
-            otlphttp/mimir:
-              endpoint: "http://mimir-gateway.monitoring.svc.cluster.local/otlp"
-              tls:
-                insecure: true
-
-            # Send traces to Tempo
-            otlp/tempo:
-              endpoint: "tempo-distributor.monitoring.svc.cluster.local:4317"
-              tls:
-                insecure: true
-
-          service:
-            pipelines:
-              logs:
-                receivers: [otlp]
-                processors: [batch]
-                exporters: [otlphttp/loki]
-
-              metrics:
-                receivers: [otlp]
-                processors: [batch]
-                exporters: [otlphttp/mimir]
-
-              traces:
-                receivers: [otlp]
-                processors: [batch]
-                exporters: [otlp/tempo]
-
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/apps/monitoring/otel-collector
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
