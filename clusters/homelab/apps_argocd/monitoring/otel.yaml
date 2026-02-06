@@ -1,0 +1,80 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: opentelemetry-collector
+  namespace: argocd
+spec:
+  project: monitoring
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm
+    chart: opentelemetry-collector
+    targetRevision: 0.111.0 # Uses the latest stable version for 2026
+    helm:
+      values: |
+        mode: deployment
+        replicaCount: 1
+        
+        # Homelab Optimized Resources (Minimum Stable)
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+        # Unified Frontend Configuration
+        config:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+                http:
+                  endpoint: 0.0.0.0:4318
+          
+          exporters:
+            # 1. Logs to Loki (via Loki Gateway Port 80)
+            otlphttp/loki:
+              endpoint: "http://loki-gateway.monitoring.svc:80/otlp"
+            
+            # 2. Metrics to Mimir (via Mimir Gateway Port 80)
+            otlphttp/mimir:
+              endpoint: "http://mimir-gateway.monitoring.svc:80/otlp"
+            
+            # 3. Traces to Tempo (via Tempo Distributor)
+            otlp/tempo:
+              endpoint: "tempo-distributor.monitoring.svc:4317"
+              tls:
+                insecure: true
+
+          processors:
+            batch:
+              send_batch_size: 1000
+              timeout: 10s
+
+          service:
+            pipelines:
+              logs:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlphttp/loki]
+              metrics:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlphttp/mimir]
+              traces:
+                receivers: [otlp]
+                processors: [batch]
+                exporters: [otlp/tempo]
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
