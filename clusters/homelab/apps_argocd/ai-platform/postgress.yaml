@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgress-db
+  name: postgres-db
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "11"
@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/ai-platform/postgress-db
+    path: clusters/homelab/apps/ai-platform/postgres-db
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform
