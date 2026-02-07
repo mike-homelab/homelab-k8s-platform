@@ -85,7 +85,3 @@ spec:
         minio:
           enabled: false
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
