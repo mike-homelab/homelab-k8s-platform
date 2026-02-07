@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: postgres-exporter
-  namespace: monitoring
+  namespace: ai-platform
 spec:
   replicas: 1
   selector:
@@ -22,7 +22,7 @@ spec:
 
           env:
             - name: DATA_SOURCE_URI
-              value: postgres.monitoring.svc.cluster.local:5432/ai_platform?sslmode=disable
+              value: postgres.ai-platform.svc.cluster.local:5432/ai_platform?sslmode=disable
             - name: DATA_SOURCE_USER
               value: ai
             - name: DATA_SOURCE_PASS

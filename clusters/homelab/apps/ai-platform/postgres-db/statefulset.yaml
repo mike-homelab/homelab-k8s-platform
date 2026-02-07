@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: postgres
-  namespace: monitoring
+  namespace: ai-platform
 spec:
   serviceName: postgres
   replicas: 1
