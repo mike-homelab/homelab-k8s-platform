@@ -22,6 +22,8 @@ spec:
 
         mimir:
           structuredConfig:
+            limits:
+              max_label_names_per_series: 100
             common:
               storage:
                 backend: s3
