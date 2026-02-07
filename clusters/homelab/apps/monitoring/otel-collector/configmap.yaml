@@ -13,7 +13,6 @@ data:
           http:
             endpoint: 0.0.0.0:4318
 
-      # 🔑 This guarantees metrics exist
       prometheus:
         config:
           scrape_configs:
@@ -27,26 +26,23 @@ data:
         timeout: 5s
 
     exporters:
-      # Logs → Loki
       otlp_http/loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
         tls:
           insecure: true
 
-      # Metrics → Mimir
+      # FIXED: Metrics go directly to distributor
       otlp_http/mimir:
-        endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
+        endpoint: http://mimir-distributor.monitoring.svc.cluster.local:8080/otlp
         tls:
           insecure: true
 
-      # Traces → Tempo
       otlp_http/tempo:
         endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
           insecure: true
 
     service:
-      # 🔑 Enable collector self-metrics
       telemetry:
         metrics:
           level: detailed
