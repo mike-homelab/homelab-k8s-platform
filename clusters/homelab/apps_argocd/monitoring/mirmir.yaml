@@ -16,7 +16,7 @@ spec:
     targetRevision: "6.0.2"
     helm:
       values: |
-        # 1. Official Storage Config (External MinIO)
+        # 1. External object storage (MinIO)
         minio:
           enabled: false
 
@@ -30,7 +30,7 @@ spec:
                   access_key_id: QNm0d2hHLBGhjKVS28N3
                   secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
                   insecure: true
-            
+
             blocks_storage:
               s3:
                 bucket_name: mimir-blocks
@@ -41,8 +41,8 @@ spec:
               s3:
                 bucket_name: mimir-ruler
 
-        # 2. Official Resource Controls (Scaling for 3-Worker setup)
-        # We use 'replicas: 3' to match your 3 worker nodes.
+        # 2. Core components
+
         ingester:
           replicas: 3
           resources:
@@ -53,7 +53,7 @@ spec:
               memory: 1Gi
           persistence:
             size: 10Gi
-            storageClass: "zfs-nvme"
+            storageClass: zfs-nvme
 
         store_gateway:
           replicas: 3
@@ -63,7 +63,7 @@ spec:
               memory: 512Mi
           persistence:
             size: 10Gi
-            storageClass: "zfs-nvme"
+            storageClass: zfs-nvme
 
         distributor:
           replicas: 2
@@ -78,6 +78,13 @@ spec:
             requests:
               cpu: 100m
               memory: 512Mi
+          extraArgs:
+            - -server.http-listen-port=8080
+
+        query_frontend:
+          enabled: true
+          extraArgs:
+            - -server.http-listen-port=8080
 
         compactor:
           replicas: 1
@@ -86,12 +93,12 @@ spec:
               cpu: 100m
               memory: 512Mi
 
-        # 3. Disable internal dependencies you aren't using
+        # 3. Disable unused components
         continuous-test:
           enabled: false
+
         mimir-proxies:
           enabled: false
-
   syncPolicy:
     automated:
       prune: true
