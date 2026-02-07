@@ -1,0 +1,5 @@
+resources:
+  - secret.yaml
+  - statefulset.yaml
+  - service.yaml
+  - exporter.yaml
