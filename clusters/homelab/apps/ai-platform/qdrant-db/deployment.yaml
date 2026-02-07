@@ -25,6 +25,8 @@ spec:
               value: INFO
             - name: QDRANT__SERVICE__ENABLE_METRICS
               value: "true"
+            - name: QDRANT__SERVICE__ENABLE_TRACING
+              value: "true"
 
             # OpenTelemetry
             - name: OTEL_SERVICE_NAME
