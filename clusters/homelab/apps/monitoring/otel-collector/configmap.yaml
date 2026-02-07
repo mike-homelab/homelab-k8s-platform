@@ -26,19 +26,21 @@ data:
         timeout: 5s
 
     exporters:
+      # Logs → Loki (HTTP)
       otlp_http/loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
         tls:
           insecure: true
 
-      # 🔑 FIX: add tenant header for Mimir ingestion
-      otlp_http/mimir:
+      # 🔑 Metrics → Mimir (gRPC, REQUIRED)
+      otlp_grpc/mimir:
         endpoint: mimir-distributor.monitoring.svc.cluster.local:9095
         headers:
           X-Scope-OrgID: anonymous
         tls:
           insecure: true
 
+      # Traces → Tempo (HTTP)
       otlp_http/tempo:
         endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
