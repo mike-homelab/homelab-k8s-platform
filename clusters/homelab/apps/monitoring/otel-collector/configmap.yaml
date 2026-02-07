@@ -9,20 +9,31 @@ data:
       otlp:
         protocols:
           grpc:
+            endpoint: 0.0.0.0:4317
           http:
+            endpoint: 0.0.0.0:4318
 
     processors:
       batch:
+        send_batch_size: 1024
+        timeout: 5s
 
     exporters:
+      # Loki (logs)
       otlphttp/loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
+        tls:
+          insecure: true
 
+      # Mimir (metrics)
       otlphttp/mimir:
         endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
+        tls:
+          insecure: true
 
+      # Tempo (traces)
       otlp/tempo:
-        endpoint: tempo-distributor.monitoring.svc.cluster.local:4317
+        endpoint: tempo-distributor.monitoring.svc.cluster.local:3100
         tls:
           insecure: true
 
