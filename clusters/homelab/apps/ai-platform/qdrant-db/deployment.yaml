@@ -49,6 +49,7 @@ spec:
     - metadata:
         name: qdrant-data
       spec:
+        storageClassName: zfs-nvme
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
