@@ -13,6 +13,14 @@ data:
           http:
             endpoint: 0.0.0.0:4318
 
+      # 🔑 This guarantees metrics exist
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: otel-collector
+              static_configs:
+                - targets: ["localhost:8888"]
+
     processors:
       batch:
         send_batch_size: 1024
@@ -31,13 +39,18 @@ data:
         tls:
           insecure: true
 
-      # Traces → Tempo (HTTP, NOT gRPC)
+      # Traces → Tempo
       otlp_http/tempo:
         endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
           insecure: true
 
     service:
+      # 🔑 Enable collector self-metrics
+      telemetry:
+        metrics:
+          level: detailed
+
       pipelines:
         logs:
           receivers: [otlp]
@@ -45,7 +58,7 @@ data:
           exporters: [otlp_http/loki]
 
         metrics:
-          receivers: [otlp]
+          receivers: [otlp, prometheus]
           processors: [batch]
           exporters: [otlp_http/mimir]
 
