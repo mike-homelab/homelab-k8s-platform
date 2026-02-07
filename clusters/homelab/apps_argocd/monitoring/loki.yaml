@@ -36,7 +36,7 @@ spec:
                   prefix: index_
                   period: 24h
 
-          # CRITICAL — runtime storage backend used by compactor
+          # Runtime storage backend (MinIO)
           storage_config:
             aws:
               endpoint: minio.monitoring.svc:9000
@@ -45,7 +45,6 @@ spec:
               s3forcepathstyle: true
               insecure: true
 
-          # Helm abstraction layer (bucket mapping)
           storage:
             type: s3
             bucketNames:
@@ -53,9 +52,12 @@ spec:
               ruler: loki-ruler
               admin: loki-admin
 
+          # UPDATED — ingestion limits (fixes 429 errors)
           limits_config:
-            retention_period: 168h
+            retention_period: 24h
             deletion_mode: filter-and-delete
+            ingestion_rate_mb: 16
+            ingestion_burst_size_mb: 32
 
           compactor:
             retention_enabled: true
