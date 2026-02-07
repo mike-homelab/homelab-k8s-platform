@@ -32,7 +32,7 @@ data:
         tls:
           insecure: true
 
-      # Metrics → Mimir (OTLP HTTP)
+      # Metrics → Mimir
       otlp_http/mimir:
         endpoint: http://mimir-distributor.monitoring.svc.cluster.local:8080/otlp
         headers:
@@ -52,7 +52,6 @@ data:
           level: detailed
         traces:
           level: detailed
-          exporters: [otlp_http/tempo]
 
       pipelines:
         logs:
