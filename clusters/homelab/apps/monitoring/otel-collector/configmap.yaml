@@ -50,6 +50,8 @@ data:
       telemetry:
         metrics:
           level: detailed
+        traces:
+          level: detailed
 
       pipelines:
         logs:
