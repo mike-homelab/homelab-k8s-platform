@@ -33,7 +33,7 @@ data:
 
       # 🔑 FIX: add tenant header for Mimir ingestion
       otlp_http/mimir:
-        endpoint: http://mimir-distributor.monitoring.svc.cluster.local:8080/otlp
+        endpoint: mimir-distributor.monitoring.svc.cluster.local:9095
         headers:
           X-Scope-OrgID: anonymous
         tls:
@@ -58,7 +58,7 @@ data:
         metrics:
           receivers: [otlp, prometheus]
           processors: [batch]
-          exporters: [otlp_http/mimir]
+          exporters: [otlp_grpc/mimir]
 
         traces:
           receivers: [otlp]
