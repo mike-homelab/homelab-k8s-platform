@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters\homelab\apps\ai-platform\postgress-db
+    path: clusters/homelab/apps/ai-platform/postgress-db
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform
