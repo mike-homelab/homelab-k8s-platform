@@ -65,7 +65,8 @@ spec:
         - type: RequestHeaderModifier
           requestHeaderModifier:
             add:
-              X-Scope-OrgID: anonymous
+              - name: X-Scope-OrgID
+                value: anonymous
       backendRefs:
         - name: mimir-querier
           port: 8080
