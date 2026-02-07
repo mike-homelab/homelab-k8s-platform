@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgress-db
+  namespace: argocd
+spec:
+  project: ai-platform
+  source:
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: homelab-k8s-platform\clusters\homelab\apps\ai-platform\postgress-db
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-platform
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true

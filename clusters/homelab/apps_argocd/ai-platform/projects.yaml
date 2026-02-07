@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ai-platform
+  namespace: argocd
+spec:
+  description: Ai platform
+  sourceRepos:
+  - https://github.com/mike-homelab/homelab-k8s-platform
+  destinations:
+  - namespace: '*'
+    server: https://kubernetes.default.svc
+
+  # Allow cluster-scoped resources
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'
