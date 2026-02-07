@@ -31,6 +31,12 @@ spec:
                   secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
                   insecure: true
 
+            # 🔑 REQUIRED: Enable OTLP ingestion for OTEL metrics
+            otlp:
+              enabled: true
+              http:
+                enabled: true
+
             blocks_storage:
               s3:
                 bucket_name: mimir-blocks
@@ -93,13 +99,4 @@ spec:
               cpu: 100m
               memory: 512Mi
 
-        # 3. Disable unused components
-        continuous-test:
-          enabled: false
-
-        mimir-proxies:
-          enabled: false
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+        # 3. Disable un
