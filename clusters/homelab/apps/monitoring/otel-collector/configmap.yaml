@@ -32,15 +32,15 @@ data:
         tls:
           insecure: true
 
-      # Metrics → Mimir
+      # Metrics → Mimir (via gateway)
       otlp_http/mimir:
-        endpoint: http://mimir-distributor.monitoring.svc.cluster.local:8080/otlp
+        endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
         headers:
           X-Scope-OrgID: anonymous
         tls:
           insecure: true
 
-      # Traces → Tempo
+      # Traces → Tempo (HTTP, correct)
       otlp_http/tempo:
         endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
