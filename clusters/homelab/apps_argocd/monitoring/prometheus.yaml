@@ -32,9 +32,6 @@ spec:
           retention: 1h
           retentionSize: 1GB
 
-          extraArgs:
-            enable-feature: agent
-
           service:
             enabled: false
 
