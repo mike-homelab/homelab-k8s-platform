@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  description: Ai platform
+  description: "Ai platform"
   sourceRepos:
   - https://github.com/mike-homelab/homelab-k8s-platform
   destinations:
