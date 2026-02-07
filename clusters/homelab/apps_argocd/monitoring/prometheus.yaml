@@ -1,0 +1,128 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus-scraper
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  project: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: 25.30.0
+    helm:
+      values: |
+        alertmanager:
+          enabled: false
+
+        pushgateway:
+          enabled: false
+
+        server:
+          enabled: true
+          persistentVolume:
+            enabled: false
+
+          retention: 1h
+          retentionSize: 1GB
+
+          extraArgs:
+            enable-feature: agent
+
+          service:
+            enabled: false
+
+          remoteWrite:
+            - url: http://mimir-distributor.monitoring.svc:8080/api/v1/push
+
+        serverFiles:
+          prometheus.yml:
+            global:
+              scrape_interval: 30s
+              evaluation_interval: 30s
+
+            scrape_configs:
+
+              # --------------------
+              # Kubernetes API server
+              # --------------------
+              - job_name: kubernetes-apiserver
+                kubernetes_sd_configs:
+                  - role: endpoints
+                scheme: https
+                tls_config:
+                  ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+                    action: keep
+                    regex: default;kubernetes;https
+
+              # --------------------
+              # kubelet metrics
+              # --------------------
+              - job_name: kubelet
+                scheme: https
+                tls_config:
+                  insecure_skip_verify: true
+                bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+                kubernetes_sd_configs:
+                  - role: node
+                relabel_configs:
+                  - action: labelmap
+                    regex: __meta_kubernetes_node_label_(.+)
+                  - target_label: __address__
+                    replacement: kubernetes.default.svc:443
+                  - source_labels: [__meta_kubernetes_node_name]
+                    target_label: __metrics_path__
+                    replacement: /api/v1/nodes/$1/proxy/metrics
+
+              # --------------------
+              # kubelet cAdvisor (container CPU/memory)
+              # --------------------
+              - job_name: kubelet-cadvisor
+                scheme: https
+                tls_config:
+                  insecure_skip_verify: true
+                bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+                kubernetes_sd_configs:
+                  - role: node
+                relabel_configs:
+                  - target_label: __address__
+                    replacement: kubernetes.default.svc:443
+                  - source_labels: [__meta_kubernetes_node_name]
+                    target_label: __metrics_path__
+                    replacement: /api/v1/nodes/$1/proxy/metrics/cadvisor
+
+              # --------------------
+              # kube-state-metrics
+              # --------------------
+              - job_name: kube-state-metrics
+                kubernetes_sd_configs:
+                  - role: service
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_service_name]
+                    action: keep
+                    regex: kube-state-metrics
+
+              # --------------------
+              # Node exporter (if installed)
+              # --------------------
+              - job_name: node-exporter
+                kubernetes_sd_configs:
+                  - role: endpoints
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_service_name]
+                    action: keep
+                    regex: node-exporter
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
