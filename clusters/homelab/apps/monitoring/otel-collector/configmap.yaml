@@ -19,21 +19,21 @@ data:
         timeout: 5s
 
     exporters:
-      # Loki (logs)
-      otlphttp/loki:
+      # Logs → Loki
+      otlp_http/loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
         tls:
           insecure: true
 
-      # Mimir (metrics)
-      otlphttp/mimir:
+      # Metrics → Mimir
+      otlp_http/mimir:
         endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
         tls:
           insecure: true
 
-      # Tempo (traces)
-      otlp/tempo:
-        endpoint: tempo-distributor.monitoring.svc.cluster.local:3100
+      # Traces → Tempo (HTTP, NOT gRPC)
+      otlp_http/tempo:
+        endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
           insecure: true
 
@@ -42,14 +42,14 @@ data:
         logs:
           receivers: [otlp]
           processors: [batch]
-          exporters: [otlphttp/loki]
+          exporters: [otlp_http/loki]
 
         metrics:
           receivers: [otlp]
           processors: [batch]
-          exporters: [otlphttp/mimir]
+          exporters: [otlp_http/mimir]
 
         traces:
           receivers: [otlp]
           processors: [batch]
-          exporters: [otlp/tempo]
+          exporters: [otlp_http/tempo]
