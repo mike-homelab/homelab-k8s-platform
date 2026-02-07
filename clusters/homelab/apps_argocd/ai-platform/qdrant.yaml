@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: homelab-k8s-platform/clusters/homelab/apps/ai-platform/qdrant-db
+    path: clusters/homelab/apps/ai-platform/qdrant-db
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform
