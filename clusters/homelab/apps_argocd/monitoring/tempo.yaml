@@ -31,10 +31,11 @@ spec:
               insecure: true
 
         # -----------------------------
-        # Core Tempo Config (CRITICAL)
+        # Core Tempo Runtime Config
+        # (THIS is what Tempo actually reads)
         # -----------------------------
         tempo:
-          config:
+          configOverride: |
             multitenancy_enabled: false
 
             memberlist:
@@ -111,7 +112,7 @@ spec:
               memory: 512Mi
 
         # -----------------------------
-        # Metrics Generator (Deployment)
+        # Metrics Generator (K8s object)
         # -----------------------------
         metricsGenerator:
           enabled: true
@@ -128,4 +129,3 @@ spec:
         # -----------------------------
         minio:
           enabled: false
-
