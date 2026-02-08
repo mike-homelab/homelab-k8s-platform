@@ -79,7 +79,30 @@ spec:
 
         # 3. Disable unneeded features for Homelab
         metricsGenerator:
-          enabled: false
+          enabled: true
+
+          replicas: 1
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+
+          config:
+            processor:
+              service_graphs:
+                enabled: true
+              span_metrics:
+                enabled: true
+
+            registry:
+              collection_interval: 15s
+
+            storage:
+              path: /var/tempo/metrics
+
         
         # MinIO is external, so ensure the internal one is off
         minio:
