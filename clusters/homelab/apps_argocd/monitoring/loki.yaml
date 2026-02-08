@@ -58,6 +58,8 @@ spec:
             deletion_mode: filter-and-delete
             ingestion_rate_mb: 16
             ingestion_burst_size_mb: 32
+            volume_enabled: true
+
 
           compactor:
             retention_enabled: true
