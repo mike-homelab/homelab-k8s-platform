@@ -18,22 +18,15 @@ spec:
     targetRevision: "1.61.3"
     helm:
       values: |
-        # -----------------------------------
-        # Storage (existing MinIO config)
-        # -----------------------------------
         storage:
           trace:
             backend: s3
             s3:
               endpoint: minio.monitoring.svc:9000
               bucket: tempo
-              access_key_id: QNm0d2hHLBGhjKVS28N3
-              secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
+              access_key: QNm0d2hHLBGhjKVS28N3
+              secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
-
-        # -----------------------------------
-        # Tempo runtime config (STRICT)
-        # -----------------------------------
         tempo:
           structuredConfig:
             multitenancy_enabled: false
@@ -55,49 +48,73 @@ spec:
                   store: memberlist
 
               processor:
-                service_graphs:
-                  enabled: true
-                span_metrics:
-                  enabled: true
+                service_graphs: {}
+                span_metrics: {}
 
               registry:
                 collection_interval: 15s
 
               storage:
                 path: /var/tempo/metrics
-
-        # -----------------------------------
-        # Enable metrics generator workload
-        # -----------------------------------
         metricsGenerator:
           enabled: true
           replicas: 1
-
-        # -----------------------------------
-        # Scaling (existing, unchanged)
-        # -----------------------------------
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
         distributor:
           replicas: 2
-
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
         ingester:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
             storageClass: zfs-nvme
-
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 400m
+              memory: 512Mi
         querier:
           replicas: 2
-
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
         queryFrontend:
           replicas: 1
-
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
         compactor:
           replicas: 1
-
-        # -----------------------------------
-        # Disable embedded MinIO
-        # -----------------------------------
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
         minio:
           enabled: false
 
