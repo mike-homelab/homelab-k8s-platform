@@ -25,24 +25,18 @@ spec:
           limits:
             cpu: 300m
             memory: 512Mi
-
-        # -----------------------------
-        #  Persist Grafana state
-        # -----------------------------
         persistence:
           enabled: true
           storageClassName: zfs-ssd
           accessModes:
             - ReadWriteOnce
           size: 10Gi
-
-        # -----------------------------
-        #  Datasource provisioning
-        # -----------------------------
         datasources:
           datasources.yaml:
             apiVersion: 1
             datasources:
+
+              # Metrics → Mimir
               - name: Mimir
                 type: prometheus
                 access: proxy
@@ -53,24 +47,22 @@ spec:
                 secureJsonData:
                   httpHeaderValue1: anonymous
 
+              # Logs → Loki (FIXED)
               - name: Loki
                 type: loki
                 access: proxy
-                url: http://loki-gateway.monitoring.svc/loki
+                url: http://loki-gateway.monitoring.svc
                 jsonData:
                   httpHeaderName1: X-Scope-OrgID
                 secureJsonData:
                   httpHeaderValue1: anonymous
 
+              # Traces → Tempo
               - name: Tempo
                 type: tempo
                 access: proxy
-                url: http://tempo-query-frontend.monitoring.svc:3100
-
-        # -----------------------------
-        # Disable UI mutation drift
-        # -----------------------------
-        adminPassword: admin
+                url: http://tempo-query-frontend.monitoring.svc:3200
+        adminPassword: admin@Homelab
 
   syncPolicy:
     automated:
