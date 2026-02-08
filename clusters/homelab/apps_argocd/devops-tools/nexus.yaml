@@ -1,19 +1,19 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: monitoring-cert-and-config
+  name: nexus
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "10"  # after cert-manager helm install
 spec:
-  project: monitoring
+  project: devops-tools
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/monitoring/monitoring-configs
+    path: clusters/homelab/apps/devops-tools/nexus
   destination:
     server: https://kubernetes.default.svc
-    namespace: monitoring
+    namespace: devops-tools
   syncPolicy:
     automated:
       prune: true
