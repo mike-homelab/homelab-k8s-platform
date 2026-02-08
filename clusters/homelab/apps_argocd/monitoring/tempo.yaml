@@ -10,13 +10,16 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: tempo-distributed
     targetRevision: "1.20.1"
     helm:
       values: |
-        # 1. Official S3 Storage Config
+        # -----------------------------
+        # Storage (MinIO / S3)
+        # -----------------------------
         storage:
           trace:
             backend: s3
@@ -27,19 +30,58 @@ spec:
               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
 
-        # 2. Component Scaling & Resources (3-Node Worker Layout)
+        # -----------------------------
+        # Core Tempo Config (CRITICAL)
+        # -----------------------------
+        tempo:
+          config:
+            multitenancy_enabled: false
+
+            memberlist:
+              join_members:
+                - dns+tempo-gossip-ring:7946
+
+            metrics_generator:
+              ring:
+                kvstore:
+                  store: memberlist
+
+              processor:
+                service_graphs:
+                  enabled: true
+                span_metrics:
+                  enabled: true
+
+              registry:
+                collection_interval: 15s
+
+              storage:
+                path: /var/tempo/metrics
+
+        # -----------------------------
+        # Scaling & Resources
+        # -----------------------------
         ingester:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: "zfs-nvme"
+            storageClass: zfs-nvme
           resources:
             requests:
               cpu: 100m
               memory: 512Mi
             limits:
               memory: 1Gi
+
+        distributor:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
 
         querier:
           replicas: 2
@@ -59,15 +101,6 @@ spec:
             limits:
               memory: 512Mi
 
-        distributor:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
-
         compactor:
           replicas: 1
           resources:
@@ -77,12 +110,12 @@ spec:
             limits:
               memory: 512Mi
 
-        # 3. Disable unneeded features for Homelab
+        # -----------------------------
+        # Metrics Generator (Deployment)
+        # -----------------------------
         metricsGenerator:
           enabled: true
-
           replicas: 1
-
           resources:
             requests:
               cpu: 100m
@@ -90,21 +123,9 @@ spec:
             limits:
               memory: 512Mi
 
-          config:
-            processor:
-              service_graphs:
-                enabled: true
-              span_metrics:
-                enabled: true
-
-            registry:
-              collection_interval: 15s
-
-            storage:
-              path: /var/tempo/metrics
-
-        
-        # MinIO is external, so ensure the internal one is off
+        # -----------------------------
+        # Disable embedded MinIO
+        # -----------------------------
         minio:
           enabled: false
 
