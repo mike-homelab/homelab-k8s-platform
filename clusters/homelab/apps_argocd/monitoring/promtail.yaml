@@ -61,6 +61,8 @@ spec:
                   target_label: node
                 - replacement: kubernetes-pods
                   target_label: job
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: service
 
                 # Log file path
                 - action: replace
