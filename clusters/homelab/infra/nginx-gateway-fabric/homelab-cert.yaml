@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: homelab-wildcard-tls
+  namespace: nginx-gateway
+spec:
+  secretName: homelab-wildcard-tls
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.michaelhomelab.work"
+    - "michaelhomelab.work"
