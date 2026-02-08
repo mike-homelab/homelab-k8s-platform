@@ -27,6 +27,7 @@ spec:
               access_key: QNm0d2hHLBGhjKVS28N3
               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
+
         tempo:
           structuredConfig:
             multitenancy_enabled: false
@@ -41,44 +42,42 @@ spec:
                   protocols:
                     grpc: {}
                     http: {}
-
-            metrics_generator:
-              ring:
-                kvstore:
-                  store: memberlist
-
-              processor:
-                service_graphs: {}
-                span_metrics: {}
-
-              registry:
-                collection_interval: 15s
-
-              storage:
-                path: /var/tempo/metrics
-              remote_write:
-                - url: http://mimir-distributor.monitoring.svc:8080/api/v1/push
-                  headers:
-                    X-Scope-OrgID: anonymous
         metricsGenerator:
           enabled: true
           replicas: 1
+
+          config:
+            processors:
+              service_graphs:
+                enabled: true
+              span_metrics:
+                enabled: true
+
+            registry:
+              collection_interval: 15s
+
+            remote_write:
+              - url: http://mimir-distributor.monitoring.svc:8080/api/v1/push
+                headers:
+                  X-Scope-OrgID: anonymous
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 25m
+              memory: 64Mi
             limits:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 100m
+              memory: 128Mi
+
         distributor:
           replicas: 2
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 25m
+              memory: 64Mi
             limits:
-              cpu: 200m
-              memory: 256Mi
+              cpu: 100m
+              memory: 128Mi
+
         ingester:
           replicas: 3
           persistence:
@@ -87,21 +86,33 @@ spec:
             storageClass: zfs-nvme
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 400m
-              memory: 512Mi
-        querier:
-          replicas: 2
-          resources:
-            requests:
               cpu: 50m
               memory: 128Mi
             limits:
               cpu: 200m
               memory: 256Mi
+
+        querier:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
         queryFrontend:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+
+        compactor:
           replicas: 1
           resources:
             requests:
@@ -110,15 +121,6 @@ spec:
             limits:
               cpu: 100m
               memory: 128Mi
-        compactor:
-          replicas: 1
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
         minio:
           enabled: false
 
