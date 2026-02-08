@@ -7,6 +7,7 @@ metadata:
     argocd.argoproj.io/sync-wave: "12"
 spec:
   project: monitoring
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -14,12 +15,12 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: tempo-distributed
-    targetRevision: "1.20.1"
+    targetRevision: "1.27.1"   # 🔒 PINNED
     helm:
       values: |
-        # -----------------------------
+        # -----------------------------------
         # Storage (MinIO / S3)
-        # -----------------------------
+        # -----------------------------------
         storage:
           trace:
             backend: s3
@@ -30,18 +31,18 @@ spec:
               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
 
-        # -----------------------------
-        # Core Tempo Runtime Config
-        # (THIS is what Tempo actually reads)
-        # -----------------------------
+        # -----------------------------------
+        # Tempo runtime config (LGTM-style)
+        # -----------------------------------
         tempo:
-          configOverride: |
+          structuredConfig:
             multitenancy_enabled: false
 
             memberlist:
               join_members:
                 - dns+tempo-gossip-ring:7946
 
+            # ✅ Metrics Generator is FIRST-CLASS now
             metrics_generator:
               ring:
                 kvstore:
@@ -59,73 +60,42 @@ spec:
               storage:
                 path: /var/tempo/metrics
 
-        # -----------------------------
-        # Scaling & Resources
-        # -----------------------------
+        # -----------------------------------
+        # Component scaling (homelab-safe)
+        # -----------------------------------
+        distributor:
+          replicas: 2
+
         ingester:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
             storageClass: zfs-nvme
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              memory: 1Gi
-
-        distributor:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
 
         querier:
           replicas: 2
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              memory: 1Gi
 
         queryFrontend:
           replicas: 1
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
 
         compactor:
           replicas: 1
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
 
-        # -----------------------------
-        # Metrics Generator (K8s object)
-        # -----------------------------
+        # -----------------------------------
+        # Metrics Generator workload
+        # -----------------------------------
         metricsGenerator:
           enabled: true
           replicas: 1
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
 
-        # -----------------------------
+        # -----------------------------------
         # Disable embedded MinIO
-        # -----------------------------
+        # -----------------------------------
         minio:
           enabled: false
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
