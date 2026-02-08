@@ -1,0 +1,7 @@
+resources:
+  - namespace.yaml
+  - volume.yaml
+  - deployment.yaml
+  - service.yaml
+  - http-route.yaml
+  - docker-http-route.yaml

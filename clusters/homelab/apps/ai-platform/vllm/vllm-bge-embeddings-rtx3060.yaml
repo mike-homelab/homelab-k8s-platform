@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vllm-bge-cache
+  namespace: ai-platform
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: zfs-ssd
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-bge-embeddings
+  namespace: ai-platform
+  labels:
+    app: vllm
+    model: bge-embeddings
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+      model: bge-embeddings
+  template:
+    metadata:
+      labels:
+        app: vllm
+        model: bge-embeddings
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-GeForce-RTX-3060
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - "--model=BAAI/bge-large-en"
+            - "--task=embedding"
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "1"
+              memory: 4Gi
+              nvidia.com/gpu: 1
+            limits:
+              cpu: "2"
+              memory: 8Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: vllm-bge-cache
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-bge-embeddings
+  namespace: ai-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm
+    model: bge-embeddings
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

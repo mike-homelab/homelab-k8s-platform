@@ -1,0 +1,7 @@
+resources:
+  - otel-configmap.yaml
+  - vllm-llama3-8b-rtx5070ti.yaml
+  - vllm-mixtral-8x7b-rtx5060ti.yaml
+  - vllm-bge-embeddings-rtx3060.yaml
+  - servicemonitor-vllm.yaml
+  - inference-router.yaml

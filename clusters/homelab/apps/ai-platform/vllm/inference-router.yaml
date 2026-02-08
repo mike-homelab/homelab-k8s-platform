@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-router
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference-router
+  template:
+    metadata:
+      labels:
+        app: inference-router
+    spec:
+      containers:
+        - name: router
+          image: python:3.11-slim
+          command: ["python", "-m", "router"]
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.ai-platform.svc.cluster.local:4317
+            - name: OTEL_SERVICE_NAME
+              value: inference-router
+            - name: OTEL_TRACES_EXPORTER
+              value: otlp
+            - name: OTEL_METRICS_EXPORTER
+              value: none
+          ports:
+            - containerPort: 8000
+          resources:
+            requests:
+              cpu: "200m"
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-router
+  namespace: ai-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: inference-router
+  ports:
+    - port: 8000
+      targetPort: 8000

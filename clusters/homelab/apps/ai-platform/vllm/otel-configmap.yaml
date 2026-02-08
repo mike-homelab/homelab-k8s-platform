@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: ai-platform
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+          http:
+
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+      resource:
+        attributes:
+          - key: service.namespace
+            value: ai-platform
+            action: upsert
+
+    exporters:
+      loki:
+        endpoint: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+
+      prometheusremotewrite:
+        endpoint: http://mimir.monitoring.svc.cluster.local:9009/api/v1/push
+        headers:
+          X-Scope-OrgID: anonymous
+
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        logs:
+          receivers: [otlp]
+          processors: [resource, batch]
+          exporters: [loki]
+
+        metrics:
+          receivers: [otlp]
+          processors: [resource, batch]
+          exporters: [prometheusremotewrite]
+
+        traces:
+          receivers: [otlp]
+          processors: [resource, batch]
+          exporters: [otlp/tempo]
