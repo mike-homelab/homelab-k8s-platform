@@ -15,12 +15,12 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: tempo-distributed
-    targetRevision: "1.27.1"   # 🔒 PINNED
+    targetRevision: "1.61.3"   # ✅ CORRECT PIN
     helm:
       values: |
-        # -----------------------------------
+        # -----------------------------
         # Storage (MinIO / S3)
-        # -----------------------------------
+        # -----------------------------
         storage:
           trace:
             backend: s3
@@ -31,9 +31,9 @@ spec:
               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
 
-        # -----------------------------------
-        # Tempo runtime config (LGTM-style)
-        # -----------------------------------
+        # -----------------------------
+        # Tempo runtime config
+        # -----------------------------
         tempo:
           structuredConfig:
             multitenancy_enabled: false
@@ -42,7 +42,6 @@ spec:
               join_members:
                 - dns+tempo-gossip-ring:7946
 
-            # ✅ Metrics Generator is FIRST-CLASS now
             metrics_generator:
               ring:
                 kvstore:
@@ -60,9 +59,9 @@ spec:
               storage:
                 path: /var/tempo/metrics
 
-        # -----------------------------------
-        # Component scaling (homelab-safe)
-        # -----------------------------------
+        # -----------------------------
+        # Scaling (homelab-safe)
+        # -----------------------------
         distributor:
           replicas: 2
 
@@ -82,16 +81,16 @@ spec:
         compactor:
           replicas: 1
 
-        # -----------------------------------
+        # -----------------------------
         # Metrics Generator workload
-        # -----------------------------------
+        # -----------------------------
         metricsGenerator:
           enabled: true
           replicas: 1
 
-        # -----------------------------------
+        # -----------------------------
         # Disable embedded MinIO
-        # -----------------------------------
+        # -----------------------------
         minio:
           enabled: false
 
