@@ -26,6 +26,52 @@ spec:
             cpu: 300m
             memory: 512Mi
 
+        # -----------------------------
+        #  Persist Grafana state
+        # -----------------------------
+        persistence:
+          enabled: true
+          storageClassName: ssd
+          accessModes:
+            - ReadWriteOnce
+          size: 10Gi
+
+        # -----------------------------
+        #  Datasource provisioning
+        # -----------------------------
+        datasources:
+          datasources.yaml:
+            apiVersion: 1
+            datasources:
+              - name: Mimir
+                type: prometheus
+                access: proxy
+                url: http://mimir-query-frontend.monitoring.svc:8080/prometheus
+                isDefault: true
+                jsonData:
+                  httpHeaderName1: X-Scope-OrgID
+                secureJsonData:
+                  httpHeaderValue1: anonymous
+
+              - name: Loki
+                type: loki
+                access: proxy
+                url: http://loki-read.monitoring.svc:3100
+                jsonData:
+                  httpHeaderName1: X-Scope-OrgID
+                secureJsonData:
+                  httpHeaderValue1: anonymous
+
+              - name: Tempo
+                type: tempo
+                access: proxy
+                url: http://tempo-query-frontend.monitoring.svc:3100
+
+        # -----------------------------
+        # Disable UI mutation drift
+        # -----------------------------
+        adminPassword: admin
+
   syncPolicy:
     automated:
       prune: true
