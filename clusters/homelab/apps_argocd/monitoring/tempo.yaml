@@ -15,12 +15,12 @@ spec:
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: tempo-distributed
-    targetRevision: "1.61.3"   # ✅ CORRECT PIN
+    targetRevision: "1.61.3"
     helm:
       values: |
-        # -----------------------------
-        # Storage (MinIO / S3)
-        # -----------------------------
+        # -----------------------------------
+        # Storage (existing MinIO config)
+        # -----------------------------------
         storage:
           trace:
             backend: s3
@@ -31,9 +31,9 @@ spec:
               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
               insecure: true
 
-        # -----------------------------
-        # Tempo runtime config
-        # -----------------------------
+        # -----------------------------------
+        # Tempo runtime config (STRICT)
+        # -----------------------------------
         tempo:
           structuredConfig:
             multitenancy_enabled: false
@@ -41,6 +41,13 @@ spec:
             memberlist:
               join_members:
                 - dns+tempo-gossip-ring:7946
+
+            distributor:
+              receivers:
+                otlp:
+                  protocols:
+                    grpc: {}
+                    http: {}
 
             metrics_generator:
               ring:
@@ -59,9 +66,16 @@ spec:
               storage:
                 path: /var/tempo/metrics
 
-        # -----------------------------
-        # Scaling (homelab-safe)
-        # -----------------------------
+        # -----------------------------------
+        # Enable metrics generator workload
+        # -----------------------------------
+        metricsGenerator:
+          enabled: true
+          replicas: 1
+
+        # -----------------------------------
+        # Scaling (existing, unchanged)
+        # -----------------------------------
         distributor:
           replicas: 2
 
@@ -81,16 +95,9 @@ spec:
         compactor:
           replicas: 1
 
-        # -----------------------------
-        # Metrics Generator workload
-        # -----------------------------
-        metricsGenerator:
-          enabled: true
-          replicas: 1
-
-        # -----------------------------
+        # -----------------------------------
         # Disable embedded MinIO
-        # -----------------------------
+        # -----------------------------------
         minio:
           enabled: false
 
