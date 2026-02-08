@@ -13,12 +13,13 @@ data:
           http:
             endpoint: 0.0.0.0:4318
 
+      # Self-metrics only (optional, safe)
       prometheus:
         config:
           scrape_configs:
             - job_name: otel-collector
               static_configs:
-                - targets: ["localhost:8888"]
+                - targets: ["0.0.0.0:8888"]
 
     processors:
       batch:
@@ -26,21 +27,11 @@ data:
         timeout: 5s
 
     exporters:
-      # Logs → Loki
       otlp_http/loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/otlp
         tls:
           insecure: true
 
-      # Metrics → Mimir (via gateway)
-      otlp_http/mimir:
-        endpoint: http://mimir-gateway.monitoring.svc.cluster.local/otlp
-        headers:
-          X-Scope-OrgID: anonymous
-        tls:
-          insecure: true
-
-      # Traces → Tempo (HTTP, correct)
       otlp_http/tempo:
         endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
         tls:
@@ -48,6 +39,8 @@ data:
 
     service:
       telemetry:
+        logs:
+          level: info
         metrics:
           level: detailed
         traces:
@@ -58,11 +51,6 @@ data:
           receivers: [otlp]
           processors: [batch]
           exporters: [otlp_http/loki]
-
-        metrics:
-          receivers: [otlp, prometheus]
-          processors: [batch]
-          exporters: [otlp_http/mimir]
 
         traces:
           receivers: [otlp]
