@@ -8,6 +8,7 @@ spec:
   issuerRef:
     name: vault-issuer
     kind: ClusterIssuer
+  commonName: michaelhomelab.work
   dnsNames:
     - "*.michaelhomelab.work"
     - "michaelhomelab.work"
