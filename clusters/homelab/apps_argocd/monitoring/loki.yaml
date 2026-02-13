@@ -1,123 +1,120 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: loki
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "12"
-spec:
-  project: monitoring
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: loki
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "12"
+# spec:
+#   project: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: loki
-    targetRevision: "6.51.0"
+#   source:
+#     repoURL: https://grafana.github.io/helm-charts
+#     chart: loki
+#     targetRevision: "6.51.0"
 
-    helm:
-      values: |
-        deploymentMode: SimpleScalable
+#     helm:
+#       values: |
+#         deploymentMode: SimpleScalable
 
-        loki:
-          auth_enabled: false
+#         loki:
+#           auth_enabled: false
 
-          commonConfig:
-            replication_factor: 1
+#           commonConfig:
+#             replication_factor: 1
 
-          schemaConfig:
-            configs:
-              - from: "2024-01-01"
-                store: tsdb
-                object_store: s3
-                schema: v13
-                index:
-                  prefix: index_
-                  period: 24h
+#           schemaConfig:
+#             configs:
+#               - from: "2024-01-01"
+#                 store: tsdb
+#                 object_store: s3
+#                 schema: v13
+#                 index:
+#                   prefix: index_
+#                   period: 24h
 
-          # Runtime storage backend (MinIO)
-          storage_config:
-            aws:
-              endpoint: minio.monitoring.svc:9000
-              access_key_id: QNm0d2hHLBGhjKVS28N3
-              secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
-              s3forcepathstyle: true
-              insecure: true
+#           # Runtime storage backend (MinIO)
+#           storage_config:
+#             aws:
+#               endpoint: minio.monitoring.svc:9000
+#               access_key_id: QNm0d2hHLBGhjKVS28N3
+#               secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
+#               s3forcepathstyle: true
+#               insecure: true
 
-          storage:
-            type: s3
-            bucketNames:
-              chunks: loki-chunks
-              ruler: loki-ruler
-              admin: loki-admin
+#           storage:
+#             type: s3
+#             bucketNames:
+#               chunks: loki-chunks
+#               ruler: loki-ruler
+#               admin: loki-admin
 
-          # UPDATED — ingestion limits (fixes 429 errors)
-          limits_config:
-            retention_period: 24h
-            deletion_mode: filter-and-delete
-            ingestion_rate_mb: 16
-            ingestion_burst_size_mb: 32
-            volume_enabled: true
+#           # UPDATED — ingestion limits (fixes 429 errors)
+#           limits_config:
+#             retention_period: 24h
+#             deletion_mode: filter-and-delete
+#             ingestion_rate_mb: 16
+#             ingestion_burst_size_mb: 32
+#             volume_enabled: true
 
 
-          compactor:
-            retention_enabled: true
-            delete_request_store: s3
-            working_directory: /var/loki/compactor
-            compaction_interval: 10m
+#           compactor:
+#             retention_enabled: true
+#             delete_request_store: s3
+#             working_directory: /var/loki/compactor
+#             compaction_interval: 10m
 
-        backend:
-          replicas: 1
-          persistence:
-            size: 10Gi
-            storageClass: zfs-nvme
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
+#         backend:
+#           replicas: 1
+#           persistence:
+#             size: 10Gi
+#             storageClass: zfs-nvme
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
 
-        read:
-          replicas: 1
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
+#         read:
+#           replicas: 1
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
 
-        write:
-          replicas: 1
-          persistence:
-            size: 10Gi
-            storageClass: zfs-nvme
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
+#         write:
+#           replicas: 1
+#           persistence:
+#             size: 10Gi
+#             storageClass: zfs-nvme
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
 
-        chunksCache:
-          allocatedMemory: 512
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
+#         chunksCache:
+#           allocatedMemory: 512
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 512Mi
 
-        resultsCache:
-          allocatedMemory: 512
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
+#         resultsCache:
+#           allocatedMemory: 512
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 512Mi
 
-        gateway:
-          replicas: 1
+#         gateway:
+#           replicas: 1
 
-        minio:
-          enabled: false
+#         minio:
+#           enabled: false
 
-        singleBinary:
-          replicas: 0
+#         singleBinary:
+#           replicas: 0
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+

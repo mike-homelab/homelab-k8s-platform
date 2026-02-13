@@ -1,0 +1,10 @@
+fastapi==0.110.0
+uvicorn==0.29.0
+
+# Observability (future-proof)
+opentelemetry-api==1.23.0
+opentelemetry-sdk==1.23.0
+opentelemetry-exporter-otlp==1.23.0
+
+# Kubernetes read-only access (later use)
+kubernetes==29.0.0

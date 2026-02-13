@@ -1,70 +1,66 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: grafana
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "15"
-spec:
-  project: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: grafana
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "15"
+# spec:
+#   project: monitoring
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: grafana
-    targetRevision: "10.5.15"
-    helm:
-      values: |
-        resources:
-          requests:
-            cpu: 100m
-            memory: 256Mi
-          limits:
-            cpu: 300m
-            memory: 512Mi
-        persistence:
-          enabled: true
-          storageClassName: zfs-ssd
-          accessModes:
-            - ReadWriteOnce
-          size: 10Gi
-        datasources:
-          datasources.yaml:
-            apiVersion: 1
-            datasources:
+#   source:
+#     repoURL: https://grafana.github.io/helm-charts
+#     chart: grafana
+#     targetRevision: "10.5.15"
+#     helm:
+#       values: |
+#         resources:
+#           requests:
+#             cpu: 100m
+#             memory: 256Mi
+#           limits:
+#             cpu: 300m
+#             memory: 512Mi
+#         persistence:
+#           enabled: true
+#           storageClassName: zfs-ssd
+#           accessModes:
+#             - ReadWriteOnce
+#           size: 10Gi
+#         datasources:
+#           datasources.yaml:
+#             apiVersion: 1
+#             datasources:
 
-              # Metrics → Mimir
-              - name: Mimir
-                type: prometheus
-                access: proxy
-                url: http://mimir-query-frontend.monitoring.svc:8080/prometheus
-                isDefault: true
-                jsonData:
-                  httpHeaderName1: X-Scope-OrgID
-                secureJsonData:
-                  httpHeaderValue1: anonymous
+#               # Metrics → Mimir
+#               - name: Mimir
+#                 type: prometheus
+#                 access: proxy
+#                 url: http://mimir-query-frontend.monitoring.svc:8080/prometheus
+#                 isDefault: true
+#                 jsonData:
+#                   httpHeaderName1: X-Scope-OrgID
+#                 secureJsonData:
+#                   httpHeaderValue1: anonymous
 
-              # Logs → Loki (FIXED)
-              - name: Loki
-                type: loki
-                access: proxy
-                url: http://loki-gateway.monitoring.svc
-                jsonData:
-                  httpHeaderName1: X-Scope-OrgID
-                secureJsonData:
-                  httpHeaderValue1: anonymous
+#               # Logs → Loki (FIXED)
+#               - name: Loki
+#                 type: loki
+#                 access: proxy
+#                 url: http://loki-gateway.monitoring.svc
+#                 jsonData:
+#                   httpHeaderName1: X-Scope-OrgID
+#                 secureJsonData:
+#                   httpHeaderValue1: anonymous
 
-              # Traces → Tempo
-              - name: Tempo
-                type: tempo
-                access: proxy
-                url: http://tempo-query-frontend.monitoring.svc:3200
-        adminPassword: admin@Homelab
+#               # Traces → Tempo
+#               - name: Tempo
+#                 type: tempo
+#                 access: proxy
+#                 url: http://tempo-query-frontend.monitoring.svc:3200
+#         adminPassword: admin@Homelab
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true

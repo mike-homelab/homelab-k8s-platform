@@ -1,0 +1,40 @@
+name: Build Observability Agent Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/agents/observability-agent/**
+
+jobs:
+  build:
+    name: Build & Push Observability Agent
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat images/ai-platform/agents/observability-agent/VERSION)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login nexus.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t nexus.michaelhomelab.work/docker-hosted/ai-platform/observability-agent:${{ steps.version.outputs.version }} \
+            images/ai-platform/agents/observability-agent
+
+      - name: Push Docker image
+        run: |
+          docker push nexus.michaelhomelab.work/docker-hosted/ai-platform/observability-agent:${{ steps.version.outputs.version }}

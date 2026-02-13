@@ -1,50 +1,50 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: cert-manager
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "10"
-spec:
-  project: default
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: cert-manager
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "10"
+# spec:
+#   project: default
 
-  source:
-    repoURL: https://charts.jetstack.io
-    chart: cert-manager
-    targetRevision: v1.19.2
-    helm:
-      releaseName: cert-manager
-      values: |
-        installCRDs: true
+#   source:
+#     repoURL: https://charts.jetstack.io
+#     chart: cert-manager
+#     targetRevision: v1.19.2
+#     helm:
+#       releaseName: cert-manager
+#       values: |
+#         installCRDs: true
 
-        global:
-          leaderElection:
-            namespace: cert-manager
+#         global:
+#           leaderElection:
+#             namespace: cert-manager
 
-        prometheus:
-          enabled: false
+#         prometheus:
+#           enabled: false
 
-        volumes:
-          - name: vault-ca
-            configMap:
-              name: vault-ca
+#         volumes:
+#           - name: vault-ca
+#             configMap:
+#               name: vault-ca
 
-        volumeMounts:
-          - name: vault-ca
-            mountPath: /etc/ssl/certs/vault-ca.crt
-            subPath: vault-ca.crt
+#         volumeMounts:
+#           - name: vault-ca
+#             mountPath: /etc/ssl/certs/vault-ca.crt
+#             subPath: vault-ca.crt
 
-        extraEnv:
-          - name: SSL_CERT_FILE
-            value: /etc/ssl/certs/vault-ca.crt
+#         extraEnv:
+#           - name: SSL_CERT_FILE
+#             value: /etc/ssl/certs/vault-ca.crt
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: cert-manager
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: cert-manager
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true

@@ -1,130 +1,128 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: tempo
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "12"
-spec:
-  project: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: tempo
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "12"
+# spec:
+#   project: monitoring
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: tempo-distributed
-    targetRevision: "1.61.3"
-    helm:
-      values: |
-        storage:
-          trace:
-            backend: s3
-            s3:
-              endpoint: minio.monitoring.svc:9000
-              bucket: tempo
-              access_key: QNm0d2hHLBGhjKVS28N3
-              secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
-              insecure: true
+#   source:
+#     repoURL: https://grafana.github.io/helm-charts
+#     chart: tempo-distributed
+#     targetRevision: "1.61.3"
+#     helm:
+#       values: |
+#         storage:
+#           trace:
+#             backend: s3
+#             s3:
+#               endpoint: minio.monitoring.svc:9000
+#               bucket: tempo
+#               access_key: QNm0d2hHLBGhjKVS28N3
+#               secret_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
+#               insecure: true
 
-        tempo:
-          structuredConfig:
-            multitenancy_enabled: false
+#         tempo:
+#           structuredConfig:
+#             multitenancy_enabled: false
 
-            memberlist:
-              join_members:
-                - dns+tempo-gossip-ring:7946
+#             memberlist:
+#               join_members:
+#                 - dns+tempo-gossip-ring:7946
 
-            distributor:
-              receivers:
-                otlp:
-                  protocols:
-                    grpc: {}
-                    http: {}
-        metricsGenerator:
-          enabled: true
-          replicas: 1
+#             distributor:
+#               receivers:
+#                 otlp:
+#                   protocols:
+#                     grpc: {}
+#                     http: {}
+#         metricsGenerator:
+#           enabled: true
+#           replicas: 1
 
-          config:
-            processors:
-              service_graphs:
-                enabled: true
-              span_metrics:
-                enabled: true
+#           config:
+#             processors:
+#               service_graphs:
+#                 enabled: true
+#               span_metrics:
+#                 enabled: true
 
-            registry:
-              collection_interval: 15s
+#             registry:
+#               collection_interval: 15s
 
-            remote_write:
-              - url: http://mimir-distributor.monitoring.svc:8080/api/v1/push
-                headers:
-                  X-Scope-OrgID: anonymous
-          resources:
-            requests:
-              cpu: 25m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
+#             remote_write:
+#               - url: http://mimir-distributor.monitoring.svc:8080/api/v1/push
+#                 headers:
+#                   X-Scope-OrgID: anonymous
+#           resources:
+#             requests:
+#               cpu: 25m
+#               memory: 64Mi
+#             limits:
+#               cpu: 100m
+#               memory: 128Mi
 
-        distributor:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 25m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
+#         distributor:
+#           replicas: 2
+#           resources:
+#             requests:
+#               cpu: 25m
+#               memory: 64Mi
+#             limits:
+#               cpu: 100m
+#               memory: 128Mi
 
-        ingester:
-          replicas: 3
-          persistence:
-            enabled: true
-            size: 10Gi
-            storageClass: zfs-nvme
-          resources:
-            requests:
-              cpu: 50m
-              memory: 128Mi
-            limits:
-              cpu: 200m
-              memory: 256Mi
+#         ingester:
+#           replicas: 3
+#           persistence:
+#             enabled: true
+#             size: 10Gi
+#             storageClass: zfs-nvme
+#           resources:
+#             requests:
+#               cpu: 50m
+#               memory: 128Mi
+#             limits:
+#               cpu: 200m
+#               memory: 256Mi
 
-        querier:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 25m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
+#         querier:
+#           replicas: 2
+#           resources:
+#             requests:
+#               cpu: 25m
+#               memory: 64Mi
+#             limits:
+#               cpu: 100m
+#               memory: 128Mi
 
-        queryFrontend:
-          replicas: 1
-          resources:
-            requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
-              cpu: 50m
-              memory: 64Mi
+#         queryFrontend:
+#           replicas: 1
+#           resources:
+#             requests:
+#               cpu: 10m
+#               memory: 32Mi
+#             limits:
+#               cpu: 50m
+#               memory: 64Mi
 
-        compactor:
-          replicas: 1
-          resources:
-            requests:
-              cpu: 25m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
-        minio:
-          enabled: false
+#         compactor:
+#           replicas: 1
+#           resources:
+#             requests:
+#               cpu: 25m
+#               memory: 64Mi
+#             limits:
+#               cpu: 100m
+#               memory: 128Mi
+#         minio:
+#           enabled: false
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+#   # Manual Sync Only: This disables auto-sync, prune, and self-heal
+#   syncPolicy: {}
