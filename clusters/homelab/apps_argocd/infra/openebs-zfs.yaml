@@ -1,22 +1,22 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: openebs-zfs
-#   namespace: argocd
-# spec:
-#   project: default
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openebs-zfs
+  namespace: argocd
+spec:
+  project: default
 
-#   source:
-#     repoURL: https://github.com/openebs/zfs-localpv
-#     targetRevision: v2.6.0
-#     path: deploy/yamls
-#     directory:
-#       recurse: true
+  source:
+    repoURL: https://github.com/openebs/zfs-localpv
+    targetRevision: v2.6.0
+    path: deploy/yamls
+    directory:
+      recurse: true
 
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: openebs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openebs
 
-#   syncPolicy:
-#     syncOptions:
-#       - CreateNamespace=true
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
