@@ -20,3 +20,7 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
+
+
+#You have to remove the --strict-topology by using the below command to make it work with OpenEBS ZFS LocalPV
+#kubectl -n kube-system edit deploy openebs-zfs-controller
