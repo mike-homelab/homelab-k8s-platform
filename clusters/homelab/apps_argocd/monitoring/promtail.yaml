@@ -1,92 +1,92 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: promtail
-#   namespace: argocd
-#   annotations:
-#     argocd.argoproj.io/sync-wave: "12"
-# spec:
-#   project: monitoring
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: monitoring
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: promtail
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "12"
+spec:
+  project: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
 
-#   source:
-#     repoURL: https://grafana.github.io/helm-charts
-#     chart: promtail
-#     targetRevision: 6.15.5
-#     helm:
-#       values: |
-#         fullnameOverride: promtail
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: promtail
+    targetRevision: 6.15.5
+    helm:
+      values: |
+        fullnameOverride: promtail
 
-#         serviceAccount:
-#           create: true
-#           name: promtail
+        serviceAccount:
+          create: true
+          name: promtail
 
-#         daemonset:
-#           enabled: true
+        daemonset:
+          enabled: true
 
-#         deployment:
-#           enabled: false
+        deployment:
+          enabled: false
 
-#         config:
-#           serverPort: 3101
-#           clients:
-#             - url: http://loki-write.monitoring.svc:3100/loki/api/v1/push
+        config:
+          serverPort: 3101
+          clients:
+            - url: http://loki-write.monitoring.svc:3100/loki/api/v1/push
 
-#           positions:
-#             filename: /run/promtail/positions.yaml
+          positions:
+            filename: /run/promtail/positions.yaml
 
-#           scrape_configs:
-#             - job_name: kubernetes-pods
-#               pipeline_stages:
-#                 - cri: {}
-#               kubernetes_sd_configs:
-#                 - role: pod
-#               relabel_configs:
-#                 # Namespace
-#                 - source_labels: [__meta_kubernetes_namespace]
-#                   target_label: namespace
+          scrape_configs:
+            - job_name: kubernetes-pods
+              pipeline_stages:
+                - cri: {}
+              kubernetes_sd_configs:
+                - role: pod
+              relabel_configs:
+                # Namespace
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: namespace
 
-#                 # Pod name
-#                 - source_labels: [__meta_kubernetes_pod_name]
-#                   target_label: pod
+                # Pod name
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: pod
 
-#                 # Container name
-#                 - source_labels: [__meta_kubernetes_pod_container_name]
-#                   target_label: container
+                # Container name
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: container
 
-#                 # Node name
-#                 - source_labels: [__meta_kubernetes_pod_node_name]
-#                   target_label: node
-#                 - replacement: kubernetes-pods
-#                   target_label: job
-#                 - source_labels: [__meta_kubernetes_pod_container_name]
-#                   target_label: service
+                # Node name
+                - source_labels: [__meta_kubernetes_pod_node_name]
+                  target_label: node
+                - replacement: kubernetes-pods
+                  target_label: job
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: service
 
-#                 # Log file path
-#                 - action: replace
-#                   source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
-#                   separator: /
-#                   target_label: __path__
-#                   replacement: /var/log/pods/*$1/*.log
+                # Log file path
+                - action: replace
+                  source_labels: [__meta_kubernetes_pod_uid, __meta_kubernetes_pod_container_name]
+                  separator: /
+                  target_label: __path__
+                  replacement: /var/log/pods/*$1/*.log
 
-#         tolerations:
-#           - operator: Exists
+        tolerations:
+          - operator: Exists
 
-#         volumes:
-#           - name: varlog
-#             hostPath:
-#               path: /var/log
-#           - name: run
-#             hostPath:
-#               path: /run
+        volumes:
+          - name: varlog
+            hostPath:
+              path: /var/log
+          - name: run
+            hostPath:
+              path: /run
 
-#         volumeMounts:
-#           - name: varlog
-#             mountPath: /var/log
-#           - name: run
-#             mountPath: /run
+        volumeMounts:
+          - name: varlog
+            mountPath: /var/log
+          - name: run
+            mountPath: /run
 
-#   # Manual Sync Only: This disables auto-sync, prune, and self-heal
-#   syncPolicy: {}
+  # Manual Sync Only: This disables auto-sync, prune, and self-heal
+  syncPolicy: {}

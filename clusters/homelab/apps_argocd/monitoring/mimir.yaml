@@ -1,104 +1,104 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: mimir
-#   namespace: argocd
-#   annotations:
-#     argocd.argoproj.io/sync-wave: "11"
-# spec:
-#   project: monitoring
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: monitoring
-#   source:
-#     repoURL: https://grafana.github.io/helm-charts
-#     chart: mimir-distributed
-#     targetRevision: "6.0.2"
-#     helm:
-#       values: |
-#         # 1. External object storage (MinIO)
-#         minio:
-#           enabled: false
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mimir
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "11"
+spec:
+  project: monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: mimir-distributed
+    targetRevision: "6.0.2"
+    helm:
+      values: |
+        # 1. External object storage (MinIO)
+        minio:
+          enabled: false
 
-#         mimir:
-#           structuredConfig:
-#             limits:
-#               max_label_names_per_series: 100
-#             common:
-#               storage:
-#                 backend: s3
-#                 s3:
-#                   endpoint: minio.monitoring.svc:9000
-#                   access_key_id: QNm0d2hHLBGhjKVS28N3
-#                   secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
-#                   insecure: true
+        mimir:
+          structuredConfig:
+            limits:
+              max_label_names_per_series: 100
+            common:
+              storage:
+                backend: s3
+                s3:
+                  endpoint: minio.monitoring.svc:9000
+                  access_key_id: QNm0d2hHLBGhjKVS28N3
+                  secret_access_key: juw4e9AqlpQQvHWfKWO4BoUiLS37MQ2BMk7LFq4Q
+                  insecure: true
 
-#             # 🔑 REQUIRED: Enable OTLP ingestion for OTEL metrics
-#             otlp:
-#               enabled: true
-#               http:
-#                 enabled: true
+            # 🔑 REQUIRED: Enable OTLP ingestion for OTEL metrics
+            otlp:
+              enabled: true
+              http:
+                enabled: true
 
-#             blocks_storage:
-#               s3:
-#                 bucket_name: mimir-blocks
-#             alertmanager_storage:
-#               s3:
-#                 bucket_name: mimir-alertmanager
-#             ruler_storage:
-#               s3:
-#                 bucket_name: mimir-ruler
+            blocks_storage:
+              s3:
+                bucket_name: mimir-blocks
+            alertmanager_storage:
+              s3:
+                bucket_name: mimir-alertmanager
+            ruler_storage:
+              s3:
+                bucket_name: mimir-ruler
 
-#         # 2. Core components
+        # 2. Core components
 
-#         ingester:
-#           replicas: 3
-#           resources:
-#             requests:
-#               cpu: 100m
-#               memory: 512Mi
-#             limits:
-#               memory: 1Gi
-#           persistence:
-#             size: 10Gi
-#             storageClass: zfs-nvme
+        ingester:
+          replicas: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          persistence:
+            size: 10Gi
+            storageClass: zfs-nvme
 
-#         store_gateway:
-#           replicas: 3
-#           resources:
-#             requests:
-#               cpu: 100m
-#               memory: 512Mi
-#           persistence:
-#             size: 10Gi
-#             storageClass: zfs-nvme
+        store_gateway:
+          replicas: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+          persistence:
+            size: 10Gi
+            storageClass: zfs-nvme
 
-#         distributor:
-#           replicas: 2
-#           resources:
-#             requests:
-#               cpu: 100m
-#               memory: 256Mi
+        distributor:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
 
-#         querier:
-#           replicas: 2
-#           resources:
-#             requests:
-#               cpu: 100m
-#               memory: 512Mi
-#           extraArgs:
-#             - -server.http-listen-port=8080
+        querier:
+          replicas: 2
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+          extraArgs:
+            - -server.http-listen-port=8080
 
-#         query_frontend:
-#           enabled: true
-#           extraArgs:
-#             - -server.http-listen-port=8080
+        query_frontend:
+          enabled: true
+          extraArgs:
+            - -server.http-listen-port=8080
 
-#         compactor:
-#           replicas: 1
-#           resources:
-#             requests:
-#               cpu: 100m
-#               memory: 512Mi
-
+        compactor:
+          replicas: 1
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+  syncPolicy: {}
 
