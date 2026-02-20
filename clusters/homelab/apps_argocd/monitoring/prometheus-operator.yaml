@@ -16,4 +16,6 @@ spec:
     targetRevision: main
     path: example/prometheus-operator-crd
 
-  syncPolicy: {}
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
