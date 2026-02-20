@@ -88,13 +88,9 @@ spec:
             requests:
               cpu: 100m
               memory: 512Mi
-          extraArgs:
-            - -server.http-listen-port=8080
 
         query_frontend:
           enabled: true
-          extraArgs:
-            - -server.http-listen-port=8080
 
         compactor:
           replicas: 1
