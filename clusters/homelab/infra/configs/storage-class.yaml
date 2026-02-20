@@ -4,13 +4,26 @@ kind: StorageClass
 metadata:
   name: zfs-nvme
 provisioner: zfs.csi.openebs.io
-reclaimPolicy: Delete
-volumeBindingMode: Immediate
+
 allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
 parameters:
-  poolname: zfspool-nvme
+  poolname: "zfspool-nvme"
   recordsize: "128k"
   compression: "lz4"
+  dedup: "off"
+  fsType: "zfs"
+
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: openebs.io/nodename
+        values:
+          - kubeworker01
+          - kubeworker02
+          - kubeworker03
+
 
 ---
 apiVersion: storage.k8s.io/v1
@@ -18,10 +31,23 @@ kind: StorageClass
 metadata:
   name: zfs-ssd
 provisioner: zfs.csi.openebs.io
-reclaimPolicy: Delete
-volumeBindingMode: Immediate
+
 allowVolumeExpansion: true
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+
 parameters:
-  poolname: zfspool-ssd
+  poolname: "zfspool-ssd"
   recordsize: "128k"
   compression: "lz4"
+  dedup: "off"
+  fsType: "zfs"
+
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: openebs.io/nodename
+        values:
+          - kubeworker01
+          - kubeworker02
+          - kubeworker03
+
