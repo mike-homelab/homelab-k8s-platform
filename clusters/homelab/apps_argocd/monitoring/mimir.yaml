@@ -103,7 +103,4 @@ spec:
               cpu: 100m
               memory: 512Mi
 
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
+  syncPolicy: {}
