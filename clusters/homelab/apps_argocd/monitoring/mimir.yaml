@@ -7,16 +7,18 @@ metadata:
     argocd.argoproj.io/sync-wave: "11"
 spec:
   project: monitoring
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     chart: mimir-distributed
     targetRevision: "6.0.2"
     helm:
       values: |
-        # 1. External object storage (MinIO)
+        # Disable bundled MinIO
         minio:
           enabled: false
 
@@ -24,32 +26,30 @@ spec:
           structuredConfig:
             limits:
               max_label_names_per_series: 100
+
             common:
               storage:
                 backend: s3
                 s3:
-                  endpoint: minio.monitoring.svc:9000
+                  endpoint: minio.monitoring.svc.cluster.local:9000
                   access_key_id: bjk9Ztf2fkW2WlxAbsRs
                   secret_access_key: HnW7sYcDmD8As06nW18pgKP58fEayo0CyqRZgINY
                   insecure: true
 
-            # 🔑 REQUIRED: Enable OTLP ingestion for OTEL metrics
-            otlp:
-              enabled: true
-              http:
-                enabled: true
-
             blocks_storage:
+              backend: s3
               s3:
                 bucket_name: mimir-blocks
+
             alertmanager_storage:
+              backend: s3
               s3:
                 bucket_name: mimir-alertmanager
+
             ruler_storage:
+              backend: s3
               s3:
                 bucket_name: mimir-ruler
-
-        # 2. Core components
 
         ingester:
           replicas: 3
@@ -60,6 +60,7 @@ spec:
             limits:
               memory: 1Gi
           persistence:
+            enabled: true
             size: 10Gi
             storageClass: zfs-nvme
 
@@ -70,6 +71,7 @@ spec:
               cpu: 100m
               memory: 512Mi
           persistence:
+            enabled: true
             size: 10Gi
             storageClass: zfs-nvme
 
@@ -100,5 +102,8 @@ spec:
             requests:
               cpu: 100m
               memory: 512Mi
-  syncPolicy: {}
 
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
