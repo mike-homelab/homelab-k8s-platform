@@ -11,31 +11,12 @@ spec:
     targetRevision: 25.10.1
     helm:
       parameters:
-        # Runtime
         - name: operator.defaultRuntime
           value: containerd
 
-        # Disable driver installation (drivers preinstalled)
         - name: driver.enabled
           value: "false"
 
-        # Force classic device plugin mode (CRITICAL FIX)
-        - name: devicePlugin.config.deviceDiscoveryStrategy
-          value: nvml
-        - name: devicePlugin.config.deviceListStrategy[0]
-          value: envvar
-
-        # Ensure CDI is disabled
-        - name: devicePlugin.config.deviceListStrategy[1]
-          value: ""
-
-        # Node Feature Discovery image override
-        - name: nfd.worker.image.repository
-          value: docker.io/kubernetes/node-feature-discovery
-        - name: nfd.worker.image.tag
-          value: v0.18.2
-
-        # Ensure required components stay enabled
         - name: toolkit.enabled
           value: "true"
         - name: devicePlugin.enabled
@@ -43,12 +24,19 @@ spec:
         - name: dcgmExporter.enabled
           value: "true"
 
+        - name: devicePlugin.config
+          value: |
+            version: v1
+            flags:
+              deviceDiscoveryStrategy: nvml
+              plugin:
+                deviceListStrategy:
+                  - envvar
+
   destination:
     server: https://kubernetes.default.svc
     namespace: gpu-operator
 
   syncPolicy:
-    automated:
-      prune: true
     syncOptions:
       - CreateNamespace=true
