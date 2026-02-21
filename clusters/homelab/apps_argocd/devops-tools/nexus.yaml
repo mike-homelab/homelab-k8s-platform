@@ -1,18 +1,18 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: nexus
-#   namespace: argocd
-#   annotations:
-#     argocd.argoproj.io/sync-wave: "10"  # after cert-manager helm install
-# spec:
-#   project: devops-tools
-#   source:
-#     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
-#     targetRevision: main
-#     path: clusters/homelab/apps/devops-tools/nexus
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: devops-tools
-#   # Manual Sync Only: This disables auto-sync, prune, and self-heal
-#   syncPolicy: {}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: nexus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"  # after cert-manager helm install
+spec:
+  project: devops-tools
+  source:
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/apps/devops-tools/nexus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devops-tools
+  # Manual Sync Only: This disables auto-sync, prune, and self-heal
+  syncPolicy: {}
