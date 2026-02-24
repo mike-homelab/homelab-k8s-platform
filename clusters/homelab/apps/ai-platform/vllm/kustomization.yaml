@@ -4,4 +4,4 @@ resources:
   - vllm-mixtral-8x7b-rtx5060ti.yaml
   - vllm-bge-embeddings-rtx3060.yaml
   - servicemonitor-vllm.yaml
-  - inference-router.yaml
+  # - inference-router.yaml
