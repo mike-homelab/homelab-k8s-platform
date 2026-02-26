@@ -4,7 +4,7 @@ metadata:
   name: cert-manager-rbac
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "11"  # after cert-manager helm install
+    argocd.argoproj.io/sync-wave: "8"  # after cert-manager helm install
 spec:
   project: default
   source:

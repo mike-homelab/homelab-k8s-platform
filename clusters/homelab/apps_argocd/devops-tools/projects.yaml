@@ -2,7 +2,9 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: devops-tools
-  namespace: argocd
+  namespace: 
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   description: DevOps Tools
 

@@ -4,7 +4,7 @@ metadata:
   name: nexus
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "10"  # after cert-manager helm install
+    argocd.argoproj.io/sync-wave: "16"  # after cert-manager helm install
 spec:
   project: devops-tools
   source:
