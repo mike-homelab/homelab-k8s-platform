@@ -33,4 +33,6 @@ spec:
           size: 100Gi
   
   # Manual Sync Only: This disables auto-sync, prune, and self-heal
-  syncPolicy: {}
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
