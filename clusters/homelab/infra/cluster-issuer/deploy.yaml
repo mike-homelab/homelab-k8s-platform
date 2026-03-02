@@ -6,7 +6,7 @@ metadata:
 spec:
   vault:
     server: https://vault.michaelhomelab.work:8200
-    path: pki_int/roles/k8s-issuer
+    path: pki_int/sign/k8s-issuer
     caBundleSecretRef:
       name: vault-tls-ca
       key: ca.crt
