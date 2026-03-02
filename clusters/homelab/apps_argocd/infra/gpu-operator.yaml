@@ -12,28 +12,31 @@ spec:
     chart: gpu-operator
     targetRevision: 25.10.1
     helm:
-      parameters:
-        - name: operator.defaultRuntime
-          value: containerd
+      values: |
+        operator:
+          defaultRuntime: containerd
 
-        - name: driver.enabled
-          value: "false"
+        driver:
+          enabled: false
 
-        - name: toolkit.enabled
-          value: "true"
-        - name: devicePlugin.enabled
-          value: "true"
-        - name: dcgmExporter.enabled
-          value: "true"
+        toolkit:
+          enabled: true
 
-        - name: devicePlugin.config
-          value: |
-            version: v1
-            flags:
-              deviceDiscoveryStrategy: nvml
+        devicePlugin:
+          enabled: true
+          config:
+            create: true
+            name: nvidia-device-plugin-config
+            data:
+              version: v1
+              flags:
+                deviceDiscoveryStrategy: nvml
               plugin:
                 deviceListStrategy:
                   - envvar
+
+        dcgmExporter:
+          enabled: true
 
   destination:
     server: https://kubernetes.default.svc
