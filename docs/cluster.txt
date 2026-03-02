@@ -1,17 +1,6 @@
 Cluster Botstrap command:
 
-kubectl create namespace metallb-system
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.14.5/config/manifests/metallb-native.yaml
-
-
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.3/manifests/tigera-operator.yaml
 kubectl create namespace argocd
 kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.11.7/manifests/install.yaml
-
-
-kubeadm join 10.10.0.231:6443 --token jlcoy4.r1rycwjcssvogn7e \
-        --discovery-token-ca-cert-hash sha256:0f7e09820f2669895c991744bac4bb81083101e662dccecc032994419690607f
-
-sudo kubeadm reset -f
-sudo rm -rf /var/lib/kubelet
-sudo rm -rf /etc/kubernetes
-sudo systemctl restart containerd
