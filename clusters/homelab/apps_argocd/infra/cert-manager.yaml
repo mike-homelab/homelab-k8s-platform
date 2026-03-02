@@ -7,7 +7,6 @@ metadata:
     argocd.argoproj.io/sync-wave: "8"
 spec:
   project: default
-
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
@@ -16,18 +15,11 @@ spec:
       releaseName: cert-manager
       values: |
         installCRDs: true
-
-        global:
-          leaderElection:
-            namespace: cert-manager
-
         prometheus:
           enabled: false
-
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
-
   syncPolicy:
     automated:
       prune: true

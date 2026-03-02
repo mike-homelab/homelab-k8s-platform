@@ -6,16 +6,11 @@ metadata:
 spec:
   vault:
     server: https://vault.michaelhomelab.work:8200
-    path: pki_int/sign/michaelhomelab-cluster
+    path: pki_int/roles/k8s-issuer
     caBundleSecretRef:
       name: vault-tls-ca
       key: ca.crt
     auth:
-      tokenSecretRef:
-        name: vault-token
-        key: token
-
-
-
-
-
+      kubernetes:
+        mountPath: /v1/auth/kubernetes
+        role: k8s-issuer

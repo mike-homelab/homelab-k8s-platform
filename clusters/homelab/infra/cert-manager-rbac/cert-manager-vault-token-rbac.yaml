@@ -1,40 +1,19 @@
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: cert-manager-admin-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: cert-manager
-  namespace: cert-manager
-- kind: ServiceAccount
-  name: cert-manager-cainjector
-  namespace: cert-manager
-- kind: ServiceAccount
-  name: cert-manager-webhook
-  namespace: cert-manager
-
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: vault-reviewer
-  namespace: cert-manager
-
+  namespace: kube-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: vault-reviewer-admin-binding
+  name: vault-reviewer-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cluster-admin
+  name: system:auth-delegator
 subjects:
 - kind: ServiceAccount
   name: vault-reviewer
-  namespace: cert-manager
+  namespace: kube-system
