@@ -27,7 +27,7 @@ spec:
           config:
             create: true
             name: nvidia-device-plugin-config
-            data:
+            data: |
               version: v1
               flags:
                 deviceDiscoveryStrategy: nvml
