@@ -26,14 +26,17 @@ spec:
           enabled: true
           config:
             create: true
-            name: nvidia-device-plugin-config
-            data: |
-              version: v1
-              flags:
-                deviceDiscoveryStrategy: nvml
-              plugin:
-                deviceListStrategy:
-                  - envvar
+            name: ""
+            data:
+              config.yaml: |
+                version: v1
+                flags:
+                  migStrategy: single
+                  deviceDiscoveryStrategy: nvml
+                plugin:
+                  deviceListStrategy:
+                    - cdi-annotations
+                    - cdi-cri
 
         dcgmExporter:
           enabled: true
