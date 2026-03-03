@@ -4,7 +4,7 @@ metadata:
   name: homelab-infra-config
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-wave: "8"
 spec:
   project: default
   source:
