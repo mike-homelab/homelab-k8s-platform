@@ -24,19 +24,6 @@ spec:
 
         devicePlugin:
           enabled: true
-          config:
-            create: true
-            name: ""
-            data:
-              config.yaml: |
-                version: v1
-                flags:
-                  migStrategy: single
-                  deviceDiscoveryStrategy: nvml
-                plugin:
-                  deviceListStrategy:
-                    - cdi-annotations
-                    - cdi-cri
 
         dcgmExporter:
           enabled: true
