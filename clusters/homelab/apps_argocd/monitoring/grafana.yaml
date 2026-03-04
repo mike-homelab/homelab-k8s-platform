@@ -44,6 +44,7 @@ spec:
                 isDefault: true
                 jsonData:
                   httpHeaderName1: X-Scope-OrgID
+                  manageAlerts: false
                 secureJsonData:
                   httpHeaderValue1: anonymous
 
