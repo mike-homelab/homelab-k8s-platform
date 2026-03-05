@@ -14,5 +14,4 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform
-  syncPolicy: {}
 
