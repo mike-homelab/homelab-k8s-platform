@@ -120,6 +120,3 @@ spec:
                   - source_labels: [__meta_kubernetes_service_name]
                     action: keep
                     regex: node-exporter
-
-  # Manual Sync Only: This disables auto-sync, prune, and self-heal
-  syncPolicy: {}

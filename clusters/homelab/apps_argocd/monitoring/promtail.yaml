@@ -88,5 +88,3 @@ spec:
           - name: run
             mountPath: /run
 
-  # Manual Sync Only: This disables auto-sync, prune, and self-heal
-  syncPolicy: {}

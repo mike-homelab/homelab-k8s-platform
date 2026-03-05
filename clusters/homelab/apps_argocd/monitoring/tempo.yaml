@@ -123,6 +123,3 @@ spec:
               memory: 128Mi
         minio:
           enabled: false
-
-  # Manual Sync Only: This disables auto-sync, prune, and self-heal
-  syncPolicy: {}

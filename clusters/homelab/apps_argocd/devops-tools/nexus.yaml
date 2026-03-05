@@ -14,5 +14,3 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: devops-tools
-  # Manual Sync Only: This disables auto-sync, prune, and self-heal
-  syncPolicy: {}

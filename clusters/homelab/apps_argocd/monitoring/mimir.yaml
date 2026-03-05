@@ -98,5 +98,3 @@ spec:
             requests:
               cpu: 100m
               memory: 512Mi
-
-  syncPolicy: {}
