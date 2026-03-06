@@ -1,16 +1,16 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: postgres-db
+  name: redis
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "11"
+    argocd.argoproj.io/sync-wave: "12"
 spec:
   project: ai-platform
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/ai-platform/postgres-db
+    path: clusters/homelab/apps/ai-platform/redis
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform

@@ -1,83 +1,78 @@
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: vllm-llama3-cache
-  namespace: ai-platform
-spec:
-  accessModes:
-    - ReadWriteOnce
-  storageClassName: zfs-ssd
-  resources:
-    requests:
-      storage: 80Gi
----
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: vllm-llama3-8b
+  name: vllm-llm
   namespace: ai-platform
-  labels:
-    app: vllm
-    model: llama3-8b
 spec:
+  serviceName: vllm-llm
   replicas: 1
   selector:
     matchLabels:
-      app: vllm
-      model: llama3-8b
+      app: vllm-llm
   template:
     metadata:
       labels:
-        app: vllm
-        model: llama3-8b
+        app: vllm-llm
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: nvidia.com/gpu.product
-                    operator: In
-                    values:
-                      - NVIDIA-GeForce-RTX-5070-Ti
+      nodeSelector:
+        kubernetes.io/hostname: kubeworker01
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+        openebs.io/nodeid: kubeworker01
       containers:
         - name: vllm
           image: vllm/vllm-openai:latest
           args:
-            - "--model=meta-llama/Llama-3.1-8B-Instruct"
-            - "--quantization=q5_k_m"
-            - "--max-model-len=8192"
-            - "--enable-chunked-prefill"
+            - --model
+            - Qwen/Qwen2.5-3B-Instruct
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --gpu-memory-utilization
+            - "0.90"
+            - --max-model-len
+            - "8192"
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
           ports:
-            - containerPort: 8000
+            - name: http
+              containerPort: 8000
           resources:
             requests:
               cpu: "2"
-              memory: 8Gi
-              nvidia.com/gpu: 1
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
             limits:
-              cpu: "4"
-              memory: 16Gi
-              nvidia.com/gpu: 1
+              cpu: "8"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
           volumeMounts:
-            - name: model-cache
+            - name: hf-cache
               mountPath: /root/.cache/huggingface
-      volumes:
-        - name: model-cache
-          persistentVolumeClaim:
-            claimName: vllm-llama3-cache
+  volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        storageClassName: zfs-nvme
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 80Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-llama3
+  name: vllm-llm
   namespace: ai-platform
+  labels:
+    app: vllm-llm
 spec:
   type: ClusterIP
   selector:
-    app: vllm
-    model: llama3-8b
+    app: vllm-llm
   ports:
     - name: http
       port: 8000
-      targetPort: 8000
+      targetPort: http

@@ -38,3 +38,19 @@ spec:
             limits:
               cpu: "200m"
               memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-exporter
+  namespace: ai-platform
+  labels:
+    app: postgres-exporter
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres-exporter
+  ports:
+    - name: metrics
+      port: 9187
+      targetPort: metrics

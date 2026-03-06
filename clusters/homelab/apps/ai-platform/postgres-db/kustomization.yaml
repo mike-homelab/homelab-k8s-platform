@@ -3,3 +3,4 @@ resources:
   - statefulset.yaml
   - service.yaml
   - exporter.yaml
+  - metrics.yaml
