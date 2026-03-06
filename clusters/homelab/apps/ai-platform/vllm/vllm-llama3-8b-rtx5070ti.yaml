@@ -39,8 +39,8 @@ spec:
               containerPort: 8000
           resources:
             requests:
-              cpu: "2"
-              memory: "8Gi"
+              cpu: "6"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "8"
