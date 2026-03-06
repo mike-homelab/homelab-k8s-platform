@@ -24,10 +24,12 @@ spec:
           image: vllm/vllm-openai:v0.10.2
           imagePullPolicy: IfNotPresent
           command:
-            - vllm
-            - serve
-            - Qwen/Qwen2.5-3B-Instruct
+            - python3
+            - -m
+            - vllm.entrypoints.openai.api_server
           args:
+            - --model
+            - Qwen/Qwen2.5-3B-Instruct
             - --host
             - 0.0.0.0
             - --port
