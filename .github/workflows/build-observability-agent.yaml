@@ -27,16 +27,16 @@ jobs:
       - name: Log in to Nexus Docker registry
         run: |
           echo "${{ secrets.NEXUS_PASSWORD }}" | \
-            docker login nexus.michaelhomelab.work \
+            docker login nexus.michaelhomelab.work:5000 \
               --username "${{ secrets.NEXUS_USERNAME }}" \
               --password-stdin
 
       - name: Build Docker image
         run: |
           docker build \
-            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }} \
+            -t nexus.michaelhomelab.work:5000/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }} \
             images/ai-platform/agents/observability-agent
 
       - name: Push Docker image
         run: |
-          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }}
+          docker push nexus.michaelhomelab.work:5000/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }}

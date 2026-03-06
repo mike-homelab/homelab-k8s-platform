@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: agent-api
-          image: nexus.local/ai/agent-api:1.0.0
+          image: nexus.michaelhomelab.work:5000/homelab-docker-repo/ai-platform/agent-api:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
