@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - images/ai-platform/agents/observability-agent/**
+      - .github/workflows/build-observability-agent.yaml
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build & Push Observability Agent
-    runs-on: self-hosted
+    runs-on: [self-hosted]
 
     steps:
       - name: Checkout repository
@@ -32,9 +34,9 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t nexus.michaelhomelab.work/docker-hosted/ai-platform/observability-agent:${{ steps.version.outputs.version }} \
+            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }} \
             images/ai-platform/agents/observability-agent
 
       - name: Push Docker image
         run: |
-          docker push nexus.michaelhomelab.work/docker-hosted/ai-platform/observability-agent:${{ steps.version.outputs.version }}
+          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/observability-agent:${{ steps.version.outputs.version }}

@@ -1,0 +1,42 @@
+name: Build vLLM Router Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/vllm/router/**
+      - .github/workflows/build-vllm-router.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push vLLM Router
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat images/ai-platform/vllm/router/VERSION)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login nexus.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-router:${{ steps.version.outputs.version }} \
+            images/ai-platform/vllm/router
+
+      - name: Push Docker image
+        run: |
+          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-router:${{ steps.version.outputs.version }}

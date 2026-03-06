@@ -1,0 +1,42 @@
+name: Build Coding Agent Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/agents/coding-agent/**
+      - .github/workflows/build-coding-agent.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push Coding Agent
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat images/ai-platform/agents/coding-agent/VERSION)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login nexus.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/coding-agent:${{ steps.version.outputs.version }} \
+            images/ai-platform/agents/coding-agent
+
+      - name: Push Docker image
+        run: |
+          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/coding-agent:${{ steps.version.outputs.version }}

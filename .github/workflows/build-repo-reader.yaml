@@ -1,17 +1,17 @@
-name: Build vLLM Planner Image
+name: Build Repo Reader Image
 
 on:
   push:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/planner/**
-      - .github/workflows/build-vllm-planner.yaml
+      - images/ai-platform/tools/repo-reader/**
+      - .github/workflows/build-repo-reader.yaml
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push vLLM Planner
+    name: Build & Push Repo Reader
     runs-on: [self-hosted]
 
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(cat images/ai-platform/vllm/planner/VERSION)
+          VERSION=$(cat images/ai-platform/tools/repo-reader/VERSION)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Log in to Nexus Docker registry
@@ -34,9 +34,9 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-planner:${{ steps.version.outputs.version }} \
-            images/ai-platform/vllm/planner
+            -t nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/repo-reader:${{ steps.version.outputs.version }} \
+            images/ai-platform/tools/repo-reader
 
       - name: Push Docker image
         run: |
-          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-planner:${{ steps.version.outputs.version }}
+          docker push nexus.michaelhomelab.work/homelab-docker-repo/ai-platform/repo-reader:${{ steps.version.outputs.version }}
