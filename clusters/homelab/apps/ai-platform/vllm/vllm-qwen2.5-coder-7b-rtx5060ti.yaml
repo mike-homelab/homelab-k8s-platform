@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vllm-coder
+  namespace: ai-platform
+spec:
+  serviceName: vllm-coder
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-coder
+  template:
+    metadata:
+      labels:
+        app: vllm-coder
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: kubeworker02
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        openebs.io/nodeid: kubeworker02
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.9.2
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model
+            - Qwen/Qwen2.5-Coder-7B-Instruct
+            - --gpu-memory-utilization
+            - "0.90"
+            - --max-model-len
+            - "8192"
+            - --enable-prefix-caching
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: "6"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+  volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        storageClassName: zfs-nvme
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 80Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-coder
+  namespace: ai-platform
+  labels:
+    app: vllm-coder
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-coder
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

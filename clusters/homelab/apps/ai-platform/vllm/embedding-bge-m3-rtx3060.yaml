@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedding-api
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedding-api
+  template:
+    metadata:
+      labels:
+        app: embedding-api
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: kubeworker03
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
+      containers:
+        - name: tei
+          image: ghcr.io/huggingface/text-embeddings-inference:1.8
+          imagePullPolicy: IfNotPresent
+          args:
+            - --model-id
+            - BAAI/bge-m3
+            - --pooling
+            - cls
+            - --max-client-batch-size
+            - "32"
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              cpu: "4"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "6"
+              memory: "12Gi"
+              nvidia.com/gpu: "1"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedding-api
+  namespace: ai-platform
+  labels:
+    app: embedding-api
+spec:
+  type: ClusterIP
+  selector:
+    app: embedding-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
