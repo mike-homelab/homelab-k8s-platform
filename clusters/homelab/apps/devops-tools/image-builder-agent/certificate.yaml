@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nexus-registry-client-cert
+  namespace: devops-tools
+spec:
+  secretName: nexus-registry-client-cert
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: docker.michaelhomelab.work
+  dnsNames:
+    - docker.michaelhomelab.work

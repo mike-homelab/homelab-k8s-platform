@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nexus-image-builder
+  namespace: devops-tools
+spec:
+  schedule: "0 2 * * *"
+  suspend: true
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 1800
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: nexus-image-builder
+          restartPolicy: Never
+          containers:
+            - name: kaniko
+              image: gcr.io/kaniko-project/executor:v1.23.2
+              args:
+                - --context=$(GIT_CONTEXT)
+                - --dockerfile=$(DOCKERFILE)
+                - --destination=$(DESTINATION_IMAGE)
+                - --registry-certificate=docker.michaelhomelab.work=/kaniko/ssl/certs/registry-ca.crt
+                - --snapshot-mode=redo
+                - --use-new-run
+              envFrom:
+                - configMapRef:
+                    name: nexus-image-builder-config
+                - secretRef:
+                    name: nexus-image-builder-git-auth
+                    optional: true
+              volumeMounts:
+                - name: docker-config
+                  mountPath: /kaniko/.docker/config.json
+                  subPath: config.json
+                - name: registry-cert
+                  mountPath: /kaniko/ssl/certs/registry-ca.crt
+                  subPath: ca.crt
+                  readOnly: true
+          volumes:
+            - name: docker-config
+              secret:
+                secretName: nexus-docker-config
+                items:
+                  - key: .dockerconfigjson
+                    path: config.json
+            - name: registry-cert
+              secret:
+                secretName: nexus-registry-client-cert
+                items:
+                  - key: ca.crt
+                    path: ca.crt
