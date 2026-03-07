@@ -1,4 +1,5 @@
 name: Build vLLM Router Image
+# trigger rebuild marker: 2026-03-08
 
 on:
   push:

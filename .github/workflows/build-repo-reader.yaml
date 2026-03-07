@@ -1,4 +1,5 @@
 name: Build Repo Reader Image
+# trigger rebuild marker: 2026-03-08
 
 on:
   push:
