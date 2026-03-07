@@ -1,0 +1,12 @@
+apiVersion: gateway.nginx.org/v1alpha1
+kind: ClientSettingsPolicy
+metadata:
+  name: nexus-docker-upload-policy
+  namespace: devops-tools
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: nexus-docker-route
+  body:
+    maxSize: "0"

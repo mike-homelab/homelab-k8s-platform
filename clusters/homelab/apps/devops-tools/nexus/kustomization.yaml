@@ -5,3 +5,4 @@ resources:
   - service.yaml
   - http-route.yaml
   - docker-http-route.yaml
+  - client-settings-policy.yaml
