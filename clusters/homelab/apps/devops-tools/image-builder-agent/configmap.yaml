@@ -1,9 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nexus-image-builder-config
-  namespace: devops-tools
-data:
-  GIT_CONTEXT: git://github.com/pradeepmichaelwork/homelab-k8s-platform.git#refs/heads/main
-  DOCKERFILE: Dockerfile
-  DESTINATION_IMAGE: docker.michaelhomelab.work/homelab-docker-repo/devops-tools/example:dev
