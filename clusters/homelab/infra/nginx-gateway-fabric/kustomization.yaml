@@ -2,3 +2,4 @@ resources:
   - homelab-cert.yaml
   - deploy.yaml
   - gateway.yaml
+  - docker-upload-policy.yaml
