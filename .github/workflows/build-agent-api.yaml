@@ -1,0 +1,43 @@
+name: Build Agent API Image
+# trigger rebuild marker: 2026-03-08
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/agent-api/**
+      - .github/workflows/build-agent-api.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push Agent API
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(cat images/ai-platform/agent-api/VERSION)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login docker.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/agent-api:${{ steps.version.outputs.version }} \
+            images/ai-platform/agent-api
+
+      - name: Push Docker image
+        run: |
+          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/agent-api:${{ steps.version.outputs.version }}
