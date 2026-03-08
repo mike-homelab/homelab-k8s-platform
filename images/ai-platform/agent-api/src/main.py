@@ -4,7 +4,7 @@ import httpx
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="agent-api", version="0.2.0")
+app = FastAPI(title="agent-api", version="0.2.1")
 
 
 class ChatRequest(BaseModel):
@@ -25,6 +25,12 @@ def _base_url(model: str) -> str:
     return os.getenv("VLLM_GENERAL_BASE_URL", os.getenv("VLLM_BASE_URL", "http://vllm-llm.ai-platform.svc.cluster.local:8000/v1"))
 
 
+def _model_id(model: str) -> str:
+    if model == "coder":
+        return os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
+    return os.getenv("VLLM_GENERAL_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {"service": "agent-api", "status": "ok"}
@@ -43,7 +49,7 @@ def readyz() -> dict[str, str]:
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
     payload = {
-        "model": "default",
+        "model": _model_id(req.model),
         "messages": [{"role": "user", "content": req.prompt}],
         "temperature": req.temperature,
         "max_tokens": req.max_tokens,
