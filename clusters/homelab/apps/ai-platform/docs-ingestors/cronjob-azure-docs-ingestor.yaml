@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.0
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.1
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
@@ -26,7 +26,7 @@ spec:
                 - name: TENANT
                   value: azure-docs
                 - name: START_URL
-                  value: https://learn.microsoft.com/en-us/azure/?product=popular
+                  value: https://learn.microsoft.com/en-us/azure/
                 - name: ALLOWED_HOSTS
                   value: learn.microsoft.com
                 - name: URL_PREFIXES

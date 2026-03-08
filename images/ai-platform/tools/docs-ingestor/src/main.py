@@ -134,12 +134,19 @@ def run() -> None:
             except Exception:
                 continue
 
+            # Always discover deeper docs links even if this page is not indexable.
+            for link in extract_links(url, res.text):
+                if link not in visited:
+                    queue.append(link)
+
             title, text = html_to_text(res.text)
             if len(text) < 200:
+                print(f"[{SOURCE_NAME}] skip short page {url} chars={len(text)}")
                 continue
 
             chunks = chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
             if not chunks:
+                print(f"[{SOURCE_NAME}] skip empty chunks {url}")
                 continue
 
             emb = client.post(
@@ -193,10 +200,6 @@ def run() -> None:
             upsert_resp.raise_for_status()
             pages_done += 1
             print(f"[{SOURCE_NAME}] indexed {url} chunks={len(points)} total_pages={pages_done}")
-
-            for link in extract_links(url, res.text):
-                if link not in visited:
-                    queue.append(link)
 
     print(f"[{SOURCE_NAME}] completed: indexed_pages={pages_done} visited={len(visited)} collection={COLLECTION}")
 
