@@ -33,7 +33,7 @@ data:
           insecure: true
 
       otlp_http/tempo:
-        endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3100/otlp
+        endpoint: http://tempo-distributor.monitoring.svc.cluster.local:3200/otlp
         tls:
           insecure: true
 
