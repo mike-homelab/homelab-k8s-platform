@@ -3,234 +3,262 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Knowledge Chat</title>
+  <title>AI Platform Console</title>
   <style>
     :root {
-      --bg: #0b1020;
-      --panel: #121a2f;
-      --panel-2: #0f172a;
-      --text: #e6edf7;
-      --muted: #9fb0d0;
-      --brand: #4fd1c5;
-      --brand-2: #60a5fa;
-      --danger: #f87171;
+      --bg: #0b1220;
+      --card: #111b31;
+      --card2: #10192b;
+      --txt: #e7eefc;
+      --muted: #9eb2d8;
       --ok: #34d399;
+      --warn: #f59e0b;
+      --bad: #f87171;
+      --brand1: #60a5fa;
+      --brand2: #4fd1c5;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
+      color: var(--txt);
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      color: var(--text);
-      background: radial-gradient(1200px 700px at 0% 0%, #182545 0%, var(--bg) 55%);
-      min-height: 100vh;
+      background: radial-gradient(900px 700px at 10% 0%, #1b2b4b 0%, var(--bg) 60%);
     }
-    .wrap {
-      max-width: 980px;
-      margin: 36px auto;
-      padding: 0 16px 30px;
-    }
-    .hero {
-      margin-bottom: 14px;
-    }
-    h1 {
-      margin: 0;
-      font-size: 1.8rem;
-      letter-spacing: 0.2px;
-    }
-    .subtitle {
-      margin-top: 6px;
-      color: var(--muted);
-    }
-    .card {
-      border: 1px solid #223050;
-      background: linear-gradient(160deg, var(--panel) 0%, var(--panel-2) 100%);
-      border-radius: 14px;
-      padding: 16px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
-    }
-    .grid {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin-bottom: 12px;
-    }
-    label {
-      display: block;
-      font-size: 0.82rem;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    select, input, textarea, button {
-      width: 100%;
+    .wrap { max-width: 1200px; margin: 28px auto; padding: 0 16px 24px; }
+    .title { margin-bottom: 14px; }
+    .title h1 { margin: 0; font-size: 1.8rem; }
+    .title p { margin: 6px 0 0; color: var(--muted); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    .tab {
+      border: 1px solid #29406a;
+      background: #0d1730;
+      color: var(--txt);
       border-radius: 10px;
-      border: 1px solid #2a3b63;
-      background: #0b1328;
-      color: var(--text);
-      padding: 10px;
-      font-size: 0.95rem;
-    }
-    textarea {
-      min-height: 110px;
-      resize: vertical;
-    }
-    .btn {
-      background: linear-gradient(120deg, var(--brand), var(--brand-2));
-      color: #06111e;
-      border: none;
-      font-weight: 700;
+      padding: 10px 14px;
       cursor: pointer;
-      margin-top: 10px;
+      font-weight: 600;
     }
-    .btn:disabled {
-      opacity: 0.65;
-      cursor: not-allowed;
-    }
-    .status {
-      min-height: 22px;
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 0.9rem;
-    }
-    .status.error { color: var(--danger); }
-    .status.ok { color: var(--ok); }
-    .answer {
-      margin-top: 14px;
+    .tab.active { background: linear-gradient(120deg, var(--brand1), var(--brand2)); color: #061223; border: none; }
+    .panel {
+      border: 1px solid #25395f;
+      background: linear-gradient(165deg, var(--card) 0%, var(--card2) 100%);
+      border-radius: 14px;
       padding: 14px;
-      border: 1px solid #294573;
-      border-radius: 10px;
-      background: #0a1327;
-      line-height: 1.45;
-      white-space: pre-wrap;
+      box-shadow: 0 10px 28px rgba(0,0,0,.3);
     }
-    .sources {
-      margin-top: 12px;
-      padding-top: 10px;
-      border-top: 1px dashed #2b436f;
+    .hidden { display: none; }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+    label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
+    input, select, textarea, button {
+      width: 100%; border-radius: 10px; border: 1px solid #2d4573; background: #0b1530; color: var(--txt); padding: 10px;
     }
-    .source {
-      margin: 8px 0;
-      font-size: 0.9rem;
-      color: #c5d6f4;
+    textarea { min-height: 110px; resize: vertical; }
+    .btn {
+      border: none; font-weight: 700; cursor: pointer;
+      background: linear-gradient(120deg, var(--brand2), var(--brand1)); color: #041220;
     }
-    @media (max-width: 780px) {
-      .grid { grid-template-columns: 1fr 1fr; }
+    .btn.secondary { background: #102244; color: var(--txt); border: 1px solid #2f4b7d; }
+    .btn.warn { background: #3a2a10; color: #f6c870; border: 1px solid #7a5b1a; }
+    .status { margin-top: 8px; min-height: 18px; color: var(--muted); }
+    .status.ok { color: var(--ok); }
+    .status.bad { color: var(--bad); }
+    .status.warn { color: var(--warn); }
+    .answer { margin-top: 12px; padding: 12px; border: 1px solid #2a456f; border-radius: 10px; white-space: pre-wrap; line-height: 1.45; }
+    .sources { margin-top: 10px; font-size: .92rem; }
+    .sources a { color: #95c7ff; }
+    .cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
+    .kpi { padding: 10px; border-radius: 10px; border: 1px solid #2a416b; background: #0c1732; }
+    .kpi .n { font-size: 1.3rem; font-weight: 700; }
+    .kpi .l { color: var(--muted); font-size: .8rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .9rem; }
+    th, td { border-bottom: 1px solid #233a60; padding: 7px 6px; text-align: left; }
+    th { color: #9eb2d8; font-weight: 600; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .row { flex-direction: column; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="hero">
-      <h1>Knowledge Chat</h1>
-      <div class="subtitle">Ask questions from AWS and Azure documentation indexed in Qdrant.</div>
+    <div class="title">
+      <h1>AI Platform Console</h1>
+      <p>Knowledge Chat + Dashboard + Action Center</p>
     </div>
-    <div class="card">
+
+    <div class="tabs">
+      <button class="tab active" data-tab="chat">Knowledge Chat</button>
+      <button class="tab" data-tab="ops">Dashboard & Action Center</button>
+    </div>
+
+    <section id="tab-chat" class="panel">
       <div class="grid">
         <div>
-          <label for="collection">Collection</label>
+          <label>Collection</label>
           <select id="collection">
             <option value="docs-aws">AWS Docs</option>
             <option value="docs-azure">Azure Docs</option>
+            <option value="rag-docs">General RAG</option>
           </select>
         </div>
         <div>
-          <label for="model">Model</label>
+          <label>Model</label>
           <select id="model">
             <option value="general">General</option>
             <option value="coder">Coder</option>
           </select>
         </div>
         <div>
-          <label for="topk">Top K</label>
+          <label>Top K</label>
           <input id="topk" type="number" value="4" min="1" max="10">
         </div>
         <div>
-          <label for="maxTokens">Max Tokens</label>
+          <label>Max Tokens</label>
           <input id="maxTokens" type="number" value="512" min="64" max="2048">
         </div>
       </div>
-
-      <label for="question">Question</label>
-      <textarea id="question" placeholder="Example: How do I create an S3 bucket with versioning enabled?"></textarea>
+      <label>Question</label>
+      <textarea id="question" placeholder="Ask from indexed docs..."></textarea>
       <button id="askBtn" class="btn">Ask</button>
-      <div id="status" class="status"></div>
+      <div id="chatStatus" class="status"></div>
+      <div id="answer" class="answer hidden"></div>
+      <div id="sources" class="sources hidden"></div>
+    </section>
 
-      <div id="answer" class="answer" style="display:none;"></div>
-      <div id="sources" class="sources" style="display:none;"></div>
-    </div>
+    <section id="tab-ops" class="panel hidden">
+      <div class="row">
+        <button id="refreshBtn" class="btn secondary">Refresh Live Status</button>
+        <button id="runAwsBtn" class="btn warn">Run AWS Ingestor Now</button>
+        <button id="runAzureBtn" class="btn warn">Run Azure Ingestor Now</button>
+      </div>
+      <div id="opsStatus" class="status"></div>
+
+      <div class="cards">
+        <div class="kpi"><div class="n" id="kPods">-</div><div class="l">Pods</div></div>
+        <div class="kpi"><div class="n" id="kDeploy">-</div><div class="l">Deployments Ready</div></div>
+        <div class="kpi"><div class="n" id="kSts">-</div><div class="l">StatefulSets Ready</div></div>
+        <div class="kpi"><div class="n" id="kCron">-</div><div class="l">CronJobs</div></div>
+        <div class="kpi"><div class="n" id="kCols">-</div><div class="l">Qdrant Collections</div></div>
+      </div>
+
+      <h3>Argo CD (ai-platform)</h3>
+      <table id="argocdTable"><thead><tr><th>App</th><th>Sync</th><th>Health</th></tr></thead><tbody></tbody></table>
+
+      <h3>Docs Ingestor Jobs (latest)</h3>
+      <table id="jobsTable"><thead><tr><th>Job</th><th>Succeeded</th><th>Failed</th><th>Active</th><th>Start</th></tr></thead><tbody></tbody></table>
+
+      <h3>Pods</h3>
+      <table id="podsTable"><thead><tr><th>Name</th><th>Status</th><th>Restarts</th><th>Node</th></tr></thead><tbody></tbody></table>
+    </section>
   </div>
 
   <script>
-    const API_BASE_URL = "https://agent-api.michaelhomelab.work";
+    const API = "https://agent-api.michaelhomelab.work";
 
-    const askBtn = document.getElementById("askBtn");
-    const statusEl = document.getElementById("status");
-    const answerEl = document.getElementById("answer");
-    const sourcesEl = document.getElementById("sources");
+    const tabs = document.querySelectorAll('.tab');
+    tabs.forEach(t => t.addEventListener('click', () => {
+      tabs.forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('tab-chat').classList.toggle('hidden', t.dataset.tab !== 'chat');
+      document.getElementById('tab-ops').classList.toggle('hidden', t.dataset.tab !== 'ops');
+      if (t.dataset.tab === 'ops') refreshStatus();
+    }));
 
-    function setStatus(text, type = "") {
-      statusEl.textContent = text;
-      statusEl.className = `status ${type}`.trim();
-    }
+    function set(el, text, cls='') { el.textContent = text; el.className = `status ${cls}`.trim(); }
 
-    function renderSources(sources) {
-      if (!sources || !sources.length) {
-        sourcesEl.style.display = "none";
-        sourcesEl.innerHTML = "";
-        return;
-      }
-      const html = sources.map((s, i) => {
-        const url = s.url || "";
-        const link = url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` : "(no url)";
-        return `<div class="source"><strong>${i + 1}.</strong> score=${Number(s.score || 0).toFixed(3)} | ${link}</div>`;
-      }).join("");
-      sourcesEl.innerHTML = `<strong>Sources</strong>${html}`;
-      sourcesEl.style.display = "block";
-    }
-
-    async function ask() {
-      const question = document.getElementById("question").value.trim();
-      if (!question) {
-        setStatus("Enter a question first.", "error");
-        return;
-      }
-      askBtn.disabled = true;
-      answerEl.style.display = "none";
-      sourcesEl.style.display = "none";
-      setStatus("Running retrieval and generation...");
-
-      const payload = {
-        question,
-        collection: document.getElementById("collection").value,
-        model: document.getElementById("model").value,
-        top_k: Number(document.getElementById("topk").value || 4),
-        max_tokens: Number(document.getElementById("maxTokens").value || 512)
-      };
-
+    document.getElementById('askBtn').addEventListener('click', async () => {
+      const status = document.getElementById('chatStatus');
+      const answer = document.getElementById('answer');
+      const sources = document.getElementById('sources');
+      const question = document.getElementById('question').value.trim();
+      if (!question) { set(status, 'Enter a question.', 'bad'); return; }
+      set(status, 'Running retrieval and generation...');
+      answer.classList.add('hidden');
+      sources.classList.add('hidden');
       try {
-        const res = await fetch(`${API_BASE_URL}/rag/ask`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(payload)
+        const res = await fetch(`${API}/rag/ask`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            collection: document.getElementById('collection').value,
+            model: document.getElementById('model').value,
+            top_k: Number(document.getElementById('topk').value || 4),
+            max_tokens: Number(document.getElementById('maxTokens').value || 512)
+          })
         });
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.detail || `HTTP ${res.status}`);
-        }
-        answerEl.textContent = data.answer || "(no answer)";
-        answerEl.style.display = "block";
-        renderSources(data.sources || []);
-        setStatus("Completed.", "ok");
-      } catch (err) {
-        setStatus(`Request failed: ${err.message}`, "error");
-      } finally {
-        askBtn.disabled = false;
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        answer.textContent = data.answer || '(no answer)';
+        answer.classList.remove('hidden');
+        const list = (data.sources || []).map((s, i) => {
+          const link = s.url ? `<a href="${s.url}" target="_blank" rel="noopener">${s.url}</a>` : '(no url)';
+          return `<div>${i + 1}. score=${Number(s.score || 0).toFixed(3)} | ${link}</div>`;
+        }).join('');
+        sources.innerHTML = `<strong>Sources</strong>${list}`;
+        sources.classList.remove('hidden');
+        set(status, 'Completed.', 'ok');
+      } catch (e) {
+        set(status, `Request failed: ${e.message}`, 'bad');
+      }
+    });
+
+    function fillTable(tableId, rows, mapFn) {
+      const tbody = document.querySelector(`#${tableId} tbody`);
+      tbody.innerHTML = rows.map(mapFn).join('') || '<tr><td colspan="5">No data</td></tr>';
+    }
+
+    async function refreshStatus() {
+      const status = document.getElementById('opsStatus');
+      set(status, 'Fetching live platform status...');
+      try {
+        const res = await fetch(`${API}/ops/status`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+
+        document.getElementById('kPods').textContent = (data.pods || []).length;
+        document.getElementById('kDeploy').textContent = (data.deployments || []).filter(x => x.ready === x.desired).length + '/' + (data.deployments || []).length;
+        document.getElementById('kSts').textContent = (data.statefulsets || []).filter(x => x.ready === x.desired).length + '/' + (data.statefulsets || []).length;
+        document.getElementById('kCron').textContent = (data.cronjobs || []).length;
+        document.getElementById('kCols').textContent = (data.qdrant_collections || []).length;
+
+        fillTable('argocdTable', data.argocd_apps || [], r => `<tr><td>${r.name}</td><td>${r.sync}</td><td>${r.health}</td></tr>`);
+        fillTable('jobsTable', (data.jobs || []).filter(j => j.name.includes('docs-ingestor')).slice(0, 10), r =>
+          `<tr><td>${r.name}</td><td>${r.succeeded}</td><td>${r.failed}</td><td>${r.active}</td><td>${r.start_time || ''}</td></tr>`
+        );
+        fillTable('podsTable', (data.pods || []).slice(0, 20), r =>
+          `<tr><td>${r.name}</td><td>${r.status}</td><td>${r.restarts}</td><td>${r.node || ''}</td></tr>`
+        );
+        set(status, `Last refresh: ${new Date().toLocaleTimeString()}`, 'ok');
+      } catch (e) {
+        set(status, `Failed to fetch status: ${e.message}`, 'bad');
       }
     }
 
-    askBtn.addEventListener("click", ask);
-    document.getElementById("question").addEventListener("keydown", (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") ask();
-    });
+    async function runIngestor(source) {
+      const status = document.getElementById('opsStatus');
+      set(status, `Triggering ${source} ingestor job...`);
+      try {
+        const res = await fetch(`${API}/ops/actions/run-ingestor`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ source })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+        set(status, `${source.toUpperCase()} ingestor started: ${data.job_name}`, 'ok');
+        refreshStatus();
+      } catch (e) {
+        set(status, `Failed to trigger ${source}: ${e.message}`, 'bad');
+      }
+    }
+
+    document.getElementById('refreshBtn').addEventListener('click', refreshStatus);
+    document.getElementById('runAwsBtn').addEventListener('click', () => runIngestor('aws'));
+    document.getElementById('runAzureBtn').addEventListener('click', () => runIngestor('azure'));
   </script>
 </body>
 </html>

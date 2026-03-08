@@ -1,12 +1,16 @@
 import os
 import uuid
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from kubernetes import client as k8s_client
+from kubernetes import config as k8s_config
+from kubernetes.client.rest import ApiException
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="agent-api", version="0.3.1")
+app = FastAPI(title="agent-api", version="0.4.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -16,6 +20,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_k8s_ready = False
+
+
+def _ensure_k8s() -> None:
+    global _k8s_ready
+    if _k8s_ready:
+        return
+    try:
+        k8s_config.load_incluster_config()
+    except Exception:
+        k8s_config.load_kube_config()
+    _k8s_ready = True
 
 
 class ChatRequest(BaseModel):
@@ -66,6 +83,16 @@ class RagAskResponse(BaseModel):
     model: str
     answer: str
     sources: list[RagSource]
+
+
+class TriggerIngestorRequest(BaseModel):
+    source: str = Field(..., pattern="^(aws|azure)$")
+
+
+class TriggerIngestorResponse(BaseModel):
+    source: str
+    cronjob: str
+    job_name: str
 
 
 def _base_url(model: str) -> str:
@@ -163,9 +190,7 @@ async def chat(req: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=502, detail=f"upstream connection error: {exc}") from exc
 
     choices = body.get("choices", [])
-    content = ""
-    if choices:
-        content = choices[0].get("message", {}).get("content", "")
+    content = choices[0].get("message", {}).get("content", "") if choices else ""
     return ChatResponse(model=req.model, text=content)
 
 
@@ -212,6 +237,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                 f"{_qdrant_url()}/collections/{req.collection}/points/search",
                 json={"vector": query_vec, "limit": req.top_k, "with_payload": True},
             )
+            if search_resp.status_code == 404:
+                raise HTTPException(status_code=404, detail=f"collection '{req.collection}' not found; run ingestor first")
             search_resp.raise_for_status()
             hits = search_resp.json().get("result", [])
             sources: list[RagSource] = []
@@ -256,7 +283,132 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
         raise HTTPException(status_code=502, detail=f"upstream connection error: {exc}") from exc
 
     choices = body.get("choices", [])
-    answer = ""
-    if choices:
-        answer = choices[0].get("message", {}).get("content", "")
+    answer = choices[0].get("message", {}).get("content", "") if choices else ""
     return RagAskResponse(model=req.model, answer=answer, sources=sources)
+
+
+@app.get("/ops/status")
+async def ops_status() -> dict:
+    _ensure_k8s()
+    namespace = "ai-platform"
+    core = k8s_client.CoreV1Api()
+    apps_api = k8s_client.AppsV1Api()
+    batch = k8s_client.BatchV1Api()
+    custom = k8s_client.CustomObjectsApi()
+
+    pods = core.list_namespaced_pod(namespace).items
+    deployments = apps_api.list_namespaced_deployment(namespace).items
+    statefulsets = apps_api.list_namespaced_stateful_set(namespace).items
+    cronjobs = batch.list_namespaced_cron_job(namespace).items
+    jobs = batch.list_namespaced_job(namespace).items
+
+    pod_rows = []
+    for p in pods:
+        restarts = 0
+        for cs in p.status.container_statuses or []:
+            restarts += cs.restart_count
+        pod_rows.append(
+            {
+                "name": p.metadata.name,
+                "status": p.status.phase,
+                "node": p.spec.node_name,
+                "restarts": restarts,
+            }
+        )
+
+    deploy_rows = []
+    for d in deployments:
+        desired = d.spec.replicas or 0
+        ready = d.status.ready_replicas or 0
+        deploy_rows.append({"name": d.metadata.name, "ready": ready, "desired": desired})
+
+    sts_rows = []
+    for s in statefulsets:
+        desired = s.spec.replicas or 0
+        ready = s.status.ready_replicas or 0
+        sts_rows.append({"name": s.metadata.name, "ready": ready, "desired": desired})
+
+    cj_rows = []
+    for cj in cronjobs:
+        cj_rows.append(
+            {
+                "name": cj.metadata.name,
+                "schedule": cj.spec.schedule,
+                "suspend": bool(cj.spec.suspend),
+                "last_schedule_time": cj.status.last_schedule_time.isoformat() if cj.status and cj.status.last_schedule_time else None,
+            }
+        )
+
+    job_rows = []
+    for j in sorted(jobs, key=lambda x: x.metadata.creation_timestamp or datetime.min.replace(tzinfo=timezone.utc), reverse=True)[:20]:
+        job_rows.append(
+            {
+                "name": j.metadata.name,
+                "succeeded": j.status.succeeded or 0,
+                "failed": j.status.failed or 0,
+                "active": j.status.active or 0,
+                "start_time": j.status.start_time.isoformat() if j.status and j.status.start_time else None,
+            }
+        )
+
+    argo_apps = []
+    try:
+        raw = custom.list_namespaced_custom_object(
+            group="argoproj.io",
+            version="v1alpha1",
+            namespace="argocd",
+            plural="applications",
+        )
+        for item in raw.get("items", []):
+            spec = item.get("spec", {})
+            if spec.get("project") == "ai-platform":
+                status = item.get("status", {})
+                argo_apps.append(
+                    {
+                        "name": item.get("metadata", {}).get("name"),
+                        "sync": status.get("sync", {}).get("status", "Unknown"),
+                        "health": status.get("health", {}).get("status", "Unknown"),
+                    }
+                )
+    except ApiException:
+        argo_apps = []
+
+    qdrant_collections = []
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            q = await client.get(f"{_qdrant_url()}/collections")
+            if q.status_code == 200:
+                qdrant_collections = [c.get("name") for c in q.json().get("result", {}).get("collections", [])]
+    except Exception:
+        qdrant_collections = []
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "pods": pod_rows,
+        "deployments": deploy_rows,
+        "statefulsets": sts_rows,
+        "cronjobs": cj_rows,
+        "jobs": job_rows,
+        "argocd_apps": argo_apps,
+        "qdrant_collections": qdrant_collections,
+    }
+
+
+@app.post("/ops/actions/run-ingestor", response_model=TriggerIngestorResponse)
+def run_ingestor(req: TriggerIngestorRequest) -> TriggerIngestorResponse:
+    _ensure_k8s()
+    batch = k8s_client.BatchV1Api()
+    namespace = "ai-platform"
+    cronjob_name = "aws-docs-ingestor" if req.source == "aws" else "azure-docs-ingestor"
+
+    try:
+        cronjob = batch.read_namespaced_cron_job(name=cronjob_name, namespace=namespace)
+        job = k8s_client.V1Job(
+            metadata=k8s_client.V1ObjectMeta(generate_name=f"{cronjob_name}-manual-"),
+            spec=cronjob.spec.job_template.spec,
+        )
+        created = batch.create_namespaced_job(namespace=namespace, body=job)
+    except ApiException as exc:
+        raise HTTPException(status_code=500, detail=f"k8s api error: {exc.reason}") from exc
+
+    return TriggerIngestorResponse(source=req.source, cronjob=cronjob_name, job_name=created.metadata.name)
