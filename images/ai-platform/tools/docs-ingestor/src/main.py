@@ -28,6 +28,7 @@ EMBED_MODEL = env("EMBEDDING_MODEL", "BAAI/bge-m3")
 MAX_PAGES = int(env("MAX_PAGES", "400"))
 CHUNK_SIZE = int(env("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(env("CHUNK_OVERLAP", "150"))
+EMBED_BATCH_SIZE = int(env("EMBED_BATCH_SIZE", "16"))
 REQUEST_TIMEOUT = float(env("REQUEST_TIMEOUT_SECONDS", "20"))
 USER_AGENT = env("USER_AGENT", "homelab-docs-ingestor/0.1")
 SITEMAP_URL = env("SITEMAP_URL", "")
@@ -175,12 +176,7 @@ def run() -> None:
                 print(f"[{SOURCE_NAME}] skip empty chunks {url}")
                 continue
 
-            emb = client.post(
-                f"{EMBEDDING_BASE_URL}/v1/embeddings",
-                json={"input": chunks, "model": EMBED_MODEL},
-            )
-            emb.raise_for_status()
-            embeddings = [x.get("embedding", []) for x in emb.json().get("data", [])]
+            embeddings = _embed_in_batches(client, chunks)
             if not embeddings or not embeddings[0]:
                 continue
 
@@ -293,6 +289,27 @@ def _interleave_urls_by_service(urls: list[str], max_urls: int) -> list[str]:
         if not progressed:
             break
     return out
+
+
+def _embed_in_batches(client: httpx.Client, chunks: list[str]) -> list[list[float]]:
+    vectors: list[list[float]] = []
+    batch_size = max(1, EMBED_BATCH_SIZE)
+    i = 0
+    while i < len(chunks):
+        batch = chunks[i : i + batch_size]
+        emb = client.post(
+            f"{EMBEDDING_BASE_URL}/v1/embeddings",
+            json={"input": batch, "model": EMBED_MODEL},
+        )
+        if emb.status_code == 413 and batch_size > 1:
+            # Reduce request size for very large pages/chunks.
+            batch_size = max(1, batch_size // 2)
+            continue
+        emb.raise_for_status()
+        data = emb.json().get("data", [])
+        vectors.extend([x.get("embedding", []) for x in data])
+        i += len(batch)
+    return vectors
 
 
 if __name__ == "__main__":
