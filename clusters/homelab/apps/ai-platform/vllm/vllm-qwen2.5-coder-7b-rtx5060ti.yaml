@@ -27,9 +27,9 @@ spec:
             - --model
             - Qwen/Qwen2.5-Coder-7B-Instruct
             - --gpu-memory-utilization
-            - "0.90"
+            - "0.95"
             - --max-model-len
-            - "8192"
+            - "4096"
             - --enable-prefix-caching
           envFrom:
             - configMapRef:
