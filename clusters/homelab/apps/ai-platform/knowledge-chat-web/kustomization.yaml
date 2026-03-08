@@ -1,4 +1,5 @@
 resources:
+  - nginx-configmap.yaml
   - deployment.yaml
   - service.yaml
   - httproute.yaml

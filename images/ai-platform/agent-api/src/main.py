@@ -17,6 +17,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
+from prometheus_fastapi_instrumentator import Instrumentator
 
 app = FastAPI(title="agent-api", version="0.5.0")
 
@@ -68,6 +69,7 @@ def _ensure_otel() -> None:
 
 
 _ensure_otel()
+Instrumentator().instrument(app).expose(app, include_in_schema=False, endpoint="/metrics")
 
 
 class ChatRequest(BaseModel):
