@@ -120,3 +120,20 @@ spec:
                   - source_labels: [__meta_kubernetes_service_name]
                     action: keep
                     regex: node-exporter
+
+              # --------------------
+              # metrics-server
+              # --------------------
+              - job_name: metrics-server
+                scheme: https
+                tls_config:
+                  insecure_skip_verify: true
+                kubernetes_sd_configs:
+                  - role: endpoints
+                relabel_configs:
+                  - source_labels: [__meta_kubernetes_namespace]
+                    action: keep
+                    regex: kube-system
+                  - source_labels: [__meta_kubernetes_service_name]
+                    action: keep
+                    regex: metrics-server
