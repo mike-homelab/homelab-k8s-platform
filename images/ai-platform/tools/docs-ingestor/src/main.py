@@ -2,6 +2,7 @@ import os
 import re
 import uuid
 import gzip
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import deque
 from datetime import datetime, timezone
 from html import unescape
@@ -29,9 +30,13 @@ MAX_PAGES = int(env("MAX_PAGES", "400"))
 CHUNK_SIZE = int(env("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(env("CHUNK_OVERLAP", "150"))
 EMBED_BATCH_SIZE = int(env("EMBED_BATCH_SIZE", "16"))
+EMBED_WORKERS = int(env("EMBED_WORKERS", "4"))
 REQUEST_TIMEOUT = float(env("REQUEST_TIMEOUT_SECONDS", "20"))
 USER_AGENT = env("USER_AGENT", "homelab-docs-ingestor/0.1")
 SITEMAP_URL = env("SITEMAP_URL", "")
+RESET_COLLECTION_ON_START = env("RESET_COLLECTION_ON_START", "false").lower() == "true"
+KEYWORD_COUNT = int(env("KEYWORD_COUNT", "12"))
+PRIORITY_KEYWORDS = [k.strip().lower() for k in env("PRIORITY_KEYWORDS", "").split(",") if k.strip()]
 
 
 def is_allowed_url(url: str) -> bool:
@@ -100,6 +105,10 @@ def point_id(url: str, chunk_index: int) -> str:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"{SOURCE_NAME}:{url}:{chunk_index}").hex
 
 
+def summary_point_id(url: str) -> str:
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"{SOURCE_NAME}:{url}:summary").hex
+
+
 def derive_service(url: str) -> str:
     p = urlparse(url)
     segs = [s for s in p.path.split("/") if s]
@@ -129,6 +138,47 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def extract_keywords(title: str, text: str, service: str, n: int) -> list[str]:
+    raw = f"{title} {text[:12000]}".lower()
+    words = re.findall(r"[a-z0-9][a-z0-9-]{2,}", raw)
+    stop = {
+        "this", "that", "with", "from", "your", "have", "will", "into", "about", "using", "used", "than",
+        "where", "when", "which", "while", "what", "they", "their", "them", "these", "those", "also", "more",
+        "aws", "azure", "service", "guide", "reference", "api", "latest", "docs", "documentation",
+    }
+    freq: dict[str, int] = {}
+    for w in words:
+        if w in stop:
+            continue
+        freq[w] = freq.get(w, 0) + 1
+    ranked = sorted(freq.items(), key=lambda kv: kv[1], reverse=True)
+    out = [service] if service and service != "unknown" else []
+    out.extend([w for w, _ in ranked[: max(0, n - len(out))]])
+    return out[:n]
+
+
+def summarize_page(title: str, text: str) -> str:
+    cleaned = " ".join(text.split())
+    if not cleaned:
+        return title
+    sentences = re.split(r"(?<=[.!?])\s+", cleaned)
+    picked: list[str] = []
+    budget = 1100
+    for s in sentences:
+        s = s.strip()
+        if not s:
+            continue
+        picked.append(s)
+        if sum(len(x) + 1 for x in picked) >= budget:
+            break
+        if len(picked) >= 6:
+            break
+    core = " ".join(picked).strip()
+    if title:
+        return f"{title}. {core}"[:1400]
+    return core[:1400]
+
+
 def run() -> None:
     if not START_URL:
         raise RuntimeError("START_URL is required")
@@ -141,9 +191,16 @@ def run() -> None:
     pages_done = 0
 
     with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers, follow_redirects=True) as client:
+        if RESET_COLLECTION_ON_START:
+            d = client.delete(f"{QDRANT_URL}/collections/{COLLECTION}")
+            if d.status_code not in (200, 404):
+                d.raise_for_status()
+            print(f"[{SOURCE_NAME}] reset collection={COLLECTION}")
+
         if SITEMAP_URL:
             sitemap_urls = _urls_from_sitemap(client, SITEMAP_URL, MAX_PAGES * 20)
             balanced_urls = _interleave_urls_by_service(sitemap_urls, MAX_PAGES * 3)
+            balanced_urls = _prioritize_urls_by_keywords(balanced_urls, PRIORITY_KEYWORDS)
             for u in balanced_urls:
                 if is_allowed_url(u) and u not in visited:
                     queue.append(u)
@@ -179,6 +236,12 @@ def run() -> None:
             embeddings = _embed_in_batches(client, chunks)
             if not embeddings or not embeddings[0]:
                 continue
+            service = derive_service(url)
+            keywords = extract_keywords(title, text, service, KEYWORD_COUNT)
+            summary = summarize_page(title, text)
+            summary_vecs = _embed_in_batches(client, [f"{title}\n\n{summary}\n\nkeywords: {' '.join(keywords)}"])
+            if not summary_vecs or not summary_vecs[0]:
+                continue
 
             dim = len(embeddings[0])
             coll_resp = client.get(f"{QDRANT_URL}/collections/{COLLECTION}")
@@ -198,6 +261,23 @@ def run() -> None:
             delete_resp.raise_for_status()
 
             points = []
+            points.append(
+                {
+                    "id": summary_point_id(url),
+                    "vector": summary_vecs[0],
+                    "payload": {
+                        "tenant": TENANT,
+                        "source": SOURCE_NAME,
+                        "url": url,
+                        "title": title,
+                        "service": service,
+                        "doc_type": "summary",
+                        "summary": summary,
+                        "keywords": keywords,
+                        "fetched_at": now_iso(),
+                    },
+                }
+            )
             for idx, (chunk, vector) in enumerate(zip(chunks, embeddings)):
                 points.append(
                     {
@@ -208,8 +288,11 @@ def run() -> None:
                             "source": SOURCE_NAME,
                             "url": url,
                             "title": title,
-                            "service": derive_service(url),
+                            "service": service,
+                            "doc_type": "chunk",
                             "chunk_index": idx,
+                            "summary": summary,
+                            "keywords": keywords,
                             "text": chunk,
                             "fetched_at": now_iso(),
                         },
@@ -292,24 +375,65 @@ def _interleave_urls_by_service(urls: list[str], max_urls: int) -> list[str]:
 
 
 def _embed_in_batches(client: httpx.Client, chunks: list[str]) -> list[list[float]]:
-    vectors: list[list[float]] = []
     batch_size = max(1, EMBED_BATCH_SIZE)
+    workers = max(1, EMBED_WORKERS)
+    batches: list[tuple[int, list[str]]] = []
     i = 0
     while i < len(chunks):
-        batch = chunks[i : i + batch_size]
-        emb = client.post(
+        batches.append((i, chunks[i : i + batch_size]))
+        i += batch_size
+
+    results: dict[int, list[list[float]]] = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = {
+            pool.submit(_embed_batch_with_retry, batch): idx
+            for idx, batch in batches
+        }
+        for fut in as_completed(futs):
+            idx = futs[fut]
+            results[idx] = fut.result()
+
+    vectors: list[list[float]] = []
+    for idx, _ in sorted(batches, key=lambda x: x[0]):
+        vectors.extend(results.get(idx, []))
+    return vectors
+
+
+def _embed_batch_with_retry(batch: list[str]) -> list[list[float]]:
+    # Retry recursively with smaller payloads on 413.
+    with httpx.Client(timeout=REQUEST_TIMEOUT, follow_redirects=True) as c:
+        emb = c.post(
             f"{EMBEDDING_BASE_URL}/v1/embeddings",
             json={"input": batch, "model": EMBED_MODEL},
         )
-        if emb.status_code == 413 and batch_size > 1:
-            # Reduce request size for very large pages/chunks.
-            batch_size = max(1, batch_size // 2)
-            continue
+        if emb.status_code == 413:
+            if len(batch) == 1:
+                raise httpx.HTTPStatusError(
+                    "413 for single chunk; reduce CHUNK_SIZE",
+                    request=emb.request,
+                    response=emb,
+                )
+            mid = len(batch) // 2
+            left = _embed_batch_with_retry(batch[:mid])
+            right = _embed_batch_with_retry(batch[mid:])
+            return left + right
         emb.raise_for_status()
         data = emb.json().get("data", [])
-        vectors.extend([x.get("embedding", []) for x in data])
-        i += len(batch)
-    return vectors
+        return [x.get("embedding", []) for x in data]
+
+
+def _prioritize_urls_by_keywords(urls: list[str], keywords: list[str]) -> list[str]:
+    if not keywords:
+        return urls
+    hi: list[str] = []
+    lo: list[str] = []
+    for u in urls:
+        lu = u.lower()
+        if any(k in lu for k in keywords):
+            hi.append(u)
+        else:
+            lo.append(u)
+    return hi + lo
 
 
 if __name__ == "__main__":

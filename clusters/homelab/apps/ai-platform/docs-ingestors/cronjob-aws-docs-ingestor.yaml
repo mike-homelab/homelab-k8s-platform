@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.5
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.2.1
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
@@ -35,12 +35,20 @@ spec:
                   value: https://docs.aws.amazon.com/
                 - name: QDRANT_COLLECTION
                   value: docs-aws
+                - name: PRIORITY_KEYWORDS
+                  value: guide
+                - name: EMBED_WORKERS
+                  value: "6"
+                - name: EMBED_BATCH_SIZE
+                  value: "12"
+                - name: RESET_COLLECTION_ON_START
+                  value: "true"
                 - name: MAX_PAGES
-                  value: "500"
+                  value: "10000"
               resources:
                 requests:
-                  cpu: "300m"
-                  memory: "512Mi"
-                limits:
                   cpu: "1"
-                  memory: "1Gi"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"

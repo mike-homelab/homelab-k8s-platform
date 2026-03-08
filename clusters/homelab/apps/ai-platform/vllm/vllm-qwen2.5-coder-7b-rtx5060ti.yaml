@@ -39,12 +39,12 @@ spec:
               containerPort: 8000
           resources:
             requests:
-              cpu: "6"
-              memory: "16Gi"
+              cpu: "4"
+              memory: "8Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "8"
-              memory: "24Gi"
+              cpu: "6"
+              memory: "12Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
