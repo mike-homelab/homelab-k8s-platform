@@ -3,9 +3,19 @@ import uuid
 
 import httpx
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-app = FastAPI(title="agent-api", version="0.3.0")
+app = FastAPI(title="agent-api", version="0.3.1")
+
+cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_allow_origins if cors_allow_origins else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ChatRequest(BaseModel):
@@ -49,6 +59,7 @@ class RagSource(BaseModel):
     chunk_index: int
     score: float
     text: str
+    url: str = ""
 
 
 class RagAskResponse(BaseModel):
@@ -216,6 +227,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                         chunk_index=int(payload.get("chunk_index", 0)),
                         score=float(hit.get("score", 0.0)),
                         text=text,
+                        url=str(payload.get("url", "")),
                     )
                 )
 

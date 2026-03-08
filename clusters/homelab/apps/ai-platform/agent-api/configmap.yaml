@@ -11,6 +11,7 @@ data:
   VLLM_CODER_BASE_URL: http://vllm-coder.ai-platform.svc.cluster.local:8000/v1
   EMBEDDING_BASE_URL: http://embedding-api.ai-platform.svc.cluster.local:80
   QDRANT_URL: http://qdrant.ai-platform.svc.cluster.local:6333
+  CORS_ALLOW_ORIGINS: https://knowledge-chat.michaelhomelab.work,http://localhost:3000,http://localhost:8080
   REDIS_URL: redis://redis.ai-platform.svc.cluster.local:6379/0
   POSTGRES_HOST: postgres.ai-platform.svc.cluster.local
   POSTGRES_PORT: "5432"

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Chat</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a2f;
+      --panel-2: #0f172a;
+      --text: #e6edf7;
+      --muted: #9fb0d0;
+      --brand: #4fd1c5;
+      --brand-2: #60a5fa;
+      --danger: #f87171;
+      --ok: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text);
+      background: radial-gradient(1200px 700px at 0% 0%, #182545 0%, var(--bg) 55%);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 36px auto;
+      padding: 0 16px 30px;
+    }
+    .hero {
+      margin-bottom: 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      letter-spacing: 0.2px;
+    }
+    .subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+    }
+    .card {
+      border: 1px solid #223050;
+      background: linear-gradient(160deg, var(--panel) 0%, var(--panel-2) 100%);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    }
+    .grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 12px;
+    }
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    select, input, textarea, button {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #2a3b63;
+      background: #0b1328;
+      color: var(--text);
+      padding: 10px;
+      font-size: 0.95rem;
+    }
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+    .btn {
+      background: linear-gradient(120deg, var(--brand), var(--brand-2));
+      color: #06111e;
+      border: none;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .btn:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .status {
+      min-height: 22px;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .status.error { color: var(--danger); }
+    .status.ok { color: var(--ok); }
+    .answer {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid #294573;
+      border-radius: 10px;
+      background: #0a1327;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .sources {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed #2b436f;
+    }
+    .source {
+      margin: 8px 0;
+      font-size: 0.9rem;
+      color: #c5d6f4;
+    }
+    @media (max-width: 780px) {
+      .grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>Knowledge Chat</h1>
+      <div class="subtitle">Ask questions from AWS and Azure documentation indexed in Qdrant.</div>
+    </div>
+    <div class="card">
+      <div class="grid">
+        <div>
+          <label for="collection">Collection</label>
+          <select id="collection">
+            <option value="docs-aws">AWS Docs</option>
+            <option value="docs-azure">Azure Docs</option>
+          </select>
+        </div>
+        <div>
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="general">General</option>
+            <option value="coder">Coder</option>
+          </select>
+        </div>
+        <div>
+          <label for="topk">Top K</label>
+          <input id="topk" type="number" value="4" min="1" max="10">
+        </div>
+        <div>
+          <label for="maxTokens">Max Tokens</label>
+          <input id="maxTokens" type="number" value="512" min="64" max="2048">
+        </div>
+      </div>
+
+      <label for="question">Question</label>
+      <textarea id="question" placeholder="Example: How do I create an S3 bucket with versioning enabled?"></textarea>
+      <button id="askBtn" class="btn">Ask</button>
+      <div id="status" class="status"></div>
+
+      <div id="answer" class="answer" style="display:none;"></div>
+      <div id="sources" class="sources" style="display:none;"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = "https://agent-api.michaelhomelab.work";
+
+    const askBtn = document.getElementById("askBtn");
+    const statusEl = document.getElementById("status");
+    const answerEl = document.getElementById("answer");
+    const sourcesEl = document.getElementById("sources");
+
+    function setStatus(text, type = "") {
+      statusEl.textContent = text;
+      statusEl.className = `status ${type}`.trim();
+    }
+
+    function renderSources(sources) {
+      if (!sources || !sources.length) {
+        sourcesEl.style.display = "none";
+        sourcesEl.innerHTML = "";
+        return;
+      }
+      const html = sources.map((s, i) => {
+        const url = s.url || "";
+        const link = url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` : "(no url)";
+        return `<div class="source"><strong>${i + 1}.</strong> score=${Number(s.score || 0).toFixed(3)} | ${link}</div>`;
+      }).join("");
+      sourcesEl.innerHTML = `<strong>Sources</strong>${html}`;
+      sourcesEl.style.display = "block";
+    }
+
+    async function ask() {
+      const question = document.getElementById("question").value.trim();
+      if (!question) {
+        setStatus("Enter a question first.", "error");
+        return;
+      }
+      askBtn.disabled = true;
+      answerEl.style.display = "none";
+      sourcesEl.style.display = "none";
+      setStatus("Running retrieval and generation...");
+
+      const payload = {
+        question,
+        collection: document.getElementById("collection").value,
+        model: document.getElementById("model").value,
+        top_k: Number(document.getElementById("topk").value || 4),
+        max_tokens: Number(document.getElementById("maxTokens").value || 512)
+      };
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/rag/ask`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `HTTP ${res.status}`);
+        }
+        answerEl.textContent = data.answer || "(no answer)";
+        answerEl.style.display = "block";
+        renderSources(data.sources || []);
+        setStatus("Completed.", "ok");
+      } catch (err) {
+        setStatus(`Request failed: ${err.message}`, "error");
+      } finally {
+        askBtn.disabled = false;
+      }
+    }
+
+    askBtn.addEventListener("click", ask);
+    document.getElementById("question").addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") ask();
+    });
+  </script>
+</body>
+</html>

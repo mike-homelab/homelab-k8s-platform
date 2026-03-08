@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docs-ingestors-config
+  namespace: ai-platform
+data:
+  EMBEDDING_BASE_URL: http://embedding-api.ai-platform.svc.cluster.local:80
+  QDRANT_URL: http://qdrant.ai-platform.svc.cluster.local:6333
+  EMBEDDING_MODEL: BAAI/bge-m3
+  CHUNK_SIZE: "1000"
+  CHUNK_OVERLAP: "150"
+  REQUEST_TIMEOUT_SECONDS: "20"

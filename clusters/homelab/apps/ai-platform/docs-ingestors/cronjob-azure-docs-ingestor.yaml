@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: azure-docs-ingestor
+  namespace: ai-platform
+spec:
+  schedule: "0 3 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ingestor
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.0
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: docs-ingestors-config
+              env:
+                - name: SOURCE_NAME
+                  value: azure
+                - name: TENANT
+                  value: azure-docs
+                - name: START_URL
+                  value: https://learn.microsoft.com/en-us/azure/?product=popular
+                - name: ALLOWED_HOSTS
+                  value: learn.microsoft.com
+                - name: URL_PREFIXES
+                  value: https://learn.microsoft.com/en-us/azure/
+                - name: QDRANT_COLLECTION
+                  value: docs-azure
+                - name: MAX_PAGES
+                  value: "500"
+              resources:
+                requests:
+                  cpu: "300m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"

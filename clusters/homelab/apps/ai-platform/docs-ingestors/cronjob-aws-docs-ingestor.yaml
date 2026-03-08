@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aws-docs-ingestor
+  namespace: ai-platform
+spec:
+  schedule: "30 2 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ingestor
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.0
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: docs-ingestors-config
+              env:
+                - name: SOURCE_NAME
+                  value: aws
+                - name: TENANT
+                  value: aws-docs
+                - name: START_URL
+                  value: https://docs.aws.amazon.com/
+                - name: ALLOWED_HOSTS
+                  value: docs.aws.amazon.com
+                - name: URL_PREFIXES
+                  value: https://docs.aws.amazon.com/
+                - name: QDRANT_COLLECTION
+                  value: docs-aws
+                - name: MAX_PAGES
+                  value: "500"
+              resources:
+                requests:
+                  cpu: "300m"
+                  memory: "512Mi"
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"

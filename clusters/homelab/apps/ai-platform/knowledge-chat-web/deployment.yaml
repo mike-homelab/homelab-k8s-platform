@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: knowledge-chat-web
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: knowledge-chat-web
+  template:
+    metadata:
+      labels:
+        app: knowledge-chat-web
+    spec:
+      containers:
+        - name: web
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-web:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
