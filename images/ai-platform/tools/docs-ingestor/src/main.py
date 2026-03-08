@@ -99,6 +99,21 @@ def point_id(url: str, chunk_index: int) -> str:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"{SOURCE_NAME}:{url}:{chunk_index}").hex
 
 
+def derive_service(url: str) -> str:
+    p = urlparse(url)
+    segs = [s for s in p.path.split("/") if s]
+    if p.netloc == "docs.aws.amazon.com":
+        return segs[0].lower() if segs else "unknown"
+    if p.netloc == "learn.microsoft.com":
+        # e.g. /en-us/azure/virtual-machines/...
+        if "azure" in segs:
+            idx = segs.index("azure")
+            if idx + 1 < len(segs):
+                return segs[idx + 1].lower()
+        return "azure"
+    return "unknown"
+
+
 def qdrant_filter_for_url(url: str) -> dict:
     return {
         "must": [
@@ -195,6 +210,7 @@ def run() -> None:
                             "source": SOURCE_NAME,
                             "url": url,
                             "title": title,
+                            "service": derive_service(url),
                             "chunk_index": idx,
                             "text": chunk,
                             "fetched_at": now_iso(),

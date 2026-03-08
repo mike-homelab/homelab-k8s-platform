@@ -1,4 +1,5 @@
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -69,6 +70,7 @@ class RagAskRequest(BaseModel):
     top_k: int = Field(default=4, ge=1, le=10)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, ge=32, le=2048)
+    service: str | None = None
 
 
 class RagSource(BaseModel):
@@ -113,6 +115,45 @@ def _embedding_base_url() -> str:
 
 def _qdrant_url() -> str:
     return os.getenv("QDRANT_URL", "http://qdrant.ai-platform.svc.cluster.local:6333")
+
+
+def _infer_service(collection: str, question: str, explicit: str | None) -> str | None:
+    if explicit:
+        return explicit.strip().lower()
+    q = f" {question.lower()} "
+    candidates = [
+        "fsx", "s3", "ec2", "eks", "ecs", "iam", "lambda", "rds", "dynamodb",
+        "cloudfront", "route53", "vpc", "sqs", "sns", "kinesis", "glue", "athena",
+    ]
+    for c in candidates:
+        if f" {c} " in q:
+            return c
+    if collection == "docs-aws" and "aws " in q:
+        return None
+    if collection == "docs-azure" and "azure " in q:
+        return None
+    return None
+
+
+def _query_terms(question: str) -> list[str]:
+    words = re.findall(r"[a-zA-Z0-9-]+", question.lower())
+    stop = {"the", "and", "for", "with", "what", "when", "where", "which", "about", "from", "into", "that", "this", "are", "can", "use"}
+    return [w for w in words if len(w) > 2 and w not in stop][:12]
+
+
+def _boosted_score(hit: dict, terms: list[str]) -> float:
+    base = float(hit.get("score", 0.0))
+    payload = hit.get("payload", {})
+    text = (
+        str(payload.get("title", "")) + " " +
+        str(payload.get("url", "")) + " " +
+        str(payload.get("text", ""))
+    ).lower()
+    bonus = 0.0
+    for t in terms:
+        if t in text:
+            bonus += 0.03
+    return base + min(bonus, 0.24)
 
 
 def _chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[str]:
@@ -233,14 +274,30 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             query_vec = (await _embed_texts(client, [req.question]))[0]
+            service = _infer_service(req.collection, req.question, req.service)
+            search_payload = {"vector": query_vec, "limit": max(req.top_k * 8, 20), "with_payload": True}
+            if service and req.collection in {"docs-aws", "docs-azure"}:
+                search_payload["filter"] = {"must": [{"key": "service", "match": {"value": service}}]}
+
             search_resp = await client.post(
                 f"{_qdrant_url()}/collections/{req.collection}/points/search",
-                json={"vector": query_vec, "limit": req.top_k, "with_payload": True},
+                json=search_payload,
             )
             if search_resp.status_code == 404:
                 raise HTTPException(status_code=404, detail=f"collection '{req.collection}' not found; run ingestor first")
             search_resp.raise_for_status()
             hits = search_resp.json().get("result", [])
+            if not hits and search_payload.get("filter"):
+                # Fallback to unfiltered semantic search when service-specific data is not yet indexed.
+                fallback_resp = await client.post(
+                    f"{_qdrant_url()}/collections/{req.collection}/points/search",
+                    json={"vector": query_vec, "limit": max(req.top_k * 8, 20), "with_payload": True},
+                )
+                fallback_resp.raise_for_status()
+                hits = fallback_resp.json().get("result", [])
+
+            terms = _query_terms(req.question)
+            hits = sorted(hits, key=lambda h: _boosted_score(h, terms), reverse=True)[: req.top_k]
             sources: list[RagSource] = []
             context_parts: list[str] = []
             for hit in hits:
