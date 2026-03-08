@@ -141,7 +141,9 @@ def run() -> None:
 
     with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers, follow_redirects=True) as client:
         if SITEMAP_URL:
-            for u in _urls_from_sitemap(client, SITEMAP_URL, MAX_PAGES * 3):
+            sitemap_urls = _urls_from_sitemap(client, SITEMAP_URL, MAX_PAGES * 20)
+            balanced_urls = _interleave_urls_by_service(sitemap_urls, MAX_PAGES * 3)
+            for u in balanced_urls:
                 if is_allowed_url(u) and u not in visited:
                     queue.append(u)
             print(f"[{SOURCE_NAME}] loaded sitemap urls={len(queue)} from={SITEMAP_URL}")
@@ -266,6 +268,31 @@ def _urls_from_sitemap(client: httpx.Client, sitemap_url: str, max_urls: int) ->
                     if len(discovered) >= max_urls:
                         break
     return discovered
+
+
+def _interleave_urls_by_service(urls: list[str], max_urls: int) -> list[str]:
+    by_service: dict[str, deque[str]] = {}
+    order: list[str] = []
+    for u in urls:
+        svc = derive_service(u)
+        if svc not in by_service:
+            by_service[svc] = deque()
+            order.append(svc)
+        by_service[svc].append(u)
+
+    out: list[str] = []
+    while len(out) < max_urls:
+        progressed = False
+        for svc in order:
+            q = by_service[svc]
+            if q:
+                out.append(q.popleft())
+                progressed = True
+                if len(out) >= max_urls:
+                    break
+        if not progressed:
+            break
+    return out
 
 
 if __name__ == "__main__":
