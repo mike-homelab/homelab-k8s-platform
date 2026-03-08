@@ -1,10 +1,12 @@
 import os
 import re
 import uuid
+import gzip
 from collections import deque
 from datetime import datetime, timezone
 from html import unescape
 from urllib.parse import urljoin, urlparse
+import xml.etree.ElementTree as ET
 
 import httpx
 from bs4 import BeautifulSoup
@@ -28,6 +30,7 @@ CHUNK_SIZE = int(env("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(env("CHUNK_OVERLAP", "150"))
 REQUEST_TIMEOUT = float(env("REQUEST_TIMEOUT_SECONDS", "20"))
 USER_AGENT = env("USER_AGENT", "homelab-docs-ingestor/0.1")
+SITEMAP_URL = env("SITEMAP_URL", "")
 
 
 def is_allowed_url(url: str) -> bool:
@@ -122,6 +125,12 @@ def run() -> None:
     pages_done = 0
 
     with httpx.Client(timeout=REQUEST_TIMEOUT, headers=headers, follow_redirects=True) as client:
+        if SITEMAP_URL:
+            for u in _urls_from_sitemap(client, SITEMAP_URL, MAX_PAGES * 3):
+                if is_allowed_url(u) and u not in visited:
+                    queue.append(u)
+            print(f"[{SOURCE_NAME}] loaded sitemap urls={len(queue)} from={SITEMAP_URL}")
+
         while queue and pages_done < MAX_PAGES:
             url = queue.popleft()
             if url in visited:
@@ -202,6 +211,45 @@ def run() -> None:
             print(f"[{SOURCE_NAME}] indexed {url} chunks={len(points)} total_pages={pages_done}")
 
     print(f"[{SOURCE_NAME}] completed: indexed_pages={pages_done} visited={len(visited)} collection={COLLECTION}")
+
+
+def _decode_xml_bytes(raw: bytes) -> bytes:
+    if raw[:2] == b"\x1f\x8b":
+        return gzip.decompress(raw)
+    return raw
+
+
+def _urls_from_sitemap(client: httpx.Client, sitemap_url: str, max_urls: int) -> list[str]:
+    discovered: list[str] = []
+    pending: deque[str] = deque([sitemap_url])
+    seen_maps: set[str] = set()
+
+    while pending and len(discovered) < max_urls:
+        sm_url = pending.popleft()
+        if sm_url in seen_maps:
+            continue
+        seen_maps.add(sm_url)
+        try:
+            res = client.get(sm_url)
+            if res.status_code != 200:
+                continue
+            raw = _decode_xml_bytes(res.content)
+            root = ET.fromstring(raw)
+        except Exception:
+            continue
+
+        tag = root.tag.lower()
+        if tag.endswith("sitemapindex"):
+            for node in root.findall(".//{*}sitemap/{*}loc"):
+                if node.text:
+                    pending.append(node.text.strip())
+        elif tag.endswith("urlset"):
+            for node in root.findall(".//{*}url/{*}loc"):
+                if node.text:
+                    discovered.append(normalize_url(node.text.strip()))
+                    if len(discovered) >= max_urls:
+                        break
+    return discovered
 
 
 if __name__ == "__main__":

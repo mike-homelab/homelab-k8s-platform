@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.1
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.2
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
@@ -27,6 +27,8 @@ spec:
                   value: aws-docs
                 - name: START_URL
                   value: https://docs.aws.amazon.com/
+                - name: SITEMAP_URL
+                  value: https://docs.aws.amazon.com/sitemap_index.xml
                 - name: ALLOWED_HOSTS
                   value: docs.aws.amazon.com
                 - name: URL_PREFIXES
