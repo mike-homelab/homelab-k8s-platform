@@ -2,6 +2,9 @@ import os
 import re
 import uuid
 import gzip
+import subprocess
+import tempfile
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import deque
 from datetime import datetime, timezone
@@ -17,9 +20,11 @@ def env(name: str, default: str) -> str:
     return os.getenv(name, default).strip()
 
 
+SOURCE_TYPE = env("SOURCE_TYPE", "web").lower()
 SOURCE_NAME = env("SOURCE_NAME", "unknown")
 TENANT = env("TENANT", SOURCE_NAME)
 START_URL = env("START_URL", "")
+GIT_URL = env("GIT_URL", "")
 ALLOWED_HOSTS = {h.strip() for h in env("ALLOWED_HOSTS", "").split(",") if h.strip()}
 URL_PREFIXES = [p.strip() for p in env("URL_PREFIXES", "").split(",") if p.strip()]
 COLLECTION = env("QDRANT_COLLECTION", f"docs-{SOURCE_NAME}")
@@ -179,11 +184,138 @@ def summarize_page(title: str, text: str) -> str:
     return core[:1400]
 
 
+def parse_md_title(text: str, filename: str) -> str:
+    match = re.search(r"^#\s+(.*?)$", text, flags=re.MULTILINE)
+    if match:
+        return match.group(1).strip()
+    return filename
+
+
 def run() -> None:
+    if SOURCE_TYPE == "git":
+        run_git_ingestion()
+    else:
+        run_web_ingestion()
+
+
+def run_git_ingestion() -> None:
+    if not GIT_URL:
+        raise RuntimeError("GIT_URL is required for SOURCE_TYPE=git")
+
+    pages_done = 0
+    with tempfile.TemporaryDirectory() as td:
+        print(f"[{SOURCE_NAME}] cloning {GIT_URL} into {td}...")
+        try:
+            subprocess.run(["git", "clone", "--depth", "1", GIT_URL, td], check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Git clone failed: {e.stderr.decode()}")
+
+        root = Path(td)
+        md_files = list(root.rglob("*.md")) + list(root.rglob("*.mdx"))
+        print(f"[{SOURCE_NAME}] found {len(md_files)} markdown files")
+
+        with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            if RESET_COLLECTION_ON_START:
+                d = client.delete(f"{QDRANT_URL}/collections/{COLLECTION}")
+                if d.status_code not in (200, 404):
+                    d.raise_for_status()
+
+            for f in md_files:
+                if pages_done >= MAX_PAGES:
+                    break
+                
+                try:
+                    text = f.read_text(encoding="utf-8")
+                except Exception:
+                    continue
+                
+                if len(text) < 50:
+                    continue
+
+                rel_path = str(f.relative_to(root))
+                # treat the file path as the "url" for consistency
+                virtual_url = f"git://{SOURCE_NAME}/{rel_path}"
+                title = parse_md_title(text, f.name)
+                
+                chunks = chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
+                if not chunks:
+                    continue
+
+                embeddings = _embed_in_batches(client, chunks)
+                if not embeddings or not embeddings[0]:
+                    continue
+
+                service = derive_service(virtual_url)
+                keywords = extract_keywords(title, text, service, KEYWORD_COUNT)
+                summary = summarize_page(title, text)
+                summary_vecs = _embed_in_batches(client, [f"{title}\n\n{summary}\n\nkeywords: {' '.join(keywords)}"])
+                if not summary_vecs or not summary_vecs[0]:
+                    continue
+
+                dim = len(embeddings[0])
+                coll_resp = client.get(f"{QDRANT_URL}/collections/{COLLECTION}")
+                if coll_resp.status_code == 404:
+                    create_resp = client.put(
+                        f"{QDRANT_URL}/collections/{COLLECTION}",
+                        json={"vectors": {"size": dim, "distance": "Cosine"}},
+                    )
+                    create_resp.raise_for_status()
+
+                points = []
+                points.append(
+                    {
+                        "id": summary_point_id(virtual_url),
+                        "vector": summary_vecs[0],
+                        "payload": {
+                            "tenant": TENANT,
+                            "source": SOURCE_NAME,
+                            "url": virtual_url,
+                            "title": title,
+                            "service": service,
+                            "doc_type": "summary",
+                            "summary": summary,
+                            "keywords": keywords,
+                            "fetched_at": now_iso(),
+                        },
+                    }
+                )
+                for idx, (chunk, vector) in enumerate(zip(chunks, embeddings)):
+                    points.append(
+                        {
+                            "id": point_id(virtual_url, idx),
+                            "vector": vector,
+                            "payload": {
+                                "tenant": TENANT,
+                                "source": SOURCE_NAME,
+                                "url": virtual_url,
+                                "title": title,
+                                "service": service,
+                                "doc_type": "chunk",
+                                "chunk_index": idx,
+                                "summary": summary,
+                                "keywords": keywords,
+                                "text": chunk,
+                                "fetched_at": now_iso(),
+                            },
+                        }
+                    )
+
+                upsert_resp = client.put(
+                    f"{QDRANT_URL}/collections/{COLLECTION}/points?wait=true",
+                    json={"points": points},
+                )
+                upsert_resp.raise_for_status()
+                pages_done += 1
+                print(f"[{SOURCE_NAME}] indexed {virtual_url} chunks={len(points)} pages_done={pages_done}")
+
+    print(f"[{SOURCE_NAME}] git ingestion completed: pages={pages_done} collection={COLLECTION}")
+
+
+def run_web_ingestion() -> None:
     if not START_URL:
-        raise RuntimeError("START_URL is required")
+        raise RuntimeError("START_URL is required for SOURCE_TYPE=web")
     if not ALLOWED_HOSTS:
-        raise RuntimeError("ALLOWED_HOSTS is required")
+        raise RuntimeError("ALLOWED_HOSTS is required for SOURCE_TYPE=web")
 
     headers = {"User-Agent": USER_AGENT}
     visited: set[str] = set()
