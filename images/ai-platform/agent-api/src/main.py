@@ -129,7 +129,7 @@ class RagAskResponse(BaseModel):
 
 
 class TriggerIngestorRequest(BaseModel):
-    source: str = Field(..., pattern="^(aws|azure)$")
+    source: str = Field(..., pattern="^(aws|azure|kubernetes)$")
 
 
 class TriggerIngestorResponse(BaseModel):
