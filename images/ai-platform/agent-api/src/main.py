@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.8.0")
+app = FastAPI(title="agent-api", version="0.8.1")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
