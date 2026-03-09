@@ -1,264 +1,484 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Platform Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b1220;
-      --card: #111b31;
-      --card2: #10192b;
-      --txt: #e7eefc;
-      --muted: #9eb2d8;
-      --ok: #34d399;
-      --warn: #f59e0b;
-      --bad: #f87171;
-      --brand1: #60a5fa;
-      --brand2: #4fd1c5;
+      --bg: #030712;
+      --panel-bg: rgba(17, 24, 39, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+      --brand-primary: #8b5cf6;
+      --brand-secondary: #3b82f6;
+      --accent: #2dd4bf;
+      --success: #34d399;
+      --danger: #f87171;
+      --warn: #fbbf24;
+      --input-bg: rgba(31, 41, 55, 0.6);
+      --btn-bg: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
     }
-    * { box-sizing: border-box; }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
-      margin: 0;
-      color: var(--txt);
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: radial-gradient(900px 700px at 10% 0%, #1b2b4b 0%, var(--bg) 60%);
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
     }
-    .wrap { max-width: 1200px; margin: 28px auto; padding: 0 16px 24px; }
-    .title { margin-bottom: 14px; }
-    .title h1 { margin: 0; font-size: 1.8rem; }
-    .title p { margin: 6px 0 0; color: var(--muted); }
-    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+
+    /* Dynamic Background Gradient */
+    .bg-blobs {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      z-index: -1; overflow: hidden; pointer-events: none;
+    }
+    .blob {
+      position: absolute; border-radius: 50%; filter: blur(100px); opacity: 0.4;
+      animation: float 20s infinite alternate ease-in-out;
+    }
+    .blob1 { width: 500px; height: 500px; background: #4c1d95; top: -10%; left: -10%; animation-delay: 0s; }
+    .blob2 { width: 600px; height: 600px; background: #1e3a8a; bottom: -20%; right: -10%; animation-delay: -5s; }
+    .blob3 { width: 400px; height: 400px; background: #115e59; top: 40%; left: 40%; animation-delay: -10s; }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(50px, 50px) scale(1.1); }
+    }
+
+    /* Layout */
+    .container {
+      max-width: 1200px; margin: 0 auto; padding: 40px 20px;
+      display: flex; flex-direction: column; height: 100vh;
+    }
+
+    .header {
+      text-align: center; margin-bottom: 30px;
+    }
+    .header h1 {
+      font-size: 2.5rem; font-weight: 700;
+      background: linear-gradient(to right, #a78bfa, #60a5fa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      margin-bottom: 8px; letter-spacing: -0.5px;
+    }
+    .header p { color: var(--text-muted); font-size: 1.1rem; }
+
+    /* Tabs */
+    .tabs { display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; }
     .tab {
-      border: 1px solid #29406a;
-      background: #0d1730;
-      color: var(--txt);
-      border-radius: 10px;
-      padding: 10px 14px;
-      cursor: pointer;
-      font-weight: 600;
+      background: rgba(255, 255, 255, 0.05); border: 1px solid var(--panel-border);
+      color: var(--text-muted); padding: 12px 24px; border-radius: 30px;
+      font-family: inherit; font-size: 1rem; font-weight: 500; cursor: pointer;
+      backdrop-filter: blur(10px); transition: all 0.3s ease;
     }
-    .tab.active { background: linear-gradient(120deg, var(--brand1), var(--brand2)); color: #061223; border: none; }
+    .tab:hover { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+    .tab.active {
+      background: var(--btn-bg); color: #fff; border-color: transparent;
+      box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+    }
+
+    /* Panels */
     .panel {
-      border: 1px solid #25395f;
-      background: linear-gradient(165deg, var(--card) 0%, var(--card2) 100%);
-      border-radius: 14px;
-      padding: 14px;
-      box-shadow: 0 10px 28px rgba(0,0,0,.3);
+      background: var(--panel-bg); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border); border-radius: 20px;
+      box-shadow: var(--glass-shadow); padding: 30px; flex-grow: 1;
+      display: none; flex-direction: column; overflow: hidden;
+      animation: fadeIn 0.4s ease-out forwards;
     }
-    .hidden { display: none; }
-    .grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
-    label { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
-    input, select, textarea, button {
-      width: 100%; border-radius: 10px; border: 1px solid #2d4573; background: #0b1530; color: var(--txt); padding: 10px;
+    .panel.active { display: flex; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
-    textarea { min-height: 110px; resize: vertical; }
+
+    /* Chat UI */
+    .chat-layout { display: flex; flex-direction: column; height: 100%; gap: 20px; }
+    .chat-controls {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;
+      background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 12px; border: 1px solid var(--panel-border);
+    }
+    .control-group { display: flex; flex-direction: column; gap: 6px; }
+    .control-group label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    select, input[type="number"] {
+      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--panel-border);
+      background: var(--input-bg); color: var(--text-main); font-family: inherit; font-size: 0.95rem;
+      transition: border-color 0.2s; outline: none;
+    }
+    select:focus, input:focus { border-color: var(--brand-secondary); }
+
+    .chat-window {
+      flex-grow: 1; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--panel-border);
+      border-radius: 12px; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px;
+      scroll-behavior: smooth;
+    }
+    
+    .message { max-width: 80%; padding: 14px 18px; border-radius: 18px; line-height: 1.5; position: relative; animation: slideIn 0.3s ease-out; }
+    .message.user {
+      align-self: flex-end; background: var(--btn-bg); color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .message.bot {
+      align-self: flex-start; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--panel-border);
+      border-bottom-left-radius: 4px;
+    }
+    .message .sources-block {
+      margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.85rem; color: var(--text-muted);
+    }
+    .message .sources-block a { color: var(--brand-secondary); text-decoration: none; transition: color 0.2s; }
+    .message .sources-block a:hover { color: var(--accent); text-decoration: underline; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-input-area { display: flex; gap: 12px; position: relative; }
+    .chat-input-area textarea {
+      flex-grow: 1; background: var(--input-bg); border: 1px solid var(--panel-border);
+      border-radius: 16px; padding: 15px 20px; color: var(--text-main); font-family: inherit;
+      font-size: 1rem; resize: none; min-height: 56px; max-height: 150px; outline: none;
+      transition: all 0.3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chat-input-area textarea:focus { border-color: var(--brand-secondary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+    .send-btn {
+      width: 56px; height: 56px; border-radius: 16px; border: none; background: var(--btn-bg);
+      color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s ease; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    }
+    .send-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .send-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .typing-indicator {
+      display: none; align-self: flex-start; background: rgba(255, 255, 255, 0.05);
+      padding: 12px 18px; border-radius: 18px; border-bottom-left-radius: 4px;
+      gap: 5px; align-items: center;
+    }
+    .typing-indicator span {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted);
+      animation: blink 1.4s infinite both;
+    }
+    .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+
+    /* Dashboard UI */
+    .dashboard-layout { overflow-y: auto; padding-right: 10px; }
+    .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
     .btn {
-      border: none; font-weight: 700; cursor: pointer;
-      background: linear-gradient(120deg, var(--brand2), var(--brand1)); color: #041220;
+      background: rgba(255, 255, 255, 0.1); border: 1px solid var(--panel-border);
+      color: var(--text-main); padding: 10px 20px; border-radius: 10px; cursor: pointer;
+      font-family: inherit; font-weight: 500; backdrop-filter: blur(5px); transition: all 0.2s;
     }
-    .btn.secondary { background: #102244; color: var(--txt); border: 1px solid #2f4b7d; }
-    .btn.warn { background: #3a2a10; color: #f6c870; border: 1px solid #7a5b1a; }
-    .status { margin-top: 8px; min-height: 18px; color: var(--muted); }
-    .status.ok { color: var(--ok); }
-    .status.bad { color: var(--bad); }
-    .status.warn { color: var(--warn); }
-    .answer { margin-top: 12px; padding: 12px; border: 1px solid #2a456f; border-radius: 10px; white-space: pre-wrap; line-height: 1.45; }
-    .sources { margin-top: 10px; font-size: .92rem; }
-    .sources a { color: #95c7ff; }
-    .cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 10px; }
-    .kpi { padding: 10px; border-radius: 10px; border: 1px solid #2a416b; background: #0c1732; }
-    .kpi .n { font-size: 1.3rem; font-weight: 700; }
-    .kpi .l { color: var(--muted); font-size: .8rem; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .9rem; }
-    th, td { border-bottom: 1px solid #233a60; padding: 7px 6px; text-align: left; }
-    th { color: #9eb2d8; font-weight: 600; }
-    .row { display: flex; gap: 10px; }
-    .row > * { flex: 1; }
-    @media (max-width: 900px) {
-      .grid { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
-      .row { flex-direction: column; }
+    .btn:hover { background: rgba(255, 255, 255, 0.15); border-color: var(--text-muted); }
+    .btn.danger { background: rgba(248, 113, 113, 0.15); color: var(--danger); border-color: rgba(248, 113, 113, 0.3); }
+    .btn.danger:hover { background: rgba(248, 113, 113, 0.25); }
+    .actions { display: flex; gap: 10px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+    .kpi-card {
+      background: rgba(0, 0, 0, 0.2); border: 1px solid var(--panel-border); border-radius: 12px;
+      padding: 20px; text-align: center; transition: transform 0.2s;
     }
+    .kpi-card:hover { transform: translateY(-3px); border-color: var(--brand-secondary); }
+    .kpi-value { font-size: 2.2rem; font-weight: 700; color: #fff; margin-bottom: 5px; }
+    .kpi-label { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .table-container { background: rgba(0, 0, 0, 0.15); border: 1px solid var(--panel-border); border-radius: 12px; overflow: hidden; margin-bottom: 25px; }
+    .table-title { padding: 15px 20px; border-bottom: 1px solid var(--panel-border); background: rgba(255, 255, 255, 0.02); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { padding: 12px 20px; font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--panel-border); }
+    td { padding: 14px 20px; font-size: 0.95rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+    .status-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+    .badge-ok { background: rgba(52, 211, 153, 0.15); color: var(--success); }
+    .badge-warn { background: rgba(251, 191, 36, 0.15); color: var(--warn); }
+    .badge-err { background: rgba(248, 113, 113, 0.15); color: var(--danger); }
+
+    .dash-status { font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="title">
-      <h1>AI Platform Console</h1>
-      <p>Knowledge Chat + Dashboard + Action Center</p>
+  <div class="bg-blobs">
+    <div class="blob blob1"></div>
+    <div class="blob blob2"></div>
+    <div class="blob blob3"></div>
+  </div>
+
+  <div class="container">
+    <div class="header">
+      <h1>AI System Console</h1>
+      <p>Cloud Knowledge & Telemetry Center</p>
     </div>
 
     <div class="tabs">
-      <button class="tab active" data-tab="chat">Knowledge Chat</button>
-      <button class="tab" data-tab="ops">Dashboard & Action Center</button>
+      <button class="tab active" data-tab="chat">Agent Chat</button>
+      <button class="tab" data-tab="dashboard">Platform Ops</button>
     </div>
 
-    <section id="tab-chat" class="panel">
-      <div class="grid">
-        <div>
-          <label>Collection</label>
-          <select id="collection">
-            <option value="docs-aws">AWS Docs</option>
-            <option value="docs-azure">Azure Docs</option>
-            <option value="rag-docs">General RAG</option>
-          </select>
+    <!-- Chat Panel -->
+    <div id="tab-chat" class="panel active">
+      <div class="chat-layout">
+        <div class="chat-controls">
+          <div class="control-group">
+            <label>Knowledge Source</label>
+            <select id="collection">
+              <option value="docs-aws-git">AWS Docs (Git)</option>
+              <option value="docs-azure-git">Azure Docs (Git)</option>
+              <option value="rag-docs">General Default</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Model Engine</label>
+            <select id="model">
+              <option value="general">Qwen General 3B</option>
+              <option value="coder">Qwen Coder 3B</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Depth (Top K)</label>
+            <input id="topk" type="number" value="4" min="1" max="10">
+          </div>
         </div>
-        <div>
-          <label>Model</label>
-          <select id="model">
-            <option value="general">General</option>
-            <option value="coder">Coder</option>
-          </select>
+
+        <div class="chat-window" id="chatWindow">
+          <div class="message bot">
+            Hello! I am your AI assistant, powered by vLLM and Qdrant. Ask me anything about your configured knowledge bases. I will maintain the history of our conversation.
+          </div>
+          <div class="typing-indicator" id="typingIndicator">
+            <span></span><span></span><span></span>
+          </div>
         </div>
-        <div>
-          <label>Top K</label>
-          <input id="topk" type="number" value="4" min="1" max="10">
-        </div>
-        <div>
-          <label>Max Tokens</label>
-          <input id="maxTokens" type="number" value="512" min="64" max="2048">
+
+        <div class="chat-input-area">
+          <textarea id="questionInput" placeholder="Ask a question..." rows="1" onInput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'"></textarea>
+          <button id="sendBtn" class="send-btn" title="Send">
+            <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
+          </button>
         </div>
       </div>
-      <label>Question</label>
-      <textarea id="question" placeholder="Ask from indexed docs..."></textarea>
-      <button id="askBtn" class="btn">Ask</button>
-      <div id="chatStatus" class="status"></div>
-      <div id="answer" class="answer hidden"></div>
-      <div id="sources" class="sources hidden"></div>
-    </section>
+    </div>
 
-    <section id="tab-ops" class="panel hidden">
-      <div class="row">
-        <button id="refreshBtn" class="btn secondary">Refresh Live Status</button>
-        <button id="runAwsBtn" class="btn warn">Run AWS Ingestor Now</button>
-        <button id="runAzureBtn" class="btn warn">Run Azure Ingestor Now</button>
+    <!-- Dashboard Panel -->
+    <div id="tab-dashboard" class="panel">
+      <div class="dashboard-layout">
+        <div class="dash-header">
+          <h2>Platform Telemetry</h2>
+          <div class="actions">
+            <button id="refreshBtn" class="btn">Refresh Data</button>
+            <button id="runAwsBtn" class="btn danger">Force AWS Sync</button>
+            <button id="runAzureBtn" class="btn danger">Force Azure Sync</button>
+          </div>
+        </div>
+        <div id="opsStatus" class="dash-status">Click Refresh to load live cluster state...</div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-value" id="kPods">-</div><div class="kpi-label">Active Pods</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="kDeploy">-</div><div class="kpi-label">Deployments</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="kSts">-</div><div class="kpi-label">StatefulSets</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="kCron">-</div><div class="kpi-label">CronJobs</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="kCols">-</div><div class="kpi-label">Vector Indexes</div></div>
+        </div>
+
+        <div class="table-container">
+          <div class="table-title">ArgoCD Applications (ai-platform)</div>
+          <table id="argocdTable">
+            <thead><tr><th>App Name</th><th>Sync Status</th><th>Health Status</th></tr></thead>
+            <tbody><tr><td colspan="3" style="text-align: center; color: var(--text-muted)">No data loaded</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="table-container">
+          <div class="table-title">Recent Ingestion Jobs</div>
+          <table id="jobsTable">
+            <thead><tr><th>Job Name</th><th>Succeeded</th><th>Failed</th><th>Active</th><th>Started</th></tr></thead>
+            <tbody><tr><td colspan="5" style="text-align: center; color: var(--text-muted)">No data loaded</td></tr></tbody>
+          </table>
+        </div>
       </div>
-      <div id="opsStatus" class="status"></div>
-
-      <div class="cards">
-        <div class="kpi"><div class="n" id="kPods">-</div><div class="l">Pods</div></div>
-        <div class="kpi"><div class="n" id="kDeploy">-</div><div class="l">Deployments Ready</div></div>
-        <div class="kpi"><div class="n" id="kSts">-</div><div class="l">StatefulSets Ready</div></div>
-        <div class="kpi"><div class="n" id="kCron">-</div><div class="l">CronJobs</div></div>
-        <div class="kpi"><div class="n" id="kCols">-</div><div class="l">Qdrant Collections</div></div>
-      </div>
-
-      <h3>Argo CD (ai-platform)</h3>
-      <table id="argocdTable"><thead><tr><th>App</th><th>Sync</th><th>Health</th></tr></thead><tbody></tbody></table>
-
-      <h3>Docs Ingestor Jobs (latest)</h3>
-      <table id="jobsTable"><thead><tr><th>Job</th><th>Succeeded</th><th>Failed</th><th>Active</th><th>Start</th></tr></thead><tbody></tbody></table>
-
-      <h3>Pods</h3>
-      <table id="podsTable"><thead><tr><th>Name</th><th>Status</th><th>Restarts</th><th>Node</th></tr></thead><tbody></tbody></table>
-    </section>
+    </div>
   </div>
 
   <script>
     const API = "https://agent-api.michaelhomelab.work";
+    // Generate unique session ID for Redis memory
+    const sessionId = 'web-sess-' + Math.random().toString(36).substring(2, 15);
 
+    // Tab Switching Context
     const tabs = document.querySelectorAll('.tab');
-    tabs.forEach(t => t.addEventListener('click', () => {
-      tabs.forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-      document.getElementById('tab-chat').classList.toggle('hidden', t.dataset.tab !== 'chat');
-      document.getElementById('tab-ops').classList.toggle('hidden', t.dataset.tab !== 'ops');
-      if (t.dataset.tab === 'ops') refreshStatus();
-    }));
+    const panels = document.querySelectorAll('.panel');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        panels.forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+        if (tab.dataset.tab === 'dashboard' && document.getElementById('kPods').textContent === '-') {
+          refreshStatus();
+        }
+      });
+    });
 
-    function set(el, text, cls='') { el.textContent = text; el.className = `status ${cls}`.trim(); }
+    // Chat Logic
+    const chatWindow = document.getElementById('chatWindow');
+    const questionInput = document.getElementById('questionInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const typingIndicator = document.getElementById('typingIndicator');
 
-    document.getElementById('askBtn').addEventListener('click', async () => {
-      const status = document.getElementById('chatStatus');
-      const answer = document.getElementById('answer');
-      const sources = document.getElementById('sources');
-      const question = document.getElementById('question').value.trim();
-      if (!question) { set(status, 'Enter a question.', 'bad'); return; }
-      set(status, 'Running retrieval and generation...');
-      answer.classList.add('hidden');
-      sources.classList.add('hidden');
+    function appendMessage(text, isUser, sources = []) {
+      const div = document.createElement('div');
+      div.className = `message ${isUser ? 'user' : 'bot'}`;
+      text = text.replace(/</g, "&lt;").replace(/>/g, "&gt;"); // simple sanitize
+      div.innerHTML = text.replace(/\n/g, '<br>');
+      
+      if (!isUser && sources && sources.length > 0) {
+        const srcDiv = document.createElement('div');
+        srcDiv.className = 'sources-block';
+        let srcHtml = '<strong>Sources:</strong><br>';
+        sources.forEach((s, i) => {
+          const urlStr = s.url ? `<a href="${s.url}" target="_blank">[link]</a>` : '(internal document)';
+          srcHtml += `${i+1}. score: ${s.score.toFixed(3)} ${urlStr}<br>`;
+        });
+        srcDiv.innerHTML = srcHtml;
+        div.appendChild(srcDiv);
+      }
+      chatWindow.insertBefore(div, typingIndicator);
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function submitQuestion() {
+      const q = questionInput.value.trim();
+      if (!q) return;
+
+      appendMessage(q, true);
+      questionInput.value = '';
+      questionInput.style.height = 'auto';
+      sendBtn.disabled = true;
+      typingIndicator.style.display = 'flex';
+      scrollToBottom();
+
       try {
         const res = await fetch(`${API}/rag/ask`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            question,
+            question: q,
+            session_id: sessionId,
             collection: document.getElementById('collection').value,
             model: document.getElementById('model').value,
-            top_k: Number(document.getElementById('topk').value || 4),
-            max_tokens: Number(document.getElementById('maxTokens').value || 512)
+            top_k: Number(document.getElementById('topk').value || 4)
           })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-        answer.textContent = data.answer || '(no answer)';
-        answer.classList.remove('hidden');
-        const list = (data.sources || []).map((s, i) => {
-          const link = s.url ? `<a href="${s.url}" target="_blank" rel="noopener">${s.url}</a>` : '(no url)';
-          return `<div>${i + 1}. score=${Number(s.score || 0).toFixed(3)} | ${link}</div>`;
-        }).join('');
-        sources.innerHTML = `<strong>Sources</strong>${list}`;
-        sources.classList.remove('hidden');
-        set(status, 'Completed.', 'ok');
-      } catch (e) {
-        set(status, `Request failed: ${e.message}`, 'bad');
+        
+        appendMessage(data.answer || "I'm sorry, I couldn't generate an answer.", false, data.sources);
+      } catch (err) {
+        appendMessage(`⚠️ Error: ${err.message}`, false);
+      } finally {
+        typingIndicator.style.display = 'none';
+        sendBtn.disabled = false;
+        questionInput.focus();
+      }
+    }
+
+    sendBtn.addEventListener('click', submitQuestion);
+    questionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitQuestion();
       }
     });
 
-    function fillTable(tableId, rows, mapFn) {
-      const tbody = document.querySelector(`#${tableId} tbody`);
-      tbody.innerHTML = rows.map(mapFn).join('') || '<tr><td colspan="5">No data</td></tr>';
+    // Dashboard Logic
+    function badge(text, okState) {
+      const cls = okState === true ? 'badge-ok' : (okState === false ? 'badge-err' : 'badge-warn');
+      return `<span class="status-badge ${cls}">${text}</span>`;
     }
 
     async function refreshStatus() {
-      const status = document.getElementById('opsStatus');
-      set(status, 'Fetching live platform status...');
+      const statusEl = document.getElementById('opsStatus');
+      statusEl.textContent = 'Fetching telemetry data...';
       try {
         const res = await fetch(`${API}/ops/status`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
 
-        document.getElementById('kPods').textContent = (data.pods || []).length;
-        document.getElementById('kDeploy').textContent = (data.deployments || []).filter(x => x.ready === x.desired).length + '/' + (data.deployments || []).length;
-        document.getElementById('kSts').textContent = (data.statefulsets || []).filter(x => x.ready === x.desired).length + '/' + (data.statefulsets || []).length;
-        document.getElementById('kCron').textContent = (data.cronjobs || []).length;
-        document.getElementById('kCols').textContent = (data.qdrant_collections || []).length;
+        document.getElementById('kPods').textContent = data.pods.length;
+        document.getElementById('kDeploy').textContent = `${data.deployments.filter(d=>d.ready===d.desired).length}/${data.deployments.length}`;
+        document.getElementById('kSts').textContent = `${data.statefulsets.filter(s=>s.ready===s.desired).length}/${data.statefulsets.length}`;
+        document.getElementById('kCron').textContent = data.cronjobs.length;
+        document.getElementById('kCols').textContent = data.qdrant_collections.length;
 
-        fillTable('argocdTable', data.argocd_apps || [], r => `<tr><td>${r.name}</td><td>${r.sync}</td><td>${r.health}</td></tr>`);
-        fillTable('jobsTable', (data.jobs || []).filter(j => j.name.includes('docs-ingestor')).slice(0, 10), r =>
-          `<tr><td>${r.name}</td><td>${r.succeeded}</td><td>${r.failed}</td><td>${r.active}</td><td>${r.start_time || ''}</td></tr>`
-        );
-        fillTable('podsTable', (data.pods || []).slice(0, 20), r =>
-          `<tr><td>${r.name}</td><td>${r.status}</td><td>${r.restarts}</td><td>${r.node || ''}</td></tr>`
-        );
-        set(status, `Last refresh: ${new Date().toLocaleTimeString()}`, 'ok');
-      } catch (e) {
-        set(status, `Failed to fetch status: ${e.message}`, 'bad');
+        const tbodyArgo = document.querySelector('#argocdTable tbody');
+        tbodyArgo.innerHTML = data.argocd_apps.map(a => {
+          const syncOk = a.sync === 'Synced';
+          const healthOk = a.health === 'Healthy';
+          return `<tr><td>${a.name}</td><td>${badge(a.sync, syncOk)}</td><td>${badge(a.health, healthOk)}</td></tr>`;
+        }).join('') || '<tr><td colspan="3" style="text-align: center">No data</td></tr>';
+
+        const tbodyJobs = document.querySelector('#jobsTable tbody');
+        const docsJobs = data.jobs.filter(j => j.name.includes('ingestor')).slice(0, 10);
+        tbodyJobs.innerHTML = docsJobs.map(j => {
+          const ok = j.failed === 0;
+          return `<tr><td>${j.name}</td><td>${j.succeeded}</td><td>${j.failed > 0 ? badge(j.failed, false) : 0}</td><td>${j.active}</td><td style="color:var(--text-muted);font-size:0.8rem">${j.start_time || ''}</td></tr>`;
+        }).join('') || '<tr><td colspan="5" style="text-align: center">No jobs found</td></tr>';
+
+        statusEl.textContent = `Last synchronized: ${new Date().toLocaleTimeString()} ✅`;
+        statusEl.style.color = 'var(--success)';
+      } catch (err) {
+        statusEl.textContent = `Failed to fetch telemetry: ${err.message} ❌`;
+        statusEl.style.color = 'var(--danger)';
       }
     }
 
-    async function runIngestor(source) {
-      const status = document.getElementById('opsStatus');
-      set(status, `Triggering ${source} ingestor job...`);
+    async function triggerJob(target) {
+      const statusEl = document.getElementById('opsStatus');
+      statusEl.textContent = `Triggering ${target.toUpperCase()} docs ingestor...`;
+      statusEl.style.color = 'var(--warn)';
       try {
         const res = await fetch(`${API}/ops/actions/run-ingestor`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ source })
+          body: JSON.stringify({ source: target })
         });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-        set(status, `${source.toUpperCase()} ingestor started: ${data.job_name}`, 'ok');
-        refreshStatus();
-      } catch (e) {
-        set(status, `Failed to trigger ${source}: ${e.message}`, 'bad');
+        statusEl.textContent = `Triggered job: ${data.job_name} ✅`;
+        statusEl.style.color = 'var(--success)';
+        setTimeout(refreshStatus, 2000);
+      } catch (err) {
+        statusEl.textContent = `Failed to trigger job: ${err.message} ❌`;
+        statusEl.style.color = 'var(--danger)';
       }
     }
 
     document.getElementById('refreshBtn').addEventListener('click', refreshStatus);
-    document.getElementById('runAwsBtn').addEventListener('click', () => runIngestor('aws'));
-    document.getElementById('runAzureBtn').addEventListener('click', () => runIngestor('azure'));
+    document.getElementById('runAwsBtn').addEventListener('click', () => triggerJob('aws'));
+    document.getElementById('runAzureBtn').addEventListener('click', () => triggerJob('azure'));
+
   </script>
 </body>
 </html>

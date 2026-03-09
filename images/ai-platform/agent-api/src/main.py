@@ -1,9 +1,11 @@
+import json
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 
 import httpx
+import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from kubernetes import client as k8s_client
@@ -19,7 +21,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.5.0")
+app = FastAPI(title="agent-api", version="0.8.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -77,6 +79,7 @@ class ChatRequest(BaseModel):
     model: str = Field(default="general", pattern="^(general|coder)$")
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=256, ge=1, le=2048)
+    session_id: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -108,6 +111,7 @@ class RagAskRequest(BaseModel):
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, ge=32, le=2048)
     service: str | None = None
+    session_id: str | None = None
 
 
 class RagSource(BaseModel):
@@ -138,6 +142,37 @@ def _base_url(model: str) -> str:
     if model == "coder":
         return os.getenv("VLLM_CODER_BASE_URL", "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1")
     return os.getenv("VLLM_GENERAL_BASE_URL", os.getenv("VLLM_BASE_URL", "http://vllm-llm.ai-platform.svc.cluster.local:8000/v1"))
+
+
+def _redis_client() -> redis.Redis:
+    url = os.getenv("REDIS_URL", "redis://redis.ai-platform.svc.cluster.local:6379")
+    return redis.from_url(url, decode_responses=True)
+
+
+async def _get_history(session_id: str | None) -> list[dict]:
+    if not session_id:
+        return []
+    try:
+        r = _redis_client()
+        data = await r.lrange(f"chat_history:{session_id}", 0, -1)
+        return [json.loads(x) for x in data]
+    except Exception as e:
+        print(f"Redis error: {e}")
+        return []
+
+
+async def _add_history(session_id: str | None, user_text: str, assistant_text: str) -> None:
+    if not session_id:
+        return
+    try:
+        r = _redis_client()
+        key = f"chat_history:{session_id}"
+        await r.rpush(key, json.dumps({"role": "user", "content": user_text}))
+        await r.rpush(key, json.dumps({"role": "assistant", "content": assistant_text}))
+        await r.ltrim(key, -10, -1)
+        await r.expire(key, 86400)
+    except Exception as e:
+        print(f"Redis error: {e}")
 
 
 def _model_id(model: str) -> str:
@@ -264,9 +299,12 @@ def readyz() -> dict[str, str]:
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
+    messages = await _get_history(req.session_id)
+    messages.append({"role": "user", "content": req.prompt})
+
     payload = {
         "model": _model_id(req.model),
-        "messages": [{"role": "user", "content": req.prompt}],
+        "messages": messages,
         "temperature": req.temperature,
         "max_tokens": req.max_tokens,
     }
@@ -282,6 +320,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
 
     choices = body.get("choices", [])
     content = choices[0].get("message", {}).get("content", "") if choices else ""
+    if content:
+        await _add_history(req.session_id, req.prompt, content)
     return ChatResponse(model=req.model, text=content)
 
 
@@ -401,16 +441,18 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             if not context_parts:
                 raise HTTPException(status_code=404, detail=f"no context found in collection '{req.collection}'")
 
-            prompt = (
-                "Use only the provided context to answer the question. "
-                "If the answer is not in context, say you don't know.\n\n"
-                f"Context:\n{chr(10).join(context_parts)}\n\nQuestion: {req.question}"
-            )
+            messages = await _get_history(req.session_id)
+            sys_prompt = "Use only the provided context to answer the user's question.\n\nContext:\n" + chr(10).join(context_parts)
+            
+            final_messages = [{"role": "system", "content": sys_prompt}]
+            final_messages.extend(messages)
+            final_messages.append({"role": "user", "content": req.question})
+
             llm_resp = await client.post(
                 f"{_base_url(req.model)}/chat/completions",
                 json={
                     "model": _model_id(req.model),
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": final_messages,
                     "temperature": req.temperature,
                     "max_tokens": req.max_tokens,
                 },
@@ -424,6 +466,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
 
     choices = body.get("choices", [])
     answer = choices[0].get("message", {}).get("content", "") if choices else ""
+    if answer:
+        await _add_history(req.session_id, req.question, answer)
     return RagAskResponse(model=req.model, answer=answer, sources=sources)
 
 

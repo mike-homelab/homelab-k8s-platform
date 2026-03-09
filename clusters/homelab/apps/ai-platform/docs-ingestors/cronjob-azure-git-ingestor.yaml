@@ -34,9 +34,9 @@ spec:
                 - name: RESET_COLLECTION_ON_START
                   value: "true"
                 - name: EMBED_WORKERS
-                  value: "6"
+                  value: "24"
                 - name: EMBED_BATCH_SIZE
-                  value: "12"
+                  value: "64"
               resources:
                 requests:
                   cpu: "1"
