@@ -25,6 +25,7 @@ SOURCE_NAME = env("SOURCE_NAME", "unknown")
 TENANT = env("TENANT", SOURCE_NAME)
 START_URL = env("START_URL", "")
 GIT_URL = env("GIT_URL", "")
+SPARSE_CHECKOUT_DIRS = env("SPARSE_CHECKOUT_DIRS", "")
 ALLOWED_HOSTS = {h.strip() for h in env("ALLOWED_HOSTS", "").split(",") if h.strip()}
 URL_PREFIXES = [p.strip() for p in env("URL_PREFIXES", "").split(",") if p.strip()]
 COLLECTION = env("QDRANT_COLLECTION", f"docs-{SOURCE_NAME}")
@@ -207,7 +208,16 @@ def run_git_ingestion() -> None:
         print(f"[{SOURCE_NAME}] cloning {GIT_URL} into {td}...")
         try:
             # Use tree-less clone to avoid downloading massive blobs (media/images)
-            subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", GIT_URL, td], check=True, capture_output=True)
+            clone_cmd = ["git", "clone", "--depth", "1", "--filter=blob:none"]
+            if SPARSE_CHECKOUT_DIRS:
+                clone_cmd.append("--sparse")
+            clone_cmd.extend([GIT_URL, td])
+            subprocess.run(clone_cmd, check=True, capture_output=True)
+
+            if SPARSE_CHECKOUT_DIRS:
+                dirs = [d.strip() for d in SPARSE_CHECKOUT_DIRS.split(",") if d.strip()]
+                if dirs:
+                    subprocess.run(["git", "sparse-checkout", "set"] + dirs, cwd=td, check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Git clone failed: {e.stderr.decode()}")
 
