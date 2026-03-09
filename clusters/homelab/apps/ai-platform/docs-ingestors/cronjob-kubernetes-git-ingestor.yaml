@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubernetes-git-ingestor
+  namespace: ai-platform
+spec:
+  schedule: "0 4 * * *"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ingestor
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.3
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: docs-ingestors-config
+              env:
+                - name: SOURCE_TYPE
+                  value: git
+                - name: SOURCE_NAME
+                  value: kubernetes
+                - name: TENANT
+                  value: kubernetes-docs
+                - name: GIT_URL
+                  value: https://github.com/kubernetes/website.git
+                - name: SPARSE_CHECKOUT_DIRS
+                  value: "content/en/docs"
+                - name: QDRANT_COLLECTION
+                  value: docs-kubernetes-git
+                - name: RESET_COLLECTION_ON_START
+                  value: "true"
+                - name: EMBED_WORKERS
+                  value: "24"
+                - name: EMBED_BATCH_SIZE
+                  value: "32"
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: "2Gi"
+                limits:
+                  cpu: "2"
+                  memory: "4Gi"

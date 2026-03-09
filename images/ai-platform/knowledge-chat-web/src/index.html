@@ -243,6 +243,7 @@
             <select id="collection">
               <option value="docs-aws-git">AWS Docs (Git)</option>
               <option value="docs-azure-git">Azure Docs (Git)</option>
+              <option value="docs-kubernetes-git">Kubernetes Docs (Git)</option>
               <option value="rag-docs">General Default</option>
             </select>
           </div>
@@ -286,6 +287,7 @@
             <button id="refreshBtn" class="btn">Refresh Data</button>
             <button id="runAwsBtn" class="btn danger">Force AWS Sync</button>
             <button id="runAzureBtn" class="btn danger">Force Azure Sync</button>
+            <button id="runK8sBtn" class="btn danger">Force K8s Sync</button>
           </div>
         </div>
         <div id="opsStatus" class="dash-status">Click Refresh to load live cluster state...</div>
@@ -478,6 +480,7 @@
     document.getElementById('refreshBtn').addEventListener('click', refreshStatus);
     document.getElementById('runAwsBtn').addEventListener('click', () => triggerJob('aws'));
     document.getElementById('runAzureBtn').addEventListener('click', () => triggerJob('azure'));
+    document.getElementById('runK8sBtn').addEventListener('click', () => triggerJob('kubernetes'));
 
   </script>
 </body>
