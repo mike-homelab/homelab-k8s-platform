@@ -36,7 +36,7 @@ spec:
                 - name: EMBED_WORKERS
                   value: "24"
                 - name: EMBED_BATCH_SIZE
-                  value: "64"
+                  value: "32"
               resources:
                 requests:
                   cpu: "1"

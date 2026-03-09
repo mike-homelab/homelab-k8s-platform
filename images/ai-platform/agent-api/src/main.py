@@ -583,7 +583,7 @@ def run_ingestor(req: TriggerIngestorRequest) -> TriggerIngestorResponse:
     _ensure_k8s()
     batch = k8s_client.BatchV1Api()
     namespace = "ai-platform"
-    cronjob_name = "aws-docs-ingestor" if req.source == "aws" else "azure-docs-ingestor"
+    cronjob_name = "aws-git-ingestor" if req.source == "aws" else "azure-git-ingestor"
 
     try:
         cronjob = batch.read_namespaced_cron_job(name=cronjob_name, namespace=namespace)
