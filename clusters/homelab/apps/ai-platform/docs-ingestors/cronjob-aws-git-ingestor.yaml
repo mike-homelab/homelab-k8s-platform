@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: azure-docs-ingestor
+  name: aws-git-ingestor
   namespace: ai-platform
 spec:
-  schedule: "0 3 * * *"
+  schedule: "30 2 * * *"
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 2
   jobTemplate:
@@ -15,28 +15,28 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.2.1
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.0
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
                     name: docs-ingestors-config
               env:
+                - name: SOURCE_TYPE
+                  value: git
                 - name: SOURCE_NAME
-                  value: azure
+                  value: aws
                 - name: TENANT
-                  value: azure-docs
-                - name: START_URL
-                  value: https://learn.microsoft.com/en-us/azure/
-                - name: ALLOWED_HOSTS
-                  value: learn.microsoft.com
-                - name: URL_PREFIXES
-                  value: https://learn.microsoft.com/en-us/azure/
+                  value: aws-docs
+                - name: GIT_URL
+                  value: https://github.com/awsdocs/amazon-ec2-user-guide.git
                 - name: QDRANT_COLLECTION
-                  value: docs-azure
+                  value: docs-aws-git
                 - name: RESET_COLLECTION_ON_START
                   value: "true"
-                - name: MAX_PAGES
-                  value: "10000"
+                - name: EMBED_WORKERS
+                  value: "6"
+                - name: EMBED_BATCH_SIZE
+                  value: "12"
               resources:
                 requests:
                   cpu: "1"

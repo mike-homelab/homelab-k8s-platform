@@ -1,4 +1,4 @@
 resources:
   - configmap.yaml
-  - cronjob-aws-docs-ingestor.yaml
-  - cronjob-azure-docs-ingestor.yaml
+  - cronjob-aws-git-ingestor.yaml
+  - cronjob-azure-git-ingestor.yaml

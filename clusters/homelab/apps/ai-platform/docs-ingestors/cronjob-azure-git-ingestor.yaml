@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: aws-docs-ingestor
+  name: azure-git-ingestor
   namespace: ai-platform
 spec:
-  schedule: "30 2 * * *"
+  schedule: "0 3 * * *"
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 2
   jobTemplate:
@@ -15,36 +15,28 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.2.1
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.0
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
                     name: docs-ingestors-config
               env:
+                - name: SOURCE_TYPE
+                  value: git
                 - name: SOURCE_NAME
-                  value: aws
+                  value: azure
                 - name: TENANT
-                  value: aws-docs
-                - name: START_URL
-                  value: https://docs.aws.amazon.com/
-                - name: SITEMAP_URL
-                  value: https://docs.aws.amazon.com/sitemap_index.xml
-                - name: ALLOWED_HOSTS
-                  value: docs.aws.amazon.com
-                - name: URL_PREFIXES
-                  value: https://docs.aws.amazon.com/
+                  value: azure-docs
+                - name: GIT_URL
+                  value: https://github.com/MicrosoftDocs/azure-docs.git
                 - name: QDRANT_COLLECTION
-                  value: docs-aws
-                - name: PRIORITY_KEYWORDS
-                  value: guide
+                  value: docs-azure-git
+                - name: RESET_COLLECTION_ON_START
+                  value: "true"
                 - name: EMBED_WORKERS
                   value: "6"
                 - name: EMBED_BATCH_SIZE
                   value: "12"
-                - name: RESET_COLLECTION_ON_START
-                  value: "true"
-                - name: MAX_PAGES
-                  value: "10000"
               resources:
                 requests:
                   cpu: "1"
