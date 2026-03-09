@@ -206,7 +206,8 @@ def run_git_ingestion() -> None:
     with tempfile.TemporaryDirectory() as td:
         print(f"[{SOURCE_NAME}] cloning {GIT_URL} into {td}...")
         try:
-            subprocess.run(["git", "clone", "--depth", "1", GIT_URL, td], check=True, capture_output=True)
+            # Use tree-less clone to avoid downloading massive blobs (media/images)
+            subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", GIT_URL, td], check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Git clone failed: {e.stderr.decode()}")
 
