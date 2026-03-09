@@ -34,6 +34,20 @@ spec:
           volumeMounts:
             - name: redis-data
               mountPath: /data
+        - name: redis-exporter
+          image: oliver006/redis_exporter:v1.65.0-alpine
+          args:
+            - "-redis.addr=redis://localhost:6379"
+          ports:
+            - containerPort: 9121
+              name: metrics
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
   volumeClaimTemplates:
     - metadata:
         name: redis-data
