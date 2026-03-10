@@ -359,68 +359,89 @@ async def rag_index(req: RagIndexRequest) -> RagIndexResponse:
     return RagIndexResponse(collection=req.collection, doc_id=doc_id, chunks_indexed=len(chunks))
 
 
+async def _determine_collections(client: httpx.AsyncClient, question: str, model: str) -> list[str]:
+    sys_prompt = (
+        "You are an expert routing agent. Determine which knowledge bases are relevant to the user's question.\n"
+        "Available knowledge bases: 'docs-aws-git', 'docs-azure-git', 'docs-kubernetes-git'.\n"
+        "Output ONLY a JSON list of strings, for example: [\"docs-aws-git\", \"docs-kubernetes-git\"]\n"
+        "Do not include markdown or explanations."
+    )
+    try:
+        resp = await client.post(
+            f"{_base_url(model)}/chat/completions",
+            json={
+                "model": _model_id(model),
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": question}
+                ],
+                "temperature": 0.0,
+                "max_tokens": 50,
+            },
+        )
+        resp.raise_for_status()
+        content = resp.json().get("choices", [])[0].get("message", {}).get("content", "").strip()
+        content = content.replace("```json", "").replace("```", "").strip()
+        cols = json.loads(content)
+        if not isinstance(cols, list):
+            return ["rag-docs"]
+        return [c for c in cols if c in ("docs-aws-git", "docs-azure-git", "docs-kubernetes-git", "rag-docs")]
+    except Exception:
+        return ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"]
+
+
 @app.post("/rag/ask", response_model=RagAskResponse)
 async def rag_ask(req: RagAskRequest) -> RagAskResponse:
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             query_vec = (await _embed_texts(client, [req.question]))[0]
-            service = _infer_service(req.collection, req.question, req.service)
+            
+            if req.collection == "auto":
+                collections_to_search = await _determine_collections(client, req.question, req.model)
+                if not collections_to_search:
+                    collections_to_search = ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"]
+            else:
+                collections_to_search = [req.collection]
+
             terms = _query_terms(req.question)
-            summary_must = [{"key": "doc_type", "match": {"value": "summary"}}]
-            if service and req.collection in {"docs-aws", "docs-azure"}:
-                summary_must.append({"key": "service", "match": {"value": service}})
-            summary_hits = await _qdrant_search(
-                client,
-                req.collection,
-                query_vec,
-                max(req.page_k * 8, 40),
-                {"must": summary_must},
-            )
-            if not summary_hits and len(summary_must) > 1:
-                summary_hits = await _qdrant_search(
-                    client,
-                    req.collection,
-                    query_vec,
-                    max(req.page_k * 8, 40),
-                    {"must": [{"key": "doc_type", "match": {"value": "summary"}}]},
-                )
+            all_chunk_hits = []
+            
+            for coll in collections_to_search:
+                try:
+                    service = _infer_service(coll, req.question, req.service)
+                    summary_must = [{"key": "doc_type", "match": {"value": "summary"}}]
+                    if service and coll in {"docs-aws-git", "docs-azure-git"}:
+                        summary_must.append({"key": "service", "match": {"value": service}})
+                    
+                    summary_hits = await _qdrant_search(client, coll, query_vec, max(req.page_k * 8, 40), {"must": summary_must})
+                    if not summary_hits and len(summary_must) > 1:
+                        summary_hits = await _qdrant_search(client, coll, query_vec, max(req.page_k * 8, 40), {"must": [{"key": "doc_type", "match": {"value": "summary"}}]})
+                        
+                    summary_hits = sorted(summary_hits, key=lambda h: _boosted_score(h, terms), reverse=True)
+                    selected_urls: list[str] = []
+                    for h in summary_hits:
+                        u = str(h.get("payload", {}).get("url", "")).strip()
+                        if u and u not in selected_urls:
+                            selected_urls.append(u)
+                        if len(selected_urls) >= req.page_k:
+                            break
+                            
+                    coll_chunk_hits: list[dict] = []
+                    for u in selected_urls:
+                        page_hits = await _qdrant_search(client, coll, query_vec, max(3, req.top_k), {"must": [{"key": "doc_type", "match": {"value": "chunk"}}, {"key": "url", "match": {"value": u}}]})
+                        coll_chunk_hits.extend(page_hits)
+                        
+                    if not coll_chunk_hits:
+                        fallback_must = [{"key": "doc_type", "match": {"value": "chunk"}}]
+                        if service and coll in {"docs-aws-git", "docs-azure-git"}:
+                            fallback_must.append({"key": "service", "match": {"value": service}})
+                        coll_chunk_hits = await _qdrant_search(client, coll, query_vec, max(req.top_k * 8, 20), {"must": fallback_must})
+                        
+                    all_chunk_hits.extend(coll_chunk_hits)
+                except Exception:
+                    continue
 
-            summary_hits = sorted(summary_hits, key=lambda h: _boosted_score(h, terms), reverse=True)
-            selected_urls: list[str] = []
-            for h in summary_hits:
-                u = str(h.get("payload", {}).get("url", "")).strip()
-                if u and u not in selected_urls:
-                    selected_urls.append(u)
-                if len(selected_urls) >= req.page_k:
-                    break
-
-            chunk_hits: list[dict] = []
-            for u in selected_urls:
-                page_hits = await _qdrant_search(
-                    client,
-                    req.collection,
-                    query_vec,
-                    max(3, req.top_k),
-                    {"must": [
-                        {"key": "doc_type", "match": {"value": "chunk"}},
-                        {"key": "url", "match": {"value": u}},
-                    ]},
-                )
-                chunk_hits.extend(page_hits)
-
-            if not chunk_hits:
-                fallback_must = [{"key": "doc_type", "match": {"value": "chunk"}}]
-                if service and req.collection in {"docs-aws", "docs-azure"}:
-                    fallback_must.append({"key": "service", "match": {"value": service}})
-                chunk_hits = await _qdrant_search(
-                    client,
-                    req.collection,
-                    query_vec,
-                    max(req.top_k * 8, 20),
-                    {"must": fallback_must},
-                )
-
-            hits = sorted(chunk_hits, key=lambda h: _boosted_score(h, terms), reverse=True)[: req.top_k]
+            hits = sorted(all_chunk_hits, key=lambda h: _boosted_score(h, terms), reverse=True)[: req.top_k]
             sources: list[RagSource] = []
             context_parts: list[str] = []
             for hit in hits:
