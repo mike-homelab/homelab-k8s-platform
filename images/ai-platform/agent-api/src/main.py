@@ -108,8 +108,8 @@ class RagAskRequest(BaseModel):
     collection: str = "rag-docs"
     top_k: int = Field(default=4, ge=1, le=10)
     page_k: int = Field(default=6, ge=2, le=20)
-    temperature: float = Field(default=0.2, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=512, ge=32, le=2048)
+    temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=2048, ge=32, le=4096)
     service: str | None = None
     session_id: str | None = None
 
@@ -483,7 +483,20 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                 raise HTTPException(status_code=404, detail=f"no context found in collection '{req.collection}'")
 
             messages = await _get_history(req.session_id)
-            sys_prompt = "Use only the provided context to answer the user's question.\n\nContext:\n" + chr(10).join(context_parts)
+            
+            sys_prompt = (
+                "You are an elite Cloud Architect and Kubernetes Platform Engineer assisting an administrator with their homelab. "
+                "The user runs a bare-metal homelab utilizing GitOps (ArgoCD), an LGTM observability stack (Prometheus, Mimir, Tempo, Grafana), "
+                "vLLM AI GPU workers, and Qdrant. Consider this architecture when giving advice.\n\n"
+                "When asked to compare technologies, evaluate designs, or provide summaries:\n"
+                "1. ALWAYS structure your output using rich Markdown.\n"
+                "2. Use comprehensive Tables to benchmark features side-by-side.\n"
+                "3. Break down 'Key Architectural Differences' and 'Operational Experience'.\n"
+                "4. End with a customized 'Recommendation' tailored specifically to the user's homelab stack.\n\n"
+                "Use the following retrieved institutional documentation to ground your facts, but confidently use your general expert knowledge to "
+                "fill in gaps, structure the narrative, and provide deep reasoning.\n\n"
+                "Context:\n" + chr(10).join(context_parts)
+            )
             
             final_messages = [{"role": "system", "content": sys_prompt}]
             final_messages.extend(messages)
