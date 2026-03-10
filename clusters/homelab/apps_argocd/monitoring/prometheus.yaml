@@ -27,6 +27,10 @@ spec:
         server:
           enabled: true
 
+          global:
+            external_labels:
+              origin_prometheus: prometheus
+
           persistentVolume:
             enabled: false
 
