@@ -167,14 +167,28 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .chat-input-area { display: flex; gap: 12px; position: relative; }
-    .chat-input-area textarea {
-      flex-grow: 1; background: var(--input-bg); border: 1px solid var(--panel-border);
+    .chat-input-area { display: flex; gap: 12px; position: relative; align-items: flex-end; }
+    .chat-input-wrapper { display: flex; flex-direction: column; gap: 10px; flex-grow: 1; }
+    .chat-settings-ribbon {
+      display: flex; gap: 15px; padding: 0 5px; font-size: 0.8rem; color: var(--text-muted);
+      align-items: center; border-radius: 8px;
+    }
+    .chat-settings-ribbon label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .chat-settings-ribbon select {
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e2e8f0; border-radius: 6px; padding: 4px 8px; font-size: 0.8rem; outline: none;
+      transition: all 0.2s; cursor: pointer;
+    }
+    .chat-settings-ribbon select:focus, .chat-settings-ribbon select:hover { border-color: var(--brand-secondary); background: rgba(255,255,255,0.1); }
+    .chat-settings-ribbon select option { background: var(--panel-bg); color: #fff; }
+
+    .chat-input-wrapper textarea {
+      width: 100%; background: var(--input-bg); border: 1px solid var(--panel-border);
       border-radius: 16px; padding: 15px 20px; color: var(--text-main); font-family: inherit;
       font-size: 1rem; resize: none; min-height: 56px; max-height: 150px; outline: none;
       transition: all 0.3s ease; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
     }
-    .chat-input-area textarea:focus { border-color: var(--brand-secondary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
+    .chat-input-wrapper textarea:focus { border-color: var(--brand-secondary); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
     .send-btn {
       width: 56px; height: 56px; border-radius: 16px; border: none; background: var(--btn-bg);
       color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;
@@ -301,7 +315,40 @@
           </div>
   
           <div class="chat-input-area">
-            <textarea id="questionInput" placeholder="Ask a question..." rows="1" onInput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'"></textarea>
+            <div class="chat-input-wrapper">
+              <div class="chat-settings-ribbon">
+                <label>Tokens: 
+                  <select id="optTokens">
+                    <option value="512">512</option>
+                    <option value="1024">1024</option>
+                    <option value="2048" selected>2048</option>
+                    <option value="4096">4096</option>
+                    <option value="8192">8192</option>
+                  </select>
+                </label>
+                <label>Chunks: 
+                  <select id="optChunks">
+                    <option value="2">2</option>
+                    <option value="4">4</option>
+                    <option value="8">8</option>
+                    <option value="10" selected>10</option>
+                    <option value="16">16</option>
+                    <option value="32">32</option>
+                    <option value="64">64</option>
+                  </select>
+                </label>
+                <label>Temp: 
+                  <select id="optTemp">
+                    <option value="0.1">0.1</option>
+                    <option value="0.4" selected>0.4</option>
+                    <option value="0.7">0.7</option>
+                    <option value="1.0">1.0</option>
+                    <option value="1.5">1.5</option>
+                  </select>
+                </label>
+              </div>
+              <textarea id="questionInput" placeholder="Ask a cross-cloud architecture question..." rows="1" onInput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'"></textarea>
+            </div>
             <button id="sendBtn" class="send-btn" title="Send">
               <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
             </button>
@@ -491,7 +538,9 @@
             session_id: sessionId,
             collection: "auto",
             model: "general",
-            top_k: 10
+            top_k: parseInt(document.getElementById('optChunks').value),
+            max_tokens: parseInt(document.getElementById('optTokens').value),
+            temperature: parseFloat(document.getElementById('optTemp').value)
           })
         });
         const data = await res.json();

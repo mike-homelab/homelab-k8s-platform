@@ -106,10 +106,10 @@ class RagAskRequest(BaseModel):
     question: str = Field(..., min_length=1)
     model: str = Field(default="general", pattern="^(general|coder)$")
     collection: str = "rag-docs"
-    top_k: int = Field(default=4, ge=1, le=10)
+    top_k: int = Field(default=8, ge=1, le=64)
     page_k: int = Field(default=6, ge=2, le=20)
     temperature: float = Field(default=0.4, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=2048, ge=32, le=4096)
+    max_tokens: int = Field(default=2048, ge=32, le=8192)
     service: str | None = None
     session_id: str | None = None
 
