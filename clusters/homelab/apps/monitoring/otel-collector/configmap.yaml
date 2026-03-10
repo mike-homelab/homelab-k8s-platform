@@ -25,7 +25,7 @@ data:
       batch:
         send_batch_size: 1024
         timeout: 5s
-      k8sattributes:
+      k8s_attributes:
         auth_type: "serviceAccount"
         passthrough: false
         filter:
@@ -67,15 +67,15 @@ data:
       pipelines:
         logs:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
+          processors: [k8s_attributes, batch]
           exporters: [otlp_http/loki]
 
         traces:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
+          processors: [k8s_attributes, batch]
           exporters: [otlp_http/tempo]
 
         metrics:
           receivers: [otlp]
-          processors: [k8sattributes, batch]
+          processors: [k8s_attributes, batch]
           exporters: [prometheusremotewrite]
