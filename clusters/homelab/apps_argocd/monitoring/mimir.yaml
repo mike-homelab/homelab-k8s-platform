@@ -25,7 +25,7 @@ spec:
         mimir:
           structuredConfig:
             limits:
-              max_label_names_per_series: 100
+              max_label_names_per_series: 200
 
             common:
               storage:
