@@ -81,10 +81,10 @@ spec:
           replicas: 2
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 500m
+              memory: 512Mi
             limits:
-              memory: 256Mi
+              memory: 1024Mi
 
         querier:
           replicas: 2
