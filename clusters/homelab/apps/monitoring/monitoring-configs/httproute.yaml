@@ -116,5 +116,5 @@ spec:
             value: /
 
       backendRefs:
-        - name: prometheus-server
+        - name: prometheus-scraper-server
           port: 80
