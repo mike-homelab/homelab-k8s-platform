@@ -507,14 +507,14 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
 
 @app.post("/ops/query-telemetry", response_model=QueryTelemetryResponse)
 async def ops_query_telemetry(req: QueryTelemetryRequest):
-    mimir_url = "http://mimir-distributor.monitoring.svc.cluster.local:8080/prometheus/api/v1/query"
+    prometheus_url = "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090/api/v1/query"
     headers = {"X-Scope-OrgID": "anonymous"}
     resp_data = QueryTelemetryResponse()
     
     async with httpx.AsyncClient(timeout=5.0) as client:
         # tokens
         q_tokens = "sum(increase(vllm:generation_tokens_total[5m]))"
-        r = await client.get(mimir_url, params={"query": q_tokens}, headers=headers)
+        r = await client.get(prometheus_url, params={"query": q_tokens})
         if r.status_code == 200:
             res = r.json().get("data", {}).get("result", [])
             if res:
@@ -522,7 +522,7 @@ async def ops_query_telemetry(req: QueryTelemetryRequest):
             
         # gpu_cache
         q_gpu = "avg(vllm:gpu_cache_usage_perc) * 100"
-        r = await client.get(mimir_url, params={"query": q_gpu}, headers=headers)
+        r = await client.get(prometheus_url, params={"query": q_gpu})
         if r.status_code == 200:
             res = r.json().get("data", {}).get("result", [])
             if res:
@@ -530,7 +530,7 @@ async def ops_query_telemetry(req: QueryTelemetryRequest):
             
         # cpu
         q_cpu = 'sum(rate(container_cpu_usage_seconds_total{namespace="ai-platform", pod=~"vllm.*|agent-api.*"}[5m])) by (pod)'
-        r = await client.get(mimir_url, params={"query": q_cpu}, headers=headers)
+        r = await client.get(prometheus_url, params={"query": q_cpu})
         if r.status_code == 200:
             for item in r.json().get("data", {}).get("result", []):
                 pod = item.get("metric", {}).get("pod", "")
@@ -542,7 +542,7 @@ async def ops_query_telemetry(req: QueryTelemetryRequest):
                     
         # ram
         q_ram = 'sum(container_memory_working_set_bytes{namespace="ai-platform", pod=~"vllm.*|agent-api.*"}) by (pod) / 1024 / 1024'
-        r = await client.get(mimir_url, params={"query": q_ram}, headers=headers)
+        r = await client.get(prometheus_url, params={"query": q_ram})
         if r.status_code == 200:
             for item in r.json().get("data", {}).get("result", []):
                 pod = item.get("metric", {}).get("pod", "")
