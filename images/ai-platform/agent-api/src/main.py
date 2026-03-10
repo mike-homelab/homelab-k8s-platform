@@ -128,6 +128,19 @@ class RagAskResponse(BaseModel):
     sources: list[RagSource]
 
 
+class QueryTelemetryRequest(BaseModel):
+    timestamp: str
+
+
+class QueryTelemetryResponse(BaseModel):
+    tokens: float = 0.0
+    gpu_cache: float = 0.0
+    cpu_vllm: float = 0.0
+    cpu_api: float = 0.0
+    ram_vllm: float = 0.0
+    ram_api: float = 0.0
+
+
 class TriggerIngestorRequest(BaseModel):
     source: str = Field(..., pattern="^(aws|azure|kubernetes)$")
 
@@ -490,6 +503,58 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
     if answer:
         await _add_history(req.session_id, req.question, answer)
     return RagAskResponse(model=req.model, answer=answer, sources=sources)
+
+
+@app.post("/ops/query-telemetry", response_model=QueryTelemetryResponse)
+async def ops_query_telemetry(req: QueryTelemetryRequest):
+    try:
+        dt = datetime.fromisoformat(req.timestamp.replace("Z", "+00:00"))
+        ts = dt.timestamp()
+    except Exception:
+        ts = datetime.now(timezone.utc).timestamp()
+        
+    mimir_url = "http://mimir-distributor.monitoring.svc.cluster.local:8080/prometheus/api/v1/query"
+    headers = {"X-Scope-OrgID": "anonymous"}
+    resp_data = QueryTelemetryResponse()
+    
+    async with httpx.AsyncClient(timeout=5.0) as client:
+        # tokens
+        q_tokens = f"sum(increase(vllm:generation_tokens_total[2m] @ {ts}))"
+        r = await client.get(mimir_url, params={"query": q_tokens}, headers=headers)
+        if r.status_code == 200 and r.json().get("data", {}).get("result"):
+            resp_data.tokens = float(r.json()["data"]["result"][0]["value"][1])
+            
+        # gpu_cache
+        q_gpu = f"avg(vllm:gpu_cache_usage_perc @ {ts}) * 100"
+        r = await client.get(mimir_url, params={"query": q_gpu}, headers=headers)
+        if r.status_code == 200 and r.json().get("data", {}).get("result"):
+            resp_data.gpu_cache = float(r.json()["data"]["result"][0]["value"][1])
+            
+        # cpu
+        q_cpu = f"sum(rate(container_cpu_usage_seconds_total{{namespace='ai-platform', pod=~'vllm.*|agent-api.*'}}[2m] @ {ts})) by (pod)"
+        r = await client.get(mimir_url, params={"query": q_cpu}, headers=headers)
+        if r.status_code == 200:
+            for item in r.json().get("data", {}).get("result", []):
+                pod = item.get("metric", {}).get("pod", "")
+                val = float(item.get("value", [0, 0])[1])
+                if "vllm" in pod:
+                    resp_data.cpu_vllm += val
+                elif "agent-api" in pod:
+                    resp_data.cpu_api += val
+                    
+        # ram
+        q_ram = f"sum(container_memory_working_set_bytes{{namespace='ai-platform', pod=~'vllm.*|agent-api.*'}} @ {ts}) by (pod) / 1024 / 1024"
+        r = await client.get(mimir_url, params={"query": q_ram}, headers=headers)
+        if r.status_code == 200:
+            for item in r.json().get("data", {}).get("result", []):
+                pod = item.get("metric", {}).get("pod", "")
+                val = float(item.get("value", [0, 0])[1])
+                if "vllm" in pod:
+                    resp_data.ram_vllm += val
+                elif "agent-api" in pod:
+                    resp_data.ram_api += val
+
+    return resp_data
 
 
 @app.get("/ops/status")

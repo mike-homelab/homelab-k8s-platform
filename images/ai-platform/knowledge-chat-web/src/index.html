@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg: #030712;
@@ -56,7 +57,7 @@
 
     /* Layout */
     .container {
-      width: 100%; max-width: 900px; margin: 0 auto; padding: 40px 20px;
+      width: 100%; max-width: 1400px; margin: 0 auto; padding: 40px 20px;
       display: flex; flex-direction: column; height: 100vh;
     }
 
@@ -102,7 +103,19 @@
     }
 
     /* Chat UI */
-    .chat-layout { display: flex; flex-direction: column; height: 100%; gap: 20px; margin-top: 10px; }
+    .chat-layout { display: grid; grid-template-columns: 2fr 1fr; height: 100%; gap: 20px; margin-top: 10px; }
+    .chat-main { display: flex; flex-direction: column; gap: 20px; height: 100%; }
+
+    .telemetry-pane {
+      background: rgba(0, 0, 0, 0.2); border: 1px solid var(--brand-primary);
+      border-radius: 12px; padding: 20px; display: flex; flex-direction: column;
+      gap: 15px; overflow-y: auto; box-shadow: inset 0 0 20px rgba(139, 92, 246, 0.1);
+    }
+    .telemetry-header { font-size: 1.1rem; font-weight: 600; color: var(--accent); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+    .telemetry-stat { display: flex; justify-content: space-between; align-items: center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; }
+    .telemetry-stat .label { font-size: 0.85rem; color: var(--text-muted); }
+    .telemetry-stat .value { font-size: 1.1rem; font-weight: 600; color: #fff; }
+    .chart-container { position: relative; width: 100%; height: 200px; margin-top: 10px; }
 
     .chat-window {
       flex-grow: 1; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--panel-border);
@@ -226,22 +239,50 @@
     <!-- Chat Panel -->
     <div id="tab-chat" class="panel active">
       <div class="chat-layout">
-        <!-- The chat will now take up the full height with no manual config blocks above it -->
-
-        <div class="chat-window" id="chatWindow">
-          <div class="message bot">
-            Hello! I am your AI assistant, powered by vLLM and Qdrant. Ask me anything about your configured knowledge bases. I will maintain the history of our conversation.
+        <div class="chat-main">
+          <div class="chat-window" id="chatWindow">
+            <div class="message bot">
+              Hello! I am your AI assistant, powered by vLLM and Qdrant. Ask me anything about your configured knowledge bases. I will maintain the history of our conversation.
+            </div>
+            <div class="typing-indicator" id="typingIndicator">
+              <span></span><span></span><span></span>
+            </div>
           </div>
-          <div class="typing-indicator" id="typingIndicator">
-            <span></span><span></span><span></span>
+  
+          <div class="chat-input-area">
+            <textarea id="questionInput" placeholder="Ask a question..." rows="1" onInput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'"></textarea>
+            <button id="sendBtn" class="send-btn" title="Send">
+              <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
+            </button>
           </div>
         </div>
 
-        <div class="chat-input-area">
-          <textarea id="questionInput" placeholder="Ask a question..." rows="1" onInput="this.style.height = 'auto'; this.style.height = (this.scrollHeight) + 'px'"></textarea>
-          <button id="sendBtn" class="send-btn" title="Send">
-            <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2"/></svg>
-          </button>
+        <div class="telemetry-pane">
+          <div class="telemetry-header">Live Query Telemetry</div>
+          <div id="telemetryStatus" style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">Waiting for next query...</div>
+          
+          <div class="telemetry-stat">
+            <span class="label">Total Tokens Generated:</span>
+            <span class="value" id="tTokens">0</span>
+          </div>
+          <div class="telemetry-stat">
+            <span class="label">Total VRAM Allocated:</span>
+            <span class="value" id="tVram">0%</span>
+          </div>
+          <div class="telemetry-stat">
+            <span class="label">Query Latency:</span>
+            <span class="value" id="tLatency">0s</span>
+          </div>
+
+          <div style="font-size:0.9rem; margin-top:15px; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">CPU Core Allocation</div>
+          <div class="chart-container">
+            <canvas id="cpuChart"></canvas>
+          </div>
+
+          <div style="font-size:0.9rem; margin-top:15px; text-transform:uppercase; color:var(--text-muted); letter-spacing:1px;">RAM Footprint (MB)</div>
+          <div class="chart-container">
+            <canvas id="ramChart"></canvas>
+          </div>
         </div>
       </div>
     </div>
@@ -338,6 +379,57 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
+    let cpuChartInstance = null;
+    let ramChartInstance = null;
+
+    function initCharts() {
+      const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+      const ramCtx = document.getElementById('ramChart').getContext('2d');
+      
+      cpuChartInstance = new Chart(cpuCtx, {
+        type: 'doughnut',
+        data: { labels: ['vLLM Motor', 'Agent API'], datasets: [{ data: [0, 0], backgroundColor: ['#8b5cf6', '#3b82f6'], borderColor: 'rgba(0,0,0,0)' }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#f9fafb' } } } }
+      });
+
+      ramChartInstance = new Chart(ramCtx, {
+        type: 'bar',
+        data: { labels: ['vLLM', 'Agent API'], datasets: [{ label: 'MB Allocated', data: [0, 0], backgroundColor: ['#2dd4bf', '#fbbf24'] }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.05)' } }, x: { ticks: { color: '#f9fafb' }, grid: { display: false } } } }
+      });
+    }
+    window.addEventListener('load', initCharts);
+
+    async function fetchTelemetry(endTimeStr, latencySecs) {
+      const tmStatus = document.getElementById('telemetryStatus');
+      tmStatus.textContent = "Fetching metrics from Mimir...";
+      try {
+        const res = await fetch(`${API}/ops/query-telemetry`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ timestamp: endTimeStr })
+        });
+        if (!res.ok) throw new Error("Telemetry fetch failed");
+        const data = await res.json();
+        
+        document.getElementById('tTokens').textContent = Math.round(data.tokens || 0);
+        document.getElementById('tVram').textContent = (data.gpu_cache || 0).toFixed(1) + "%";
+        document.getElementById('tLatency').textContent = latencySecs.toFixed(2) + "s";
+
+        // Update Charts
+        cpuChartInstance.data.datasets[0].data = [(data.cpu_vllm || 0).toFixed(2), (data.cpu_api || 0).toFixed(2)];
+        cpuChartInstance.update();
+
+        ramChartInstance.data.datasets[0].data = [(data.ram_vllm || 0).toFixed(0), (data.ram_api || 0).toFixed(0)];
+        ramChartInstance.update();
+
+        tmStatus.textContent = "Data synced with Grafana Mimir.";
+      } catch (e) {
+        tmStatus.textContent = "Failed to load telemetry.";
+        console.error(e);
+      }
+    }
+
     async function submitQuestion() {
       const q = questionInput.value.trim();
       if (!q) return;
@@ -348,6 +440,9 @@
       sendBtn.disabled = true;
       typingIndicator.style.display = 'flex';
       scrollToBottom();
+
+      const startTime = Date.now();
+      let ok = false;
 
       try {
         const res = await fetch(`${API}/rag/ask`, {
@@ -365,12 +460,19 @@
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
         
         appendMessage(data.answer || "I'm sorry, I couldn't generate an answer.", false, data.sources);
+        ok = true;
       } catch (err) {
         appendMessage(`⚠️ Error: ${err.message}`, false);
       } finally {
         typingIndicator.style.display = 'none';
         sendBtn.disabled = false;
         questionInput.focus();
+        if (ok) {
+          const endTime = Date.now();
+          const latencySecs = (endTime - startTime) / 1000.0;
+          // pass an ISO string of the current time
+          fetchTelemetry(new Date().toISOString(), latencySecs);
+        }
       }
     }
 
