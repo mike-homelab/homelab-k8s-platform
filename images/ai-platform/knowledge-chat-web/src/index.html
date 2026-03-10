@@ -56,7 +56,7 @@
 
     /* Layout */
     .container {
-      max-width: 1200px; margin: 0 auto; padding: 40px 20px;
+      width: 100%; max-width: 900px; margin: 0 auto; padding: 40px 20px;
       display: flex; flex-direction: column; height: 100vh;
     }
 
@@ -101,19 +101,7 @@
     }
 
     /* Chat UI */
-    .chat-layout { display: flex; flex-direction: column; height: 100%; gap: 20px; }
-    .chat-controls {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;
-      background: rgba(0, 0, 0, 0.2); padding: 15px; border-radius: 12px; border: 1px solid var(--panel-border);
-    }
-    .control-group { display: flex; flex-direction: column; gap: 6px; }
-    .control-group label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    select, input[type="number"] {
-      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--panel-border);
-      background: var(--input-bg); color: var(--text-main); font-family: inherit; font-size: 0.95rem;
-      transition: border-color 0.2s; outline: none;
-    }
-    select:focus, input:focus { border-color: var(--brand-secondary); }
+    .chat-layout { display: flex; flex-direction: column; height: 100%; gap: 20px; margin-top: 10px; }
 
     .chat-window {
       flex-grow: 1; background: rgba(0, 0, 0, 0.15); border: 1px solid var(--panel-border);
@@ -237,28 +225,7 @@
     <!-- Chat Panel -->
     <div id="tab-chat" class="panel active">
       <div class="chat-layout">
-        <div class="chat-controls">
-          <div class="control-group">
-            <label>Knowledge Source</label>
-            <select id="collection">
-              <option value="docs-aws-git">AWS Docs (Git)</option>
-              <option value="docs-azure-git">Azure Docs (Git)</option>
-              <option value="docs-kubernetes-git">Kubernetes Docs (Git)</option>
-              <option value="rag-docs">General Default</option>
-            </select>
-          </div>
-          <div class="control-group">
-            <label>Model Engine</label>
-            <select id="model">
-              <option value="general">Qwen General 3B</option>
-              <option value="coder">Qwen Coder 3B</option>
-            </select>
-          </div>
-          <div class="control-group">
-            <label>Depth (Top K)</label>
-            <input id="topk" type="number" value="4" min="1" max="10">
-          </div>
-        </div>
+        <!-- The chat will now take up the full height with no manual config blocks above it -->
 
         <div class="chat-window" id="chatWindow">
           <div class="message bot">
@@ -388,9 +355,9 @@
           body: JSON.stringify({
             question: q,
             session_id: sessionId,
-            collection: document.getElementById('collection').value,
-            model: document.getElementById('model').value,
-            top_k: Number(document.getElementById('topk').value || 4)
+            collection: "auto",
+            model: "general",
+            top_k: 4
           })
         });
         const data = await res.json();
