@@ -120,6 +120,7 @@ class RagSource(BaseModel):
     score: float
     text: str
     url: str = ""
+    collection: str = ""
 
 
 class RagAskResponse(BaseModel):
@@ -442,6 +443,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                     coll_chunk_hits: list[dict] = []
                     for u in selected_urls:
                         page_hits = await _qdrant_search(client, coll, query_vec, max(3, req.top_k), {"must": [{"key": "doc_type", "match": {"value": "chunk"}}, {"key": "url", "match": {"value": u}}]})
+                        for h in page_hits:
+                            h["__collection_name__"] = coll
                         coll_chunk_hits.extend(page_hits)
                         
                     if not coll_chunk_hits:
@@ -449,6 +452,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                         if service and coll in {"docs-aws-git", "docs-azure-git"}:
                             fallback_must.append({"key": "service", "match": {"value": service}})
                         coll_chunk_hits = await _qdrant_search(client, coll, query_vec, max(req.top_k * 8, 20), {"must": fallback_must})
+                        for h in coll_chunk_hits:
+                            h["__collection_name__"] = coll
                         
                     all_chunk_hits.extend(coll_chunk_hits)
                 except Exception:
@@ -459,6 +464,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             context_parts: list[str] = []
             for hit in hits:
                 payload = hit.get("payload", {})
+                coll_name = hit.get("__collection_name__", "unknown")
                 text = payload.get("text", "")
                 if text:
                     context_parts.append(text)
@@ -469,6 +475,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                         score=float(hit.get("score", 0.0)),
                         text=text,
                         url=str(payload.get("url", "")),
+                        collection=coll_name,
                     )
                 )
 
