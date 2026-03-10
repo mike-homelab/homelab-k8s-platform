@@ -127,6 +127,7 @@ class RagAskResponse(BaseModel):
     model: str
     answer: str
     sources: list[RagSource]
+    tokens: int = 0
 
 
 class QueryTelemetryRequest(BaseModel):
@@ -520,9 +521,10 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
 
     choices = body.get("choices", [])
     answer = choices[0].get("message", {}).get("content", "") if choices else ""
+    tokens_used = body.get("usage", {}).get("total_tokens", 0)
     if answer:
         await _add_history(req.session_id, req.question, answer)
-    return RagAskResponse(model=req.model, answer=answer, sources=sources)
+    return RagAskResponse(model=req.model, answer=answer, sources=sources, tokens=tokens_used)
 
 
 @app.post("/ops/query-telemetry", response_model=QueryTelemetryResponse)
@@ -532,13 +534,8 @@ async def ops_query_telemetry(req: QueryTelemetryRequest):
     resp_data = QueryTelemetryResponse()
     
     async with httpx.AsyncClient(timeout=5.0) as client:
-        # tokens
-        q_tokens = "sum(increase(vllm:generation_tokens_total[5m]))"
-        r = await client.get(prometheus_url, params={"query": q_tokens})
-        if r.status_code == 200:
-            res = r.json().get("data", {}).get("result", [])
-            if res:
-                resp_data.tokens = float(res[0]["value"][1])
+        # tokens (bypassed, now fetched synchronously via vLLM)
+        resp_data.tokens = 0.0
             
         # gpu_cache
         q_gpu = "avg(vllm:gpu_cache_usage_perc) * 100"

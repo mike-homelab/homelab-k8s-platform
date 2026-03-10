@@ -450,8 +450,8 @@
         if (!res.ok) throw new Error("Telemetry fetch failed");
         const data = await res.json();
         
-        document.getElementById('tTokens').textContent = Math.round(data.tokens || 0);
-        document.getElementById('tVram').textContent = (data.gpu_cache || 0).toFixed(1) + "%";
+        // Tokens are now updated synchronously via the RAG response
+        document.getElementById('tVram').textContent = (data.gpu_cache || 0).toFixed(4) + "%";
         document.getElementById('tLatency').textContent = latencySecs.toFixed(2) + "s";
 
         // Update Charts
@@ -491,13 +491,13 @@
             session_id: sessionId,
             collection: "auto",
             model: "general",
-            top_k: 4
+            top_k: 10
           })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-        
         appendMessage(data.answer || "I'm sorry, I couldn't generate an answer.", false, data.sources);
+        if (data.tokens) document.getElementById('tTokens').textContent = data.tokens;
         ok = true;
       } catch (err) {
         appendMessage(`⚠️ Error: ${err.message}`, false);
