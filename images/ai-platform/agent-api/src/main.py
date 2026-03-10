@@ -374,35 +374,45 @@ async def rag_index(req: RagIndexRequest) -> RagIndexResponse:
     return RagIndexResponse(collection=req.collection, doc_id=doc_id, chunks_indexed=len(chunks))
 
 
-async def _determine_collections(client: httpx.AsyncClient, question: str, model: str) -> list[str]:
+async def _determine_collections_and_model(client: httpx.AsyncClient, question: str, default_model: str) -> tuple[list[str], str]:
     sys_prompt = (
-        "You are an expert routing agent. Determine which knowledge bases are relevant to the user's question.\n"
-        "Available knowledge bases: 'docs-aws-git', 'docs-azure-git', 'docs-kubernetes-git'.\n"
-        "Output ONLY a JSON list of strings, for example: [\"docs-aws-git\", \"docs-kubernetes-git\"]\n"
+        "You are an expert routing agent. Based on the user's question, determine two things:\n"
+        "1. Which knowledge bases are needed to answer it. Available: 'docs-aws-git', 'docs-azure-git', 'docs-kubernetes-git'.\n"
+        "2. Which model should generate the final answer. Available: 'general' (for architecture, definitions, platform facts), 'coder' (if the user is explicitly asking to write, generate, or review raw code).\n"
+        "Output ONLY a JSON object containing 'collections' (list of strings) and 'model' (string). Example: {\"collections\": [\"docs-aws-git\", \"docs-kubernetes-git\"], \"model\": \"general\"}\n"
         "Do not include markdown or explanations."
     )
     try:
         resp = await client.post(
-            f"{_base_url(model)}/chat/completions",
+            f"{_base_url('general')}/chat/completions",
             json={
-                "model": _model_id(model),
+                "model": _model_id('general'),
                 "messages": [
                     {"role": "system", "content": sys_prompt},
                     {"role": "user", "content": question}
                 ],
                 "temperature": 0.0,
-                "max_tokens": 50,
+                "max_tokens": 100,
             },
         )
         resp.raise_for_status()
         content = resp.json().get("choices", [])[0].get("message", {}).get("content", "").strip()
         content = content.replace("```json", "").replace("```", "").strip()
-        cols = json.loads(content)
+        data = json.loads(content)
+        
+        cols = data.get("collections", [])
         if not isinstance(cols, list):
-            return ["rag-docs"]
-        return [c for c in cols if c in ("docs-aws-git", "docs-azure-git", "docs-kubernetes-git", "rag-docs")]
+            cols = ["rag-docs"]
+        else:
+            cols = [c for c in cols if c in ("docs-aws-git", "docs-azure-git", "docs-kubernetes-git", "rag-docs")]
+            
+        target_model = data.get("model", default_model)
+        if target_model not in ("general", "coder"):
+            target_model = default_model
+            
+        return cols, target_model
     except Exception:
-        return ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"]
+        return ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"], default_model
 
 
 @app.post("/rag/ask", response_model=RagAskResponse)
@@ -411,10 +421,14 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
         async with httpx.AsyncClient(timeout=90.0) as client:
             query_vec = (await _embed_texts(client, [req.question]))[0]
             
+            target_model = req.model
             if req.collection == "auto":
-                collections_to_search = await _determine_collections(client, req.question, req.model)
+                collections_to_search, routed_model = await _determine_collections_and_model(client, req.question, req.model)
                 if not collections_to_search:
                     collections_to_search = ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"]
+                # Override the model if the user didn't explicitly demand 'coder'
+                if req.model == "general" and routed_model == "coder":
+                    target_model = "coder"
             else:
                 collections_to_search = [req.collection]
 
@@ -504,9 +518,9 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             final_messages.append({"role": "user", "content": req.question})
 
             llm_resp = await client.post(
-                f"{_base_url(req.model)}/chat/completions",
+                f"{_base_url(target_model)}/chat/completions",
                 json={
-                    "model": _model_id(req.model),
+                    "model": _model_id(target_model),
                     "messages": final_messages,
                     "temperature": req.temperature,
                     "max_tokens": req.max_tokens,
@@ -524,7 +538,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
     tokens_used = body.get("usage", {}).get("total_tokens", 0)
     if answer:
         await _add_history(req.session_id, req.question, answer)
-    return RagAskResponse(model=req.model, answer=answer, sources=sources, tokens=tokens_used)
+    return RagAskResponse(model=target_model, answer=answer, sources=sources, tokens=tokens_used)
 
 
 @app.post("/ops/query-telemetry", response_model=QueryTelemetryResponse)
