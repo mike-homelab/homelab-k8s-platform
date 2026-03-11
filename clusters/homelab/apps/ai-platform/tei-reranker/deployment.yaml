@@ -15,9 +15,13 @@ spec:
       labels:
         app: tei-reranker
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: kubeworker03
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
         - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+          image: ghcr.io/huggingface/text-embeddings-inference:1.5
           imagePullPolicy: IfNotPresent
           args:
             - "--model-id"
@@ -32,14 +36,15 @@ spec:
               value: "80"
             - name: RUST_LOG
               value: "info"
-          # No GPU requests since we're using the CPU image
           resources:
             requests:
               cpu: "1"
               memory: "2Gi"
+              nvidia.com/gpu: "1"
             limits:
               cpu: "4"
               memory: "8Gi"
+              nvidia.com/gpu: "1"
           readinessProbe:
             httpGet:
               path: /health

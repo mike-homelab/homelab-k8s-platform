@@ -1,3 +1,4 @@
 resources:
   - https-route.yaml
   - storage-class.yaml
+  - nvidia-time-slicing-config.yaml

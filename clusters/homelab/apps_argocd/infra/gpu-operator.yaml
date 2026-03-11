@@ -24,6 +24,9 @@ spec:
 
         devicePlugin:
           enabled: true
+          config:
+            name: nvidia-time-slicing-config
+            default: any
 
         dcgmExporter:
           enabled: true
