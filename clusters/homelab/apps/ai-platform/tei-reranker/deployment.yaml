@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tei-reranker
+  namespace: ai-platform
+  labels:
+    app: tei-reranker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tei-reranker
+  template:
+    metadata:
+      labels:
+        app: tei-reranker
+    spec:
+      containers:
+        - name: tei
+          image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--model-id"
+            - "BAAI/bge-reranker-v2-m3"
+            - "--port"
+            - "80"
+          ports:
+            - containerPort: 80
+              name: http
+          env:
+            - name: PORT
+              value: "80"
+            - name: RUST_LOG
+              value: "info"
+          # No GPU requests since we're using the CPU image
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tei-reranker
+  namespace: ai-platform
+  labels:
+    app: tei-reranker
+spec:
+  type: ClusterIP
+  selector:
+    app: tei-reranker
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80

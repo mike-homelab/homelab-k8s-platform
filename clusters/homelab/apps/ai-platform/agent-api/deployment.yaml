@@ -16,7 +16,7 @@ spec:
       serviceAccountName: agent-api-ops
       containers:
         - name: agent-api
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/agent-api:0.10.7
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/agent-api:0.10.8
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000

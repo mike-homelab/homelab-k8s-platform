@@ -285,7 +285,9 @@
                 <span class="label">Tokens</span><span class="value" id="tTokens">-</span>
               </div>
               <div class="telemetry-stat">
-                <span class="label">VRAM</span><span class="value" id="tVram">-</span>
+                <span class="label">VRAM</span>
+                <span class="value" id="tVram">-</span>
+                <span id="tVramExact" style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 2px;">Used: - MB / Free: - MB</span>
               </div>
               <div class="telemetry-stat">
                 <span class="label">Latency</span><span class="value" id="tLatency">-</span>
@@ -499,6 +501,10 @@
         
         // Tokens are now updated synchronously via the RAG response
         document.getElementById('tVram').textContent = (data.gpu_cache || 0).toFixed(4) + "%";
+        
+        let exactHtml = `Used: ${data.vram_used_mb || 0} MB / Free: ${data.vram_free_mb || 0} MB`;
+        document.getElementById('tVramExact').textContent = exactHtml;
+        
         document.getElementById('tLatency').textContent = latencySecs.toFixed(2) + "s";
 
         // Update Charts

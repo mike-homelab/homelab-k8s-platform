@@ -137,6 +137,8 @@ class QueryTelemetryRequest(BaseModel):
 class QueryTelemetryResponse(BaseModel):
     tokens: float = 0.0
     gpu_cache: float = 0.0
+    vram_used_mb: int = 0
+    vram_free_mb: int = 0
     cpu_vllm: float = 0.0
     cpu_api: float = 0.0
     ram_vllm: float = 0.0
@@ -228,21 +230,50 @@ def _query_terms(question: str) -> list[str]:
     return [w for w in words if len(w) > 2 and w not in stop][:12]
 
 
-def _boosted_score(hit: dict, terms: list[str]) -> float:
-    base = float(hit.get("score", 0.0))
-    payload = hit.get("payload", {})
-    text = (
-        str(payload.get("title", "")) + " " +
-        str(payload.get("url", "")) + " " +
-        str(payload.get("summary", "")) + " " +
-        str(payload.get("text", "")) + " " +
-        " ".join(payload.get("keywords", []) if isinstance(payload.get("keywords"), list) else [])
-    ).lower()
-    bonus = 0.0
-    for t in terms:
-        if t in text:
-            bonus += 0.03
-    return base + min(bonus, 0.24)
+def _tei_url() -> str:
+    return os.getenv("TEI_URL", "http://tei-reranker.ai-platform.svc.cluster.local:80")
+
+
+async def _rerank_hits(client: httpx.AsyncClient, question: str, hits: list[dict], top_k: int) -> list[dict]:
+    if not hits:
+        return []
+    
+    # Extract the payload texts for reranking
+    texts = []
+    for h in hits:
+        payload = h.get("payload", {})
+        # Give the reranker enough context to understand what the chunk is
+        text_repr = str(payload.get("title", "")) + "\n" + str(payload.get("text", ""))
+        texts.append(text_repr)
+        
+    try:
+        resp = await client.post(
+            f"{_tei_url()}/rerank",
+            json={
+                "query": question,
+                "texts": texts,
+                "raw_scores": False,
+                "return_text": False
+            },
+            timeout=10.0
+        )
+        if resp.status_code == 200:
+            results = resp.json()
+            # TEI returns a list of dictionaries with 'index' and 'score', already sorted by score
+            # Example: [{"index": 0, "score": 0.99}, {"index": 5, "score": 0.85}]
+            reranked_hits = []
+            for item in results[:top_k]:
+                idx = item.get("index")
+                if idx is not None and idx < len(hits):
+                    hit = hits[idx].copy()
+                    hit["score"] = item.get("score", 0.0) # overwrite Qdrant dot-product with TEI semantic score
+                    reranked_hits.append(hit)
+            return reranked_hits
+    except Exception as e:
+        print(f"TEI Reranker failed: {e}. Falling back to default Qdrant sorting.")
+        
+    # Fallback if TEI fails: standard dot-product sorting
+    return sorted(hits, key=lambda h: float(h.get("score", 0.0)), reverse=True)[:top_k]
 
 
 async def _qdrant_search(client: httpx.AsyncClient, collection: str, vector: list[float], limit: int, query_filter: dict | None) -> list[dict]:
@@ -446,7 +477,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                     if not summary_hits and len(summary_must) > 1:
                         summary_hits = await _qdrant_search(client, coll, query_vec, max(req.page_k * 8, 40), {"must": [{"key": "doc_type", "match": {"value": "summary"}}]})
                         
-                    summary_hits = sorted(summary_hits, key=lambda h: _boosted_score(h, terms), reverse=True)
+                    summary_hits = sorted(summary_hits, key=lambda h: float(h.get("score", 0.0)), reverse=True)
                     selected_urls: list[str] = []
                     for h in summary_hits:
                         u = str(h.get("payload", {}).get("url", "")).strip()
@@ -474,7 +505,9 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                 except Exception:
                     continue
 
-            hits = sorted(all_chunk_hits, key=lambda h: _boosted_score(h, terms), reverse=True)[: req.top_k]
+            # Phase 2: Cross-Encoder Reranking
+            hits = await _rerank_hits(client, req.question, all_chunk_hits, req.top_k)
+            
             sources: list[RagSource] = []
             context_parts: list[str] = []
             for hit in hits:
@@ -558,6 +591,21 @@ async def ops_query_telemetry(req: QueryTelemetryRequest):
             res = r.json().get("data", {}).get("result", [])
             if res:
                 resp_data.gpu_cache = float(res[0]["value"][1])
+                
+        # exact vram
+        q_vram_used = "sum(DCGM_FI_DEV_FB_USED)"
+        r_used = await client.get(prometheus_url, params={"query": q_vram_used})
+        if r_used.status_code == 200:
+            res_u = r_used.json().get("data", {}).get("result", [])
+            if res_u:
+                resp_data.vram_used_mb = int(float(res_u[0]["value"][1]))
+                
+        q_vram_free = "sum(DCGM_FI_DEV_FB_FREE)"
+        r_free = await client.get(prometheus_url, params={"query": q_vram_free})
+        if r_free.status_code == 200:
+            res_f = r_free.json().get("data", {}).get("result", [])
+            if res_f:
+                resp_data.vram_free_mb = int(float(res_f[0]["value"][1]))
             
         # cpu
         q_cpu = 'sum(rate(container_cpu_usage_seconds_total{namespace="ai-platform", pod=~"vllm.*|agent-api.*"}[5m])) by (pod)'
