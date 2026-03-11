@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
     paths:
       - images/ai-platform/vllm/planner/**
       - .github/workflows/build-vllm-planner.yaml

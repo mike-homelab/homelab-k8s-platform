@@ -34,16 +34,23 @@ spec:
                   name: external-ai-secrets
                   key: gemini-api-key
                   optional: true
+            # GitOps Credentials
+            - name: GITHUB_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: jevin-github-auth
+                  key: github-pat
+            - name: GITHUB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: jevin-github-auth
+                  key: github-username
           volumeMounts:
             - name: user-workspace
               mountPath: /workspace
-          securityContext:
-            runAsUser: 0 # Root needed to manipulate user files depending on permissions
       volumes:
         - name: user-workspace
-          hostPath:
-            path: /home/michael/homelab-k8s-platform
-            type: Directory
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

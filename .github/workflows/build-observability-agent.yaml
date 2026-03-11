@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
     paths:
       - images/ai-platform/agents/observability-agent/**
       - .github/workflows/build-observability-agent.yaml
