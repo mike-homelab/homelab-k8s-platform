@@ -18,7 +18,7 @@ spec:
       nodeSelector:
         kubernetes.io/hostname: kubeworker03
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060-SHARED
       containers:
         - name: tei
           image: ghcr.io/huggingface/text-embeddings-inference:1.5
