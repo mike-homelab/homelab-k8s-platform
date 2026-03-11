@@ -26,6 +26,12 @@ spec:
           args:
             - "--model-id"
             - "BAAI/bge-reranker-v2-m3"
+            - "--max-client-batch-size"
+            - "16"
+            - "--max-batch-tokens"
+            - "8192"
+            - "--max-concurrent-requests"
+            - "128"
             - "--port"
             - "80"
           ports:

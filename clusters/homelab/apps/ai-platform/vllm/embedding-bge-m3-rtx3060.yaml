@@ -27,7 +27,11 @@ spec:
             - --pooling
             - cls
             - --max-client-batch-size
-            - "32"
+            - "16"
+            - --max-batch-tokens
+            - "8192"
+            - --max-concurrent-requests
+            - "128"
           ports:
             - name: http
               containerPort: 80
