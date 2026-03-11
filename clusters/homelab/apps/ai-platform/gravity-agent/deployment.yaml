@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gravity-agent
+  namespace: ai-platform
+  labels:
+    app: gravity-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gravity-agent
+  template:
+    metadata:
+      labels:
+        app: gravity-agent
+    spec:
+      serviceAccountName: default
+      containers:
+        - name: gravity
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/gravity-agent:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: VLLM_CODER_BASE_URL
+              value: "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1"
+            - name: VLLM_CODER_MODEL_ID
+              value: "Qwen/Qwen2.5-Coder-3B-Instruct"
+            # External fall back logic
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: external-ai-secrets
+                  key: gemini-api-key
+                  optional: true
+          volumeMounts:
+            - name: user-workspace
+              mountPath: /workspace
+          securityContext:
+            runAsUser: 0 # Root needed to manipulate user files depending on permissions
+      volumes:
+        - name: user-workspace
+          hostPath:
+            path: /home/michael/homelab-k8s-platform
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gravity-agent
+  namespace: ai-platform
+  labels:
+    app: gravity-agent
+spec:
+  type: ClusterIP
+  selector:
+    app: gravity-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
