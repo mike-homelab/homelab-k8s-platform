@@ -15,33 +15,35 @@ spec:
       values: |
         operator:
           defaultRuntime: containerd
+
         driver:
           enabled: true
+
         toolkit:
           enabled: true
+
         devicePlugin:
           enabled: true
           config:
             name: nvidia-time-slicing-config
             default: any
-            # Define the slicing profiles here
             data:
-              # Default 'any' profile (no slicing for other GPUs)
               any: |-
                 version: v1
                 sharing:
                   timeSlicing:
                     resources:
-                      - name: ://nvidia.com
-                        replicas: 1
-              # Custom profile for your RTX 3060
+                    - name: nvidia.com/gpu
+                      replicas: 1
+
               rtx-3060-config: |-
                 version: v1
                 sharing:
                   timeSlicing:
                     resources:
-                      - name: ://nvidia.com
-                        replicas: 4
+                    - name: nvidia.com/gpu
+                      replicas: 2
+
         dcgmExporter:
           enabled: true
   destination:
