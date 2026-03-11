@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from smolagents import CodeAgent, HfApiModel, tool
 
-app = FastAPI(title="Gravity Agent API")
+app = FastAPI(title="Jevin Agent API")
 
 # --------- Tools ---------
 
@@ -111,7 +111,7 @@ class ChatResponse(BaseModel):
 async def chat_endpoint(req: ChatRequest):
     try:
         sys_prompt = (
-            "You are Gravity, an autonomous coding agent. You have access to the user's workspace "
+            "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
             "at /workspace. Use your tools to read files, navigate, and execute bash commands to fulfill "
             f"the user's request: {req.prompt}"
         )

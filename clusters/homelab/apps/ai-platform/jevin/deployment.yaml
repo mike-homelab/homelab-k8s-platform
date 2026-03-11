@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gravity-agent
+  name: jevin
   namespace: ai-platform
   labels:
-    app: gravity-agent
+    app: jevin
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gravity-agent
+      app: jevin
   template:
     metadata:
       labels:
-        app: gravity-agent
+        app: jevin
     spec:
       serviceAccountName: default
       containers:
-        - name: gravity
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/gravity-agent:1.0.0
+        - name: jevin
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -48,14 +48,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: gravity-agent
+  name: jevin
   namespace: ai-platform
   labels:
-    app: gravity-agent
+    app: jevin
 spec:
   type: ClusterIP
   selector:
-    app: gravity-agent
+    app: jevin
   ports:
     - protocol: TCP
       port: 8000
