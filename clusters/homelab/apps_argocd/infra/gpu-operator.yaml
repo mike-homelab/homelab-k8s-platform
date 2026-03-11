@@ -25,6 +25,7 @@ spec:
         devicePlugin:
           enabled: true
           config:
+            create: true
             name: nvidia-time-slicing-config
             default: any
             data:
