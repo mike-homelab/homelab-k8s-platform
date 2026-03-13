@@ -51,12 +51,12 @@ spec:
       volumes:
         - name: hf-cache
           persistentVolumeClaim:
-            claimName: hf-cache
+            claimName: hf-cache-embedding
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: hf-cache
+  name: hf-cache-embedding
   namespace: ai-platform
 spec:
   storageClassName: zfs-ssd

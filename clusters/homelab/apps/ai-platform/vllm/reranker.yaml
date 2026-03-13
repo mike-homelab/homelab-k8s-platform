@@ -70,12 +70,12 @@ spec:
       volumes:
         - name: hf-cache
           persistentVolumeClaim:
-            claimName: hf-cache
+            claimName: hf-cache-reranker
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: hf-cache
+  name: hf-cache-reranker
   namespace: ai-platform
 spec:
   storageClassName: zfs-ssd
