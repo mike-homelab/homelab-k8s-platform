@@ -21,12 +21,19 @@ spec:
 
         toolkit:
           enabled: true
+          runtimeClassName: ""   # force default runtime
 
         devicePlugin:
           enabled: true
+          runtimeClassName: ""   # force default runtime
 
         dcgmExporter:
           enabled: true
+          runtimeClassName: ""   # force default runtime
+
+        featureDiscovery:
+          enabled: true
+          runtimeClassName: ""   # force default runtime
 
   destination:
     server: https://kubernetes.default.svc
