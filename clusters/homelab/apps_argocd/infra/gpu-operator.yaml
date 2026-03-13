@@ -1,44 +1,44 @@
-# apiVersion: argoproj.io/v1alpha1
-# kind: Application
-# metadata:
-#   name: gpu-operator
-#   namespace: argocd
-#   annotations:
-#     argocd.argoproj.io/sync-wave: "9"
-# spec:
-#   project: default
-#   source:
-#     repoURL: https://nvidia.github.io/gpu-operator
-#     chart: gpu-operator
-#     targetRevision: 25.10.1
-#     helm:
-#       values: |
-#         operator:
-#           defaultRuntime: containerd
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gpu-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "9"
+spec:
+  project: default
+  source:
+    repoURL: https://nvidia.github.io/gpu-operator
+    chart: gpu-operator
+    targetRevision: 25.10.1
+    helm:
+      values: |
+        operator:
+          defaultRuntime: containerd
 
-#         driver:
-#           enabled: false
+        driver:
+          enabled: false
 
-#         toolkit:
-#           enabled: true
-#           runtimeClassName: ""   # force default runtime
+        toolkit:
+          enabled: true
+          runtimeClassName: ""   # force default runtime
 
-#         devicePlugin:
-#           enabled: true
-#           runtimeClassName: ""   # force default runtime
+        devicePlugin:
+          enabled: true
+          runtimeClassName: ""   # force default runtime
 
-#         dcgmExporter:
-#           enabled: true
-#           runtimeClassName: ""   # force default runtime
+        dcgmExporter:
+          enabled: true
+          runtimeClassName: ""   # force default runtime
 
-#         featureDiscovery:
-#           enabled: true
-#           runtimeClassName: ""   # force default runtime
+        featureDiscovery:
+          enabled: true
+          runtimeClassName: ""   # force default runtime
 
-#   destination:
-#     server: https://kubernetes.default.svc
-#     namespace: gpu-operator
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: gpu-operator
 
-#   syncPolicy:
-#     syncOptions:
-#       - CreateNamespace=true
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
