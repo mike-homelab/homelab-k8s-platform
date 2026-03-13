@@ -26,7 +26,7 @@ spec:
             - name: VLLM_CODER_BASE_URL
               value: "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1"
             - name: VLLM_CODER_MODEL_ID
-              value: "Qwen/Qwen2.5-Coder-3B-Instruct"
+              value: "Qwen/Qwen2.5-Coder-7B-Instruct"
             # External fall back logic
             - name: GEMINI_API_KEY
               valueFrom:

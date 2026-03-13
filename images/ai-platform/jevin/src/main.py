@@ -141,7 +141,7 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
 
 # We connect smolagents to the existing homelab vLLM Coder endpoint.
 vllm_base_url = os.getenv("VLLM_CODER_BASE_URL", "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1")
-model_id = os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
+model_id = os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct")
 
 # We mock the API key since vLLM doesn't require one internally, but the framework expects it.
 os.environ["HF_TOKEN"] = "mock-token-for-vllm"

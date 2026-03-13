@@ -21,7 +21,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.8.1")
+app = FastAPI(title="agent-api", version="0.11.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -156,9 +156,8 @@ class TriggerIngestorResponse(BaseModel):
 
 
 def _base_url(model: str) -> str:
-    if model == "coder":
-        return os.getenv("VLLM_CODER_BASE_URL", "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1")
-    return os.getenv("VLLM_GENERAL_BASE_URL", os.getenv("VLLM_BASE_URL", "http://vllm-llm.ai-platform.svc.cluster.local:8000/v1"))
+    # All LLM requests now route to the specialised coder model
+    return os.getenv("VLLM_CODER_BASE_URL", "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1")
 
 
 def _redis_client() -> redis.Redis:
@@ -193,9 +192,8 @@ async def _add_history(session_id: str | None, user_text: str, assistant_text: s
 
 
 def _model_id(model: str) -> str:
-    if model == "coder":
-        return os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
-    return os.getenv("VLLM_GENERAL_MODEL_ID", "Qwen/Qwen2.5-3B-Instruct")
+    # Return the specialised coder model ID, defaulting to the 7B Instruct version
+    return os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct")
 
 
 def _embedding_base_url() -> str:

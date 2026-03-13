@@ -1,21 +1,23 @@
-name: Build Coding Agent Image
-# trigger rebuild marker: 2026-03-14
+name: Build Jevin Agent Image
 
 on:
   push:
     branches:
       - main
+    paths:
+      - images/ai-platform/jevin/**
+      - .github/workflows/build-jevin.yaml
   pull_request:
     branches:
       - main
     paths:
-      - images/ai-platform/agents/coding-agent/**
-      - .github/workflows/build-coding-agent.yaml
+      - images/ai-platform/jevin/**
+      - .github/workflows/build-jevin.yaml
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push Coding Agent
+    name: Build & Push Jevin
     runs-on: [self-hosted]
 
     steps:
@@ -25,7 +27,7 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(cat images/ai-platform/agents/coding-agent/VERSION)
+          VERSION=$(cat images/ai-platform/jevin/VERSION)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Log in to Nexus Docker registry
@@ -38,9 +40,9 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coding-agent:${{ steps.version.outputs.version }} \
-            images/ai-platform/agents/coding-agent
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:${{ steps.version.outputs.version }} \
+            images/ai-platform/jevin
 
       - name: Push Docker image
         run: |
-          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coding-agent:${{ steps.version.outputs.version }}
+          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:${{ steps.version.outputs.version }}

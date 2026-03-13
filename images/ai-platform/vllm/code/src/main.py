@@ -4,9 +4,9 @@ import os
 import requests
 
 
-app = FastAPI(title="vLLM Code Service", version=os.getenv("APP_VERSION", "0.1.0"))
-VLLM_BASE = os.getenv("VLLM_BASE_URL", "http://vllm-llm.ai-platform.svc.cluster.local:8000/v1")
-MODEL = os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-3B-Instruct")
+app = FastAPI(title="vLLM Code Service", version=os.getenv("APP_VERSION", "0.1.1"))
+VLLM_BASE = os.getenv("VLLM_CODER_BASE_URL", os.getenv("VLLM_BASE_URL", "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1"))
+MODEL = os.getenv("VLLM_CODER_MODEL_ID", os.getenv("VLLM_MODEL", "Qwen/Qwen2.5-Coder-7B-Instruct"))
 
 
 class PromptRequest(BaseModel):

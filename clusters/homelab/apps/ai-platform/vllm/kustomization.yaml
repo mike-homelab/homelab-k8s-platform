@@ -1,6 +1,5 @@
 resources:
   - otel-configmap.yaml
-  - vllm-llama3-8b-rtx5070ti.yaml
-  - vllm-qwen2.5-coder-7b-rtx5060ti.yaml
-  - embedding-bge-m3-rtx3060.yaml
+  - coder.yaml
+  - embedding.yaml
   - reranker.yaml

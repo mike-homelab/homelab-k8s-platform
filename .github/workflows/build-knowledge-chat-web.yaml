@@ -1,4 +1,5 @@
 name: Build Knowledge Chat Web Image
+# trigger rebuild marker: 2026-03-14
 
 on:
   push:
