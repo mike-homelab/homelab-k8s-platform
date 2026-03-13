@@ -1,10 +1,19 @@
 import os
 import subprocess
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from smolagents import CodeAgent, HfApiModel, tool
 
-app = FastAPI(title="Jevin Agent API")
+app = FastAPI(title="Jevin Agent API", version="1.0.1")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME")
@@ -166,6 +175,69 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+# OpenAI-Compatible Models
+class OpenAIModel(BaseModel):
+    id: str
+    object: str = "model"
+    created: int = 1677610602
+    owned_by: str = "jevin"
+
+class OpenAIModelsResponse(BaseModel):
+    object: str = "list"
+    data: list[OpenAIModel]
+
+class OpenAIMessage(BaseModel):
+    role: str
+    content: str
+
+class OpenAIChatRequest(BaseModel):
+    model: str = "jevin"
+    messages: list[OpenAIMessage]
+    stream: bool = False
+
+class OpenAIChatChoice(BaseModel):
+    index: int = 0
+    message: OpenAIMessage
+    finish_reason: str = "stop"
+
+class OpenAIChatResponse(BaseModel):
+    id: str = "chatcmpl-jevin"
+    object: str = "chat.completion"
+    created: int = 1677610602
+    model: str = "jevin"
+    choices: list[OpenAIChatChoice]
+
+@app.get("/v1/models", response_model=OpenAIModelsResponse)
+async def list_models():
+    return OpenAIModelsResponse(data=[OpenAIModel(id="jevin")])
+
+@app.post("/v1/chat/completions", response_model=OpenAIChatResponse)
+async def openai_chat_endpoint(req: OpenAIChatRequest):
+    # Extract the last user message as the task for Jevin
+    last_msg = next((m.content for m in reversed(req.messages) if m.role == "user"), None)
+    if not last_msg:
+        raise HTTPException(status_code=400, detail="No user message found")
+    
+    try:
+        sys_prompt = (
+            "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
+            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase. "
+            "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
+            f"to persist your work to GitHub! Request: {last_msg}"
+        )
+        # We run the agent synchronously for now as smolagents .run is blocking
+        result = agent.run(sys_prompt)
+        
+        return OpenAIChatResponse(
+            choices=[
+                OpenAIChatChoice(
+                    message=OpenAIMessage(role="assistant", content=str(result))
+                )
+            ]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/agent/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
