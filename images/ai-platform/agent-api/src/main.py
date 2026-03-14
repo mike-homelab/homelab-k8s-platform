@@ -193,7 +193,7 @@ async def _add_history(session_id: str | None, user_text: str, assistant_text: s
 
 def _model_id(model: str) -> str:
     # Return the specialised coder model ID, defaulting to the 7B Instruct version
-    return os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-7B-Instruct")
+    return os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
 
 
 def _embedding_base_url() -> str:
