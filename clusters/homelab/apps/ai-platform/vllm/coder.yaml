@@ -53,7 +53,7 @@ spec:
     - metadata:
         name: hf-cache
       spec:
-        storageClassName: zfs-nvme
+        storageClassName: zfs-ssd
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
