@@ -27,7 +27,7 @@ spec:
             - --model
             - Qwen/Qwen2.5-Coder-7B-Instruct
             - --gpu-memory-utilization
-            - "0.90"                # safer headroom for 7B
+            - "0.80"                # safer headroom for 7B
             - --max-model-len
             - "8192"                # extended context length
             - --enable-prefix-caching
