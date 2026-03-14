@@ -1,72 +1,43 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tei-reranker
+  name: reranker
   namespace: ai-platform
   labels:
-    app: tei-reranker
+    app: reranker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: tei-reranker
+      app: reranker
   template:
     metadata:
       labels:
-        app: tei-reranker
+        app: reranker
     spec:
       nodeSelector:
         kubernetes.io/hostname: kubeworker03
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
-        openebs.io/nodeid: kubeworker03
       containers:
-        - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:1.5
+        - name: reranker
+          image: your-registry/reranker:latest   # build from Dockerfile with transformers
           imagePullPolicy: IfNotPresent
-          args:
-            - "--model-id"
-            - "BAAI/bge-reranker-v2-m3"
-            - "--max-client-batch-size"
-            - "16"
-            - "--max-batch-tokens"
-            - "1024"   # tuned for reranker context
-            - "--max-concurrent-requests"
-            - "128"
-            - "--port"
-            - "80"
           ports:
             - containerPort: 80
               name: http
-          env:
-            - name: PORT
-              value: "80"
-            - name: RUST_LOG
-              value: "info"
           resources:
             requests:
-              cpu: "1"
-              memory: "2Gi"
-              nvidia.com/gpu: "1"
-            limits:
               cpu: "4"
               memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 80
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 80
-            initialDelaySeconds: 30
-            periodSeconds: 20
       volumes:
         - name: hf-cache
           persistentVolumeClaim:
@@ -87,18 +58,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: tei-reranker
+  name: reranker
   namespace: ai-platform
   labels:
-    app: tei-reranker
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/path: /metrics
-    prometheus.io/port: "80"
+    app: reranker
 spec:
   type: ClusterIP
   selector:
-    app: tei-reranker
+    app: reranker
   ports:
     - protocol: TCP
       port: 80
