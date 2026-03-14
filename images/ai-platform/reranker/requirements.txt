@@ -1,0 +1,6 @@
+fastapi==0.115.4
+uvicorn==0.29.0
+transformers==4.40.0
+sentencepiece==0.2.0
+pydantic==2.8.0
+accelerate==0.29.3

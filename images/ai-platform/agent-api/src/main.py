@@ -229,7 +229,7 @@ def _query_terms(question: str) -> list[str]:
 
 
 def _tei_url() -> str:
-    return os.getenv("TEI_URL", "http://tei-reranker.ai-platform.svc.cluster.local:80")
+    return os.getenv("TEI_URL", "http://reranker.ai-platform.svc.cluster.local:80")
 
 
 async def _rerank_hits(client: httpx.AsyncClient, question: str, hits: list[dict], top_k: int) -> list[dict]:

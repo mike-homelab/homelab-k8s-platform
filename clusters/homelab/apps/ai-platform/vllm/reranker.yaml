@@ -21,7 +21,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
         - name: reranker
-          image: your-registry/reranker:latest   # build from Dockerfile with transformers
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/reranker:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
