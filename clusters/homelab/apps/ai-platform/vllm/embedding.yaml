@@ -14,12 +14,12 @@ spec:
         app: embedding-api
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kubeworker02
+        kubernetes.io/hostname: kubeworker03
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
         - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:pytorch-cuda12
+          image: ghcr.io/huggingface/text-embeddings-inference:1.8
           imagePullPolicy: IfNotPresent
           args:
             - --model-id
@@ -40,25 +40,6 @@ spec:
               cpu: "6"
               memory: "12Gi"
               nvidia.com/gpu: "1"
-          volumeMounts:
-            - name: hf-cache
-              mountPath: /root/.cache/huggingface
-      volumes:
-        - name: hf-cache
-          persistentVolumeClaim:
-            claimName: hf-cache-embedding
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: hf-cache-embedding
-  namespace: ai-platform
-spec:
-  storageClassName: zfs-ssd
-  accessModes: ["ReadWriteOnce"]
-  resources:
-    requests:
-      storage: 80Gi
 ---
 apiVersion: v1
 kind: Service

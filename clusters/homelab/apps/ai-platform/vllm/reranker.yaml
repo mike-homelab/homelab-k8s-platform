@@ -16,9 +16,9 @@ spec:
         app: reranker
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kubeworker03
+        kubernetes.io/hostname: kubeworker02
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060
       containers:
         - name: reranker
           image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/reranker:1.0.0
