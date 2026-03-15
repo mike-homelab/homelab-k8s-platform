@@ -1,13 +1,16 @@
 import json
 import os
 import re
+import time
 import uuid
 from datetime import datetime, timezone
+from typing import AsyncGenerator, Optional
 
 import httpx
 import redis.asyncio as redis
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from kubernetes import client as k8s_client
 from kubernetes import config as k8s_config
 from kubernetes.client.rest import ApiException
@@ -21,7 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.11.0")
+app = FastAPI(title="agent-api", version="0.12.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -761,3 +764,134 @@ def run_ingestor(req: TriggerIngestorRequest) -> TriggerIngestorResponse:
         raise HTTPException(status_code=500, detail=f"k8s api error: {exc.reason}") from exc
 
     return TriggerIngestorResponse(source=req.source, cronjob=cronjob_name, job_name=created.metadata.name)
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible API  (/v1/models + /v1/chat/completions)
+# Allows VS Code Continue extension and any OpenAI-compatible client to use
+# the full RAG-powered agent directly.
+# ---------------------------------------------------------------------------
+
+class OAIMessage(BaseModel):
+    role: str
+    content: str
+
+
+class OAIChatRequest(BaseModel):
+    model: str = "homelab-rag"
+    messages: list[OAIMessage]
+    stream: bool = False
+    temperature: float = Field(default=0.4, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=2048, ge=32, le=8192)
+    # Extra RAG controls forwarded if present
+    top_k: int = Field(default=10, ge=1, le=64)
+
+
+@app.get("/v1/models")
+async def list_models() -> JSONResponse:
+    """OpenAI-compatible model listing so Continue / other clients discover the model."""
+    return JSONResponse({
+        "object": "list",
+        "data": [
+            {
+                "id": "homelab-rag",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "homelab",
+                "description": "RAG-powered assistant backed by vLLM + Qdrant (AWS, Azure, Kubernetes docs)",
+            }
+        ],
+    })
+
+
+async def _rag_stream(answer: str, model: str) -> AsyncGenerator[bytes, None]:
+    """Yield the answer word-by-word as SSE chunks in OpenAI streaming format."""
+    cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
+    words = answer.split(" ")
+    for i, word in enumerate(words):
+        token = word if i == 0 else " " + word
+        chunk = {
+            "id": cid,
+            "object": "chat.completion.chunk",
+            "created": int(time.time()),
+            "model": model,
+            "choices": [{"index": 0, "delta": {"role": "assistant", "content": token}, "finish_reason": None}],
+        }
+        yield f"data: {json.dumps(chunk)}\n\n".encode()
+    # Final chunk
+    done_chunk = {
+        "id": cid,
+        "object": "chat.completion.chunk",
+        "created": int(time.time()),
+        "model": model,
+        "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+    }
+    yield f"data: {json.dumps(done_chunk)}\n\n".encode()
+    yield b"data: [DONE]\n\n"
+
+
+@app.post("/v1/chat/completions")
+async def oai_chat_completions(req: OAIChatRequest):
+    """
+    OpenAI-compatible chat completions endpoint.
+    Extracts the last user message and runs the full RAG pipeline
+    (embedding → Qdrant multi-collection → cross-encoder rerank → vLLM).
+    Supports both streaming and non-streaming responses.
+    """
+    # Extract the last user turn as the RAG question
+    user_messages = [m for m in req.messages if m.role == "user"]
+    if not user_messages:
+        raise HTTPException(status_code=422, detail="No user message found in messages")
+    question = user_messages[-1].content.strip()
+
+    # Find session_id from system message if present (allows memory across turns)
+    session_id: Optional[str] = None
+    for m in req.messages:
+        if m.role == "system" and "session_id:" in m.content:
+            try:
+                session_id = m.content.split("session_id:")[1].strip().split()[0]
+            except Exception:
+                pass
+
+    # Reuse the existing RagAskRequest pipeline
+    rag_req = RagAskRequest(
+        question=question,
+        model="general",
+        collection="auto",
+        top_k=req.top_k,
+        max_tokens=req.max_tokens,
+        temperature=req.temperature,
+        session_id=session_id,
+    )
+
+    try:
+        rag_resp = await rag_ask(rag_req)
+    except HTTPException as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    answer = rag_resp.answer
+    model_name = req.model
+
+    if req.stream:
+        return StreamingResponse(
+            _rag_stream(answer, model_name),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    return JSONResponse({
+        "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": model_name,
+        "choices": [{
+            "index": 0,
+            "message": {"role": "assistant", "content": answer},
+            "finish_reason": "stop",
+        }],
+        "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": rag_resp.tokens,
+            "total_tokens": rag_resp.tokens,
+        },
+    })
