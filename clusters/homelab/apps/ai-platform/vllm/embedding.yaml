@@ -14,25 +14,20 @@ spec:
         app: embedding-api
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kubeworker02
+        kubernetes.io/hostname: kubeworker04   # update to your RTX 5060 node
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
-        openebs.io/nodeid: kubeworker02
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060
       containers:
         - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:1.9.1
+          image: ghcr.io/huggingface/text-embeddings-inference:pytorch-cuda12
           imagePullPolicy: IfNotPresent
           args:
             - --model-id
-            - sentence-transformers/all-MiniLM-L6-v2
+            - BAAI/bge-m3
             - --pooling
             - cls
             - --max-client-batch-size
-            - "16"
-            - --max-batch-tokens
-            - "8192"
-            - --max-concurrent-requests
-            - "128"
+            - "32"
           ports:
             - name: http
               containerPort: 80
