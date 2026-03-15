@@ -6,9 +6,8 @@ metadata:
 data:
   APP_ENV: production
   APP_PORT: "8000"
-  VLLM_BASE_URL: http://vllm-llm.ai-platform.svc.cluster.local:8000/v1
-  VLLM_GENERAL_BASE_URL: http://vllm-llm.ai-platform.svc.cluster.local:8000/v1
   VLLM_CODER_BASE_URL: http://vllm-coder.ai-platform.svc.cluster.local:8000/v1
+  VLLM_CODER_MODEL_ID: Qwen/Qwen2.5-Coder-3B-Instruct
   EMBEDDING_BASE_URL: http://embedding-api.ai-platform.svc.cluster.local:80
   QDRANT_URL: http://qdrant.ai-platform.svc.cluster.local:6333
   CORS_ALLOW_ORIGINS: https://knowledge-chat.michaelhomelab.work,http://localhost:3000,http://localhost:8080

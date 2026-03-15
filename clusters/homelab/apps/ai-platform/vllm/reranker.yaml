@@ -62,11 +62,16 @@ metadata:
   namespace: ai-platform
   labels:
     app: reranker
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /health
+    prometheus.io/port: "8000"
 spec:
   type: ClusterIP
   selector:
     app: reranker
   ports:
-    - protocol: TCP
+    - name: http
+      protocol: TCP
       port: 80
-      targetPort: 80
+      targetPort: 8000
