@@ -192,6 +192,52 @@ def parse_md_title(text: str, filename: str) -> str:
     return filename
 
 
+def parse_rst_title(text: str, filename: str) -> str:
+    """Extract the first heading from an RST file.
+    RST headings are text underlined (and optionally overlined) with ==, --, ~~, etc.
+    """
+    lines = text.splitlines()
+    adornment = re.compile(r"^([=\-~^#*+`'".,:;!?|_<>{}()/\\])\1{2,}\s*$")
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Check if next non-empty line is an adornment (underline-only heading)
+        if i + 1 < len(lines) and adornment.match(lines[i + 1]):
+            # Make sure it's text, not an adornment line itself
+            if not adornment.match(line):
+                return stripped
+    return filename
+
+
+def rst_to_text(text: str) -> str:
+    """Strip RST markup and return clean plain text suitable for embedding."""
+    # Remove RST directives (.. directive:: args / options / body)
+    text = re.sub(r"\.\.\s+[\w:-]+::.*", "", text)
+    # Remove RST hyperlink targets: .. _label: URL
+    text = re.sub(r"\.\.\s+_[^:]+:.*", "", text)
+    # Remove anonymous targets: __
+    text = re.sub(r"^\.\.\s*$", "", text, flags=re.MULTILINE)
+    # Remove inline roles: :role:`text` -> text
+    text = re.sub(r":(?:ref|doc|class|func|meth|mod|attr|exc|data|const|obj|term|dfn|abbr|samp|kbd|file|envvar|option|token|any)[:`][^`]*`", lambda m: m.group(0).split("`")[-2] if "`" in m.group(0) else "", text)
+    text = re.sub(r":[a-z]+:`([^`]*)`", r"\1", text)
+    # Remove RST heading adornment lines (====, ----, ~~~~)
+    text = re.sub(r"^[=\-~^#*+`'".,:;!?|_<>{}()/\\]{3,}\s*$", "", text, flags=re.MULTILINE)
+    # Remove bold/italic markup
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    # Remove backtick code spans
+    text = re.sub(r"``([^`]*)``", r"\1", text)
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    # Remove hyperlink references: `label`_
+    text = re.sub(r"`[^`]+`_+", "", text)
+    # Remove comment blocks
+    text = re.sub(r"\.\.\s.*", "", text)
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
 def run() -> None:
     if SOURCE_TYPE == "git":
         run_git_ingestion()
@@ -223,7 +269,9 @@ def run_git_ingestion() -> None:
 
         root = Path(td)
         md_files = list(root.rglob("*.md")) + list(root.rglob("*.mdx"))
-        print(f"[{SOURCE_NAME}] found {len(md_files)} markdown files")
+        rst_files = list(root.rglob("*.rst"))
+        all_files = md_files + rst_files
+        print(f"[{SOURCE_NAME}] found {len(md_files)} markdown files, {len(rst_files)} RST files ({len(all_files)} total)")
 
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
             if RESET_COLLECTION_ON_START:
@@ -231,23 +279,32 @@ def run_git_ingestion() -> None:
                 if d.status_code not in (200, 404):
                     d.raise_for_status()
 
-            for f in md_files:
+            for f in all_files:
                 if pages_done >= MAX_PAGES:
                     break
-                
+
                 try:
-                    text = f.read_text(encoding="utf-8")
+                    raw_text = f.read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     continue
-                
+
+                if len(raw_text) < 50:
+                    continue
+
+                is_rst = f.suffix.lower() == ".rst"
+                rel_path = str(f.relative_to(root))
+                virtual_url = f"git://{SOURCE_NAME}/{rel_path}"
+
+                if is_rst:
+                    title = parse_rst_title(raw_text, f.name)
+                    text = rst_to_text(raw_text)
+                else:
+                    title = parse_md_title(raw_text, f.name)
+                    text = raw_text
+
                 if len(text) < 50:
                     continue
 
-                rel_path = str(f.relative_to(root))
-                # treat the file path as the "url" for consistency
-                virtual_url = f"git://{SOURCE_NAME}/{rel_path}"
-                title = parse_md_title(text, f.name)
-                
                 chunks = chunk_text(text, CHUNK_SIZE, CHUNK_OVERLAP)
                 if not chunks:
                     continue

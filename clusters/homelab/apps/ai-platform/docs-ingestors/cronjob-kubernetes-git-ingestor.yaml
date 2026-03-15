@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.3
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.6
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:

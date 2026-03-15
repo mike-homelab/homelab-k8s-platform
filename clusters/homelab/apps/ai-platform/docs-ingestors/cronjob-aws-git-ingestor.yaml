@@ -15,7 +15,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: ingestor
-              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.3
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.3.6
               imagePullPolicy: IfNotPresent
               envFrom:
                 - configMapRef:
@@ -28,7 +28,9 @@ spec:
                 - name: TENANT
                   value: aws-docs
                 - name: GIT_URL
-                  value: https://github.com/awsdocs/amazon-ec2-user-guide.git
+                  value: https://github.com/awsdocs/aws-cloudformation-user-guide.git
+                - name: SPARSE_CHECKOUT_DIRS
+                  value: "doc_source"
                 - name: QDRANT_COLLECTION
                   value: docs-aws-git
                 - name: RESET_COLLECTION_ON_START
