@@ -27,8 +27,6 @@ spec:
             - BAAI/bge-m3
             - --pooling
             - cls
-            - --backend
-            - pytorch
             - --max-client-batch-size
             - "16"
             - --max-batch-tokens
