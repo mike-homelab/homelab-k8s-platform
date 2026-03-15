@@ -20,11 +20,11 @@ spec:
         openebs.io/nodeid: kubeworker02
       containers:
         - name: tei
-          image: ghcr.io/huggingface/text-embeddings-inference:1.9
+          image: ghcr.io/huggingface/text-embeddings-inference:1.9.1
           imagePullPolicy: IfNotPresent
           args:
             - --model-id
-            - BAAI/bge-m3
+            - sentence-transformers/all-MiniLM-L6-v2
             - --pooling
             - cls
             - --max-client-batch-size
