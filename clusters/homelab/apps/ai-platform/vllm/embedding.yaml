@@ -14,7 +14,7 @@ spec:
         app: embedding-api
     spec:
       nodeSelector:
-        kubernetes.io/hostname: kubeworker04   # update to your RTX 5060 node
+        kubernetes.io/hostname: kubeworker02   # update to your RTX 5060 node
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060
       containers:
