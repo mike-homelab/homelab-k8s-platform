@@ -26,6 +26,11 @@ spec:
         devicePlugin:
           enabled: true
           runtimeClassName: ""   # force default runtime
+          securityContext:
+            privileged: true
+          extraEnv:
+            - name: NOFILE_LIMIT
+              value: "65536"
 
         dcgmExporter:
           enabled: true
