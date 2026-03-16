@@ -4,7 +4,7 @@ metadata:
   name: embedding-api
   namespace: ai-platform
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: embedding-api
