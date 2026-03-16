@@ -1,108 +1,108 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: mimir
-  namespace: argocd
-  annotations:
-    argocd.argoproj.io/sync-wave: "11"
-spec:
-  project: monitoring
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: mimir
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "11"
+# spec:
+#   project: monitoring
 
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: monitoring
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: monitoring
 
-  source:
-    repoURL: https://grafana.github.io/helm-charts
-    chart: mimir-distributed
-    targetRevision: "6.0.2"
-    helm:
-      values: |
-        # Disable bundled MinIO
-        minio:
-          enabled: false
+#   source:
+#     repoURL: https://grafana.github.io/helm-charts
+#     chart: mimir-distributed
+#     targetRevision: "6.0.2"
+#     helm:
+#       values: |
+#         # Disable bundled MinIO
+#         minio:
+#           enabled: false
 
-        mimir:
-          structuredConfig:
-            limits:
-              max_label_names_per_series: 200
+#         mimir:
+#           structuredConfig:
+#             limits:
+#               max_label_names_per_series: 200
 
-            common:
-              storage:
-                backend: s3
-                s3:
-                  endpoint: minio.monitoring.svc.cluster.local:9000
-                  access_key_id: Gp4Th5jWp23WQrnciiLz
-                  secret_access_key: UFBuK5ndrRzVgPadWUhtxdhLLkbiXlIJQcFpyX6H
-                  insecure: true
+#             common:
+#               storage:
+#                 backend: s3
+#                 s3:
+#                   endpoint: minio.monitoring.svc.cluster.local:9000
+#                   access_key_id: Gp4Th5jWp23WQrnciiLz
+#                   secret_access_key: UFBuK5ndrRzVgPadWUhtxdhLLkbiXlIJQcFpyX6H
+#                   insecure: true
 
-            blocks_storage:
-              backend: s3
-              s3:
-                bucket_name: mimir-blocks
+#             blocks_storage:
+#               backend: s3
+#               s3:
+#                 bucket_name: mimir-blocks
 
-            alertmanager_storage:
-              backend: s3
-              s3:
-                bucket_name: mimir-alertmanager
+#             alertmanager_storage:
+#               backend: s3
+#               s3:
+#                 bucket_name: mimir-alertmanager
 
-            ruler_storage:
-              backend: s3
-              s3:
-                bucket_name: mimir-ruler
+#             ruler_storage:
+#               backend: s3
+#               s3:
+#                 bucket_name: mimir-ruler
 
-        ingester:
-          replicas: 3
-          resources:
-            requests:
-              cpu: 100m
-              memory: 512Mi
-            limits:
-              memory: 1Gi
-          persistence:
-            enabled: true
-            size: 10Gi
-            storageClass: zfs-nvme
+#         ingester:
+#           replicas: 3
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 512Mi
+#             limits:
+#               memory: 1Gi
+#           persistence:
+#             enabled: true
+#             size: 10Gi
+#             storageClass: zfs-nvme
 
-        store_gateway:
-          replicas: 3
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
-          persistence:
-            enabled: true
-            size: 10Gi
-            storageClass: zfs-nvme
+#         store_gateway:
+#           replicas: 3
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
+#             limits:
+#               memory: 512Mi
+#           persistence:
+#             enabled: true
+#             size: 10Gi
+#             storageClass: zfs-nvme
 
-        distributor:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 500m
-              memory: 512Mi
-            limits:
-              memory: 1024Mi
+#         distributor:
+#           replicas: 2
+#           resources:
+#             requests:
+#               cpu: 500m
+#               memory: 512Mi
+#             limits:
+#               memory: 1024Mi
 
-        querier:
-          replicas: 2
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
+#         querier:
+#           replicas: 2
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
+#             limits:
+#               memory: 512Mi
 
-        query_frontend:
-          enabled: true
+#         query_frontend:
+#           enabled: true
 
-        compactor:
-          replicas: 1
-          resources:
-            requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              memory: 512Mi
+#         compactor:
+#           replicas: 1
+#           resources:
+#             requests:
+#               cpu: 100m
+#               memory: 256Mi
+#             limits:
+#               memory: 512Mi
