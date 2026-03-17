@@ -1,3 +1,4 @@
 resources:
   - https-route.yaml
+  - mayester-pools.yaml
   - storage-class.yaml

@@ -2,78 +2,63 @@
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: zfs-nvme
+  name: longhorn
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: zfs.csi.openebs.io
-
+provisioner: driver.longhorn.io
 allowVolumeExpansion: true
 reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer
-
+volumeBindingMode: Immediate
 parameters:
-  poolname: "zfs-nvme"
-  recordsize: "128k"
-  compression: "lz4"
-  dedup: "off"
-  fsType: "zfs"
-
-allowedTopologies:
-  - matchLabelExpressions:
-      - key: openebs.io/nodename
-        values:
-          - kubeworker01
-          - kubeworker02
-          - kubeworker03
-
-
+  numberOfReplicas: "2"
+  staleReplicaTimeout: "30"
+  fromBackup: ""
+  fsType: "ext4"
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: zfs-ssd
-provisioner: zfs.csi.openebs.io
-
-allowVolumeExpansion: true
+  name: mayastor-nvme-kube3
+provisioner: io.openebs.csi-mayastor
+parameters:
+  repl: "1"
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
-
-parameters:
-  poolname: "zfs-ssd"
-  recordsize: "128k"
-  compression: "lz4"
-  dedup: "off"
-  fsType: "zfs"
-
 allowedTopologies:
-  - matchLabelExpressions:
-      - key: openebs.io/nodename
-        values:
-          - kubeworker01
-          - kubeworker02
-          - kubeworker03
-
-
+- matchLabelExpressions:
+  - key: mayastor-role
+    operator: In
+    values:
+      - nvme-03
 ---
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: zfs-hdd
-provisioner: zfs.csi.openebs.io
-
-allowVolumeExpansion: true
+  name: mayastor-nvme-kube2
+provisioner: io.openebs.csi-mayastor
+parameters:
+  repl: "1"
 reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
-
-parameters:
-  poolname: "zfs-ssd"
-  recordsize: "128k"
-  compression: "lz4"
-  dedup: "off"
-  fsType: "zfs"
-
 allowedTopologies:
-  - matchLabelExpressions:
-      - key: openebs.io/nodename
-        values:
-          - kubeworker03
+- matchLabelExpressions:
+  - key: mayastor-role
+    operator: In
+    values:
+      - nvme-02
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: mayastor-nvme-kube3
+provisioner: io.openebs.csi-mayastor
+parameters:
+  repl: "1"
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:
+- matchLabelExpressions:
+  - key: mayastor-role
+    operator: In
+    values:
+      - nvme-03

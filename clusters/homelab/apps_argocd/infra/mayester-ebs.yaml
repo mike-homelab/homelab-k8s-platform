@@ -1,0 +1,68 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mayastor-core
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: infrastructure
+
+  source:
+    repoURL: https://openebs.github.io/openebs
+    chart: openebs
+    targetRevision: 3.10.0
+    helm:
+      releaseName: mayastor
+      values: |
+        engines:
+          local:
+            lvm:
+              enabled: false
+            zfs:
+              enabled: false
+          replicated:
+            mayastor:
+              enabled: true
+
+        mayastor:
+          csi:
+            node:
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 512Mi
+            controller:
+              replicas: 2
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 512Mi
+
+          io_engine:
+            nodeSelector:
+              node-role.kubernetes.io/worker: ""
+            tolerations:
+              - operator: Exists
+
+            resources:
+              requests:
+                cpu: 2000m
+                memory: 2Gi
+                hugepages-2Mi: 1Gi
+              limits:
+                cpu: 4000m
+                memory: 4Gi
+                hugepages-2Mi: 1Gi
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mayastor
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

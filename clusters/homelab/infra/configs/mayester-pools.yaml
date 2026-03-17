@@ -1,0 +1,27 @@
+apiVersion: mayastor.openebs.io/v1alpha1
+kind: Pool
+metadata:
+  name: nvme-01
+spec:
+  node: kubeworker01
+  disks:
+    - /dev/nvme0n1
+
+---
+apiVersion: mayastor.openebs.io/v1alpha1
+kind: Pool
+metadata:
+  name: nvme-02
+spec:
+  node: kubeworker02
+  disks:
+    - /dev/nvme0n1
+---
+apiVersion: mayastor.openebs.io/v1alpha1
+kind: Pool
+metadata:
+  name: nvme-03
+spec:
+  node: kubeworker03
+  disks:
+    - /dev/nvme0n1
