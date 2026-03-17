@@ -1,27 +1,31 @@
 ---
-apiVersion: mayastor.openebs.io/v1alpha1
-kind: Pool
+apiVersion: openebs.io/v1beta3
+kind: DiskPool
 metadata:
   name: nvme-01
+  namespace: mayastor
 spec:
   node: kubeworker01
   disks:
     - /dev/nvme0n1
 
 ---
-apiVersion: mayastor.openebs.io/v1alpha1
-kind: Pool
+apiVersion: openebs.io/v1beta3
+kind: DiskPool
 metadata:
   name: nvme-02
+  namespace: mayastor
 spec:
   node: kubeworker02
   disks:
     - /dev/nvme0n1
+
 ---
-apiVersion: mayastor.openebs.io/v1alpha1
-kind: Pool
+apiVersion: openebs.io/v1beta3
+kind: DiskPool
 metadata:
   name: nvme-03
+  namespace: mayastor
 spec:
   node: kubeworker03
   disks:
