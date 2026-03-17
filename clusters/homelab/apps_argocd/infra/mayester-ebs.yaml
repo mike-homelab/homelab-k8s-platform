@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
-  project: infrastructure
+  project: default
 
   source:
     repoURL: https://openebs.github.io/openebs
