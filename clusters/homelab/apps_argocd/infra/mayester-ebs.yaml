@@ -25,6 +25,10 @@ spec:
             enabled: true
 
         replicated:
+          etcd:
+            preUpgrade:
+              enabled: false   # ✅ IMPORTANT FIX
+
           csi:
             node:
               resources:
@@ -43,7 +47,6 @@ spec:
               node-role.kubernetes.io/worker: ""
             tolerations:
               - operator: Exists
-
             resources:
               requests:
                 cpu: 2000m
