@@ -25,6 +25,14 @@ spec:
             enabled: true
 
         replicated:
+            nats:
+              cluster:
+                enabled: true
+                replicas: 3
+                # Important: exclude self from routes
+                routes:
+                  - nats://mayastor-nats-0.mayastor-nats.mayastor.svc.cluster.local:6222
+                  - nats://mayastor-nats-1.mayastor-nats.mayastor.svc.cluster.local:6222
           etcd:
             preUpgrade:
               enabled: false
