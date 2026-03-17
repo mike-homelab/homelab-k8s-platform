@@ -27,7 +27,10 @@ spec:
         replicated:
           etcd:
             preUpgrade:
-              enabled: false   # ✅ IMPORTANT FIX
+              enabled: false
+            jwtToken:
+              secretName: mayastor-etcd-jwt-token
+              token: "31913f00f5612c243f68bbc4f0764442074a4b1dcb9841edaac6f0958d6e2978"
 
           csi:
             node:
