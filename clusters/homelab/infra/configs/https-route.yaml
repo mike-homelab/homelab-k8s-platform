@@ -27,8 +27,10 @@ metadata:
   namespace: longhorn-system
 spec:
   parentRefs:
-    - name: nginx-gateway   # your gateway name
-      namespace: gateway-system  # adjust if needed
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: nginx-gateway
+      namespace: gateway-system
 
   hostnames:
     - longhorn.michaelhomelab.work
@@ -39,5 +41,8 @@ spec:
             type: PathPrefix
             value: /
       backendRefs:
-        - name: longhorn-frontend
+        - group: ""
+          kind: Service
+          name: longhorn-frontend
           port: 80
+          weight: 1
