@@ -1,3 +1,4 @@
+---
 apiVersion: mayastor.openebs.io/v1alpha1
 kind: Pool
 metadata:
