@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mayastor-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"   # CRDs must be applied before core
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/openebs/mayastor.git
+    targetRevision: v4.4.0   # match the version you want
+    path: deploy/crds        # directory in repo containing CRD YAMLs
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mayastor      # CRDs are cluster-scoped, namespace is just for bookkeeping
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
