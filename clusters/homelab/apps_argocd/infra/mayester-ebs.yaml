@@ -11,7 +11,7 @@ spec:
   source:
     repoURL: https://openebs.github.io/openebs
     chart: openebs
-    targetRevision: 3.10.0
+    targetRevision: 4.4.0
     helm:
       releaseName: mayastor
       values: |
@@ -22,10 +22,9 @@ spec:
             zfs:
               enabled: false
           replicated:
-            mayastor:
-              enabled: true
+            enabled: true
 
-        mayastor:
+        replicated:
           csi:
             node:
               resources:
