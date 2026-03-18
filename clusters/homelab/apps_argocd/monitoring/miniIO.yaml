@@ -5,21 +5,27 @@ metadata:
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "10"
+
 spec:
   project: monitoring
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+
   source:
     repoURL: https://charts.min.io/
     chart: minio
     targetRevision: "5.4.0"
+
     helm:
       values: |
         mode: standalone
+
         deployment:
           strategy:
             type: Recreate
+
         resources:
           requests:
             cpu: 200m
@@ -27,12 +33,16 @@ spec:
           limits:
             cpu: 500m
             memory: 1Gi
+
         persistence:
           enabled: true
-          storageClass: mayastor-nvme-kube2
-          size: 100Gi
-  
-  # Manual Sync Only: This disables auto-sync, prune, and self-heal
+          storageClass: mayastor-single-replica   # ✅ correct choice now
+          size: 200Gi
+
+        # Optional: still pin if you want predictable locality
+        nodeSelector:
+          kubernetes.io/hostname: kubeworker01
+
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
