@@ -26,14 +26,34 @@ spec:
             enabled: true
 
         replicated:
+          mayastor:
+            enabled: true 
+
+          io_engine:
+            enabled: true
+
+            nodeSelector:
+              node-role.kubernetes.io/worker: ""
+            tolerations:
+              - operator: Exists
+            resources:
+              requests:
+                cpu: 2000m
+                memory: 2Gi
+                hugepages-2Mi: 1Gi
+              limits:
+                cpu: 4000m
+                memory: 4Gi
+                hugepages-2Mi: 1Gi
+
           nats:
             cluster:
               enabled: true
               replicas: 3
-              # Important: exclude self from routes
               routes:
                 - nats://mayastor-nats-0.mayastor-nats.mayastor.svc.cluster.local:6222
                 - nats://mayastor-nats-1.mayastor-nats.mayastor.svc.cluster.local:6222
+
           etcd:
             preUpgrade:
               enabled: false
@@ -53,21 +73,6 @@ spec:
                 requests:
                   cpu: 500m
                   memory: 512Mi
-
-          io_engine:
-            nodeSelector:
-              node-role.kubernetes.io/worker: ""
-            tolerations:
-              - operator: Exists
-            resources:
-              requests:
-                cpu: 2000m
-                memory: 2Gi
-                hugepages-2Mi: 1Gi
-              limits:
-                cpu: 4000m
-                memory: 4Gi
-                hugepages-2Mi: 1Gi
 
   destination:
     server: https://kubernetes.default.svc
