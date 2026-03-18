@@ -38,13 +38,13 @@ spec:
               - operator: Exists
             resources:
               requests:
-                cpu: 2000m
-                memory: 2Gi
-                hugepages-2Mi: 1Gi
+                cpu: 250m
+                memory: 512Mi
+                hugepages-2Mi: 512Mi
               limits:
-                cpu: 4000m
-                memory: 4Gi
-                hugepages-2Mi: 1Gi
+                cpu: 1000m
+                memory: 2Gi
+                hugepages-2Mi: 512Mi
 
           nats:
             cluster:
