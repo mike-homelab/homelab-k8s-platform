@@ -7,7 +7,7 @@ metadata:
 spec:
   node: kubeworker01
   disks:
-    - /dev/nvme0n1
+    - /dev/disk/by-id/nvme-CT1000P3PSSD8_24514D0ACAF1
 
 ---
 apiVersion: openebs.io/v1beta3
@@ -18,7 +18,7 @@ metadata:
 spec:
   node: kubeworker02
   disks:
-    - /dev/nvme0n1
+    - /dev/disk/by-id/nvme-WD_Blue_SN580_500GB_24455X411160
 
 ---
 apiVersion: openebs.io/v1beta3
@@ -29,4 +29,4 @@ metadata:
 spec:
   node: kubeworker03
   disks:
-    - /dev/nvme0n1
+    - /dev/disk/by-id/nvme-SKHynix_HFM256GD3HX015N_FJB3N542212103E4G
