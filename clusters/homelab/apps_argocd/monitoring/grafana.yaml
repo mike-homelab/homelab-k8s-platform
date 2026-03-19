@@ -27,7 +27,7 @@ spec:
             memory: 1G
         persistence:
           enabled: true
-          storageClassName: zfs-ssd
+          storageClassName: longhorn
           accessModes:
             - ReadWriteOnce
           size: 10Gi
