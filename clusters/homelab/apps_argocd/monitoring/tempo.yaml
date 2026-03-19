@@ -85,7 +85,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: zfs-nvme
+            storageClass: mayastor-single-replica
           resources:
             requests:
               cpu: 50m

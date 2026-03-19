@@ -62,7 +62,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: zfs-nvme
+            storageClass: mayastor-single-replica
 
         store_gateway:
           replicas: 3
@@ -75,7 +75,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: zfs-nvme
+            storageClass: mayastor-single-replica
 
         distributor:
           replicas: 2

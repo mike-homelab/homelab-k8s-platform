@@ -71,7 +71,7 @@ spec:
           replicas: 1
           persistence:
             size: 10Gi
-            storageClass: zfs-nvme
+            storageClass: longhorn
           resources:
             requests:
               cpu: 100m
@@ -88,7 +88,7 @@ spec:
           replicas: 1
           persistence:
             size: 10Gi
-            storageClass: zfs-nvme
+            storageClass: longhorn
           resources:
             requests:
               cpu: 100m
