@@ -6,7 +6,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
-  storageClassName: zfs-ssd
+  storageClassName: longhorn
   resources:
     requests:
       storage: 60Gi
