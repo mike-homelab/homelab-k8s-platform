@@ -44,3 +44,7 @@ jobs:
       - name: Push Docker image
         run: |
           docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/repo-reader:${{ steps.version.outputs.version }}
+      - name: Clean up Docker image
+        if: always()
+        run: |
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/repo-reader:${{ steps.version.outputs.version }} || true
