@@ -60,7 +60,7 @@ spec:
     - metadata:
         name: qdrant-data
       spec:
-        storageClassName: zfs-nvme
+        storageClassName: mayastor-single-replica
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:

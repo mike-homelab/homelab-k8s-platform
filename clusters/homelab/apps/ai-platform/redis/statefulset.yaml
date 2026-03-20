@@ -52,7 +52,7 @@ spec:
     - metadata:
         name: redis-data
       spec:
-        storageClassName: zfs-nvme
+        storageClassName: mayastor-single-replica
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
