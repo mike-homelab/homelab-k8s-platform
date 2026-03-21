@@ -197,7 +197,7 @@ def parse_rst_title(text: str, filename: str) -> str:
     RST headings are text underlined (and optionally overlined) with ==, --, ~~, etc.
     """
     lines = text.splitlines()
-    adornment = re.compile(r"^([=\-~^#*+`'".,:;!?|_<>{}()/\\])\1{2,}\s*$")
+    adornment = re.compile(r'^([=\-~^#*+`\'",.,:;!?|_<>{}()/\\])\1{2,}\s*$')
     for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped:
@@ -222,7 +222,7 @@ def rst_to_text(text: str) -> str:
     text = re.sub(r":(?:ref|doc|class|func|meth|mod|attr|exc|data|const|obj|term|dfn|abbr|samp|kbd|file|envvar|option|token|any)[:`][^`]*`", lambda m: m.group(0).split("`")[-2] if "`" in m.group(0) else "", text)
     text = re.sub(r":[a-z]+:`([^`]*)`", r"\1", text)
     # Remove RST heading adornment lines (====, ----, ~~~~)
-    text = re.sub(r"^[=\-~^#*+`'".,:;!?|_<>{}()/\\]{3,}\s*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r'^[=\-~^#*+`\'",.,:;!?|_<>{}()/\\]{3,}\s*$', "", text, flags=re.MULTILINE)
     # Remove bold/italic markup
     text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
     text = re.sub(r"\*([^*]+)\*", r"\1", text)
