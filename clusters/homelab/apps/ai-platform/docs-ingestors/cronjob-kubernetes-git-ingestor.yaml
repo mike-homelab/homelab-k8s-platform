@@ -39,6 +39,8 @@ spec:
                   value: "24"
                 - name: EMBED_BATCH_SIZE
                   value: "32"
+                - name: MAX_PAGES
+                  value: "10000"
               resources:
                 requests:
                   cpu: "1"

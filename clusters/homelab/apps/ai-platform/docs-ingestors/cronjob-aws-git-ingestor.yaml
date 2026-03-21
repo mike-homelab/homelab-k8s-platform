@@ -28,9 +28,9 @@ spec:
                 - name: TENANT
                   value: aws-docs
                 - name: GIT_URL
-                  value: https://github.com/awsdocs/aws-cloudformation-user-guide.git
+                  value: https://github.com/awslabs/aws-well-architected-labs.git
                 - name: SPARSE_CHECKOUT_DIRS
-                  value: "doc_source"
+                  value: ""
                 - name: QDRANT_COLLECTION
                   value: docs-aws-git
                 - name: RESET_COLLECTION_ON_START
@@ -39,6 +39,8 @@ spec:
                   value: "24"
                 - name: EMBED_BATCH_SIZE
                   value: "32"
+                - name: MAX_PAGES
+                  value: "15000"
               resources:
                 requests:
                   cpu: "1"
