@@ -197,8 +197,8 @@ def ask_local_mcp(tool_name: str, arguments: dict) -> str:
     url = f"http://{host_ip}:8080/sse"
 
     async def _fetch():
-        async with sse_client(url) as (read, write):
-            async with ClientSession(read, write) as session:
+        async with sse_client(url) as streams:
+            async with ClientSession(streams[0], streams[1]) as session:
                 await session.initialize()
                 res = await session.call_tool(tool_name, arguments)
                 return res.content[0].text
@@ -226,7 +226,7 @@ model = OpenAIServerModel(
 agent = CodeAgent(
     tools=[read_file, list_dir, edit_code, run_bash, ask_gemini, ask_local_mcp, create_pull_request], 
     model=model,
-    add_base_tools=True
+    add_base_tools=False
 )
 
 
@@ -275,7 +275,7 @@ async def list_models():
     return OpenAIModelsResponse(data=[OpenAIModel(id="jevin")])
 
 @app.post("/v1/chat/completions", response_model=OpenAIChatResponse)
-async def openai_chat_endpoint(req: OpenAIChatRequest):
+def openai_chat_endpoint(req: OpenAIChatRequest):
     # Extract the last user message as the task for Jevin
     last_msg = next((m.content for m in reversed(req.messages) if m.role == "user"), None)
     if not last_msg:
@@ -310,7 +310,7 @@ async def openai_chat_endpoint(req: OpenAIChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/agent/chat", response_model=ChatResponse)
-async def chat_endpoint(req: ChatRequest):
+def chat_endpoint(req: ChatRequest):
     try:
         if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
             subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR)
