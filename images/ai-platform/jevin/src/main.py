@@ -3,7 +3,7 @@ import subprocess
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from smolagents import CodeAgent, HfApiModel, tool
+from smolagents import CodeAgent, OpenAIServerModel, tool
 
 app = FastAPI(title="Jevin Agent API", version="1.0.3")
 
@@ -210,10 +210,10 @@ model_id = os.getenv("VLLM_CODER_MODEL_ID", "Qwen/Qwen2.5-Coder-3B-Instruct")
 # We mock the API key since vLLM doesn't require one internally, but the framework expects it.
 os.environ["HF_TOKEN"] = "mock-token-for-vllm"
 
-model = HfApiModel(
+model = OpenAIServerModel(
     model_id=model_id,
-    provider="vllm", # custom provider string if using OpenAI compatible base_url in smolagents > 1.3
-    base_url=vllm_base_url,
+    api_base=vllm_base_url,
+    api_key="mock-token-for-vllm"
 )
 
 agent = CodeAgent(
