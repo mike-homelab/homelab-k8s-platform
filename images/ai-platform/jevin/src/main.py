@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from smolagents import CodeAgent, HfApiModel, tool
 
-app = FastAPI(title="Jevin Agent API", version="1.0.1")
+app = FastAPI(title="Jevin Agent API", version="1.0.2")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,6 +28,31 @@ if GITHUB_PAT and GITHUB_USERNAME:
         subprocess.run(["git", "clone", repo_url, WORKSPACE_DIR], check=True)
 else:
     print("[!] Warning: GITHUB_PAT or GITHUB_USERNAME is missing. GitOps features may fail.")
+
+def generate_repo_map(root_dir='/workspace', max_depth=3):
+    """Generates a compressed folder tree of the workspace."""
+    if not os.path.exists(root_dir):
+        return "Workspace is empty."
+    tree = "Workspace Architecture Map:\n"
+    for root, dirs, files in os.walk(root_dir):
+        # Filter out noisy directories
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('node_modules', 'venv', 'dist', '__pycache__', 'build')]
+        depth = root[len(root_dir):].count(os.sep)
+        if depth >= max_depth:
+            dirs.clear()
+            continue
+        indent = '  ' * depth
+        folder = os.path.basename(root)
+        if depth == 0:
+            tree += f"/\n"
+        else:
+            tree += f"{indent}{folder}/\n"
+        # Optional: Add files if depth < max_depth
+        if depth < max_depth:
+            for f in files:
+                if not f.startswith('.') and not f.endswith(('.pyc', '.png', '.jpg', '.jpeg', '.pdf', '.bin')):
+                    tree += f"{indent}  {f}\n"
+    return tree
 
 # --------- Tools ---------
 
@@ -220,9 +245,17 @@ async def openai_chat_endpoint(req: OpenAIChatRequest):
         raise HTTPException(status_code=400, detail="No user message found")
     
     try:
+        # 1. Sync the workspace with latest GitOps changes so the agent always
+        # sees what the user most recently pushed from their local PC!
+        if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
+            subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR)
+            
+        repo_map = generate_repo_map()
+            
         sys_prompt = (
             "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase. "
+            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+            f"{repo_map}\n\n"
             "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
             f"to persist your work to GitHub! Request: {last_msg}"
         )
@@ -242,9 +275,15 @@ async def openai_chat_endpoint(req: OpenAIChatRequest):
 @app.post("/agent/chat", response_model=ChatResponse)
 async def chat_endpoint(req: ChatRequest):
     try:
+        if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
+            subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR)
+            
+        repo_map = generate_repo_map()
+        
         sys_prompt = (
             "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase. "
+            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+            f"{repo_map}\n\n"
             "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
             f"to persist your work to GitHub! Request: {req.prompt}"
         )
