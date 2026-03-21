@@ -36,7 +36,7 @@ if GITHUB_PAT and GITHUB_USERNAME:
 else:
     print("[!] Warning: GITHUB_PAT or GITHUB_USERNAME is missing. GitOps features may fail.")
 
-def generate_repo_map(root_dir='/workspace', max_depth=3):
+def generate_repo_map(root_dir='/workspace', max_depth=2):
     """Generates a compressed folder tree of the workspace."""
     if not os.path.exists(root_dir):
         return "Workspace is empty."
@@ -147,7 +147,7 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
         subprocess.run(f"git config --global user.name '{GITHUB_USERNAME} AI Agent'", shell=True, cwd=WORKSPACE_DIR)
         
         # Branch, Commit, Push
-        subprocess.run(f"git checkout -b {branch_name}", shell=True, cwd=WORKSPACE_DIR, check=True)
+        subprocess.run(f"git checkout -B {branch_name}", shell=True, cwd=WORKSPACE_DIR, check=True)
         subprocess.run("git add .", shell=True, cwd=WORKSPACE_DIR, check=True)
         subprocess.run(f"git commit -m '{title}'", shell=True, cwd=WORKSPACE_DIR, check=True)
         
