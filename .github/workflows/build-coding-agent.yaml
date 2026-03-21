@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - images/ai-platform/agents/coding-agent/**
+      - .github/workflows/build-coding-agent.yaml
   pull_request:
     branches:
       - main

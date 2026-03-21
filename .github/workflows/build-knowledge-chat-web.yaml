@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - images/ai-platform/knowledge-chat-web/**
+      - .github/workflows/build-knowledge-chat-web.yaml
   pull_request:
     branches:
       - main

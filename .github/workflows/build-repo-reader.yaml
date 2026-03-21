@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - images/ai-platform/tools/repo-reader/**
+      - .github/workflows/build-repo-reader.yaml
   pull_request:
     branches:
       - main
