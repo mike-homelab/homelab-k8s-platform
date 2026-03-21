@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from smolagents import CodeAgent, HfApiModel, tool
 
-app = FastAPI(title="Jevin Agent API", version="1.0.2")
+app = FastAPI(title="Jevin Agent API", version="1.0.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -171,6 +171,36 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
     except Exception as e:
         return f"Error during GitOps PR flow: {e}"
 
+@tool
+def ask_local_mcp(tool_name: str, arguments: dict) -> str:
+    """A tool that proxies execution back to the user's remote PC via Model Context Protocol (MCP).
+    Use this to read, write, or list live files on the user's actual desktop if GitOps is too slow!
+    Args:
+        tool_name: The name of the MCP tool (e.g. "read_local_file", "write_local_file", "list_local_dir").
+        arguments: The dictionary arguments required by the tool (e.g., {"path": "src/main.py"}).
+    """
+    import asyncio
+    try:
+        from mcp import ClientSession
+        from mcp.client.sse import sse_client
+    except ImportError:
+        return "Error: mcp sdk not installed in container"
+        
+    host_ip = os.getenv("HOST_IP", "127.0.0.1")
+    url = f"http://{host_ip}:8080/sse"
+
+    async def _fetch():
+        async with sse_client(url) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                res = await session.call_tool(tool_name, arguments)
+                return res.content[0].text
+                
+    try:
+        return asyncio.run(_fetch())
+    except Exception as e:
+        return f"MCP Connection Error to {url}: {e}"
+
 # --------- Agent Setup ---------
 
 # We connect smolagents to the existing homelab vLLM Coder endpoint.
@@ -187,7 +217,7 @@ model = HfApiModel(
 )
 
 agent = CodeAgent(
-    tools=[read_file, list_dir, edit_code, run_bash, ask_gemini, create_pull_request], 
+    tools=[read_file, list_dir, edit_code, run_bash, ask_gemini, ask_local_mcp, create_pull_request], 
     model=model,
     add_base_tools=True
 )

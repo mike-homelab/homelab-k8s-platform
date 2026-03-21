@@ -18,7 +18,7 @@ spec:
       serviceAccountName: default
       containers:
         - name: jevin
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:1.0.2
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:1.0.3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -27,6 +27,10 @@ spec:
               value: "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1"
             - name: VLLM_CODER_MODEL_ID
               value: "Qwen/Qwen2.5-Coder-7B-Instruct"
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             # External fall back logic
             - name: GEMINI_API_KEY
               valueFrom:
