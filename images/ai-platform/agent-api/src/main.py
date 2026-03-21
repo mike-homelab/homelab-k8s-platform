@@ -24,7 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.13.0")
+app = FastAPI(title="agent-api", version="0.14.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -455,9 +455,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             
             target_model = req.model
             if req.collection == "auto":
-                collections_to_search, routed_model = await _determine_collections_and_model(client, req.question, req.model)
-                if not collections_to_search:
-                    collections_to_search = ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git"]
+                _, routed_model = await _determine_collections_and_model(client, req.question, req.model)
+                collections_to_search = ["docs-aws-git", "docs-azure-git", "docs-kubernetes-git", "rag-docs"]
                 # Override the model if the user didn't explicitly demand 'coder'
                 if req.model == "general" and routed_model == "coder":
                     target_model = "coder"
@@ -467,17 +466,42 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             terms = _query_terms(req.question)
             all_chunk_hits = []
             
+            import asyncio
+            async def _fetch_web():
+                try:
+                    def sync_ddg():
+                        from duckduckgo_search import DDGS
+                        with DDGS() as ddgs:
+                            return list(ddgs.text(req.question, max_results=5))
+                    res = await asyncio.get_running_loop().run_in_executor(None, sync_ddg)
+                    hits = []
+                    for i, r in enumerate(res):
+                        hits.append({
+                            "id": f"web-{i}",
+                            "vector": [],
+                            "payload": {
+                                "text": r.get("body", ""),
+                                "url": r.get("href", ""),
+                                "doc_id": "web-search",
+                                "chunk_index": i
+                            },
+                            "score": 0.0,
+                            "__collection_name__": "web-search"
+                        })
+                    return hits
+                except Exception as e:
+                    print(f"Web search failed: {e}")
+                    return []
+                    
+            web_task = asyncio.create_task(_fetch_web())
+
             for coll in collections_to_search:
                 try:
                     service = _infer_service(coll, req.question, req.service)
                     
                     if "git" in coll:
-                        must_filters = []
-                        if service and coll in {"docs-aws-git", "docs-azure-git"}:
-                            must_filters.append({"key": "service", "match": {"value": service}})
-                        query_filter = {"must": must_filters} if must_filters else None
-                        
-                        coll_chunk_hits = await _qdrant_search(client, coll, query_vec, max(req.top_k * 8, 20), query_filter)
+                        # Direct search, completely bypassing service/metadata filters which git ingestors do not generate.
+                        coll_chunk_hits = await _qdrant_search(client, coll, query_vec, max(req.top_k * 4, 15), None)
                         for h in coll_chunk_hits:
                             h["__collection_name__"] = coll
                         all_chunk_hits.extend(coll_chunk_hits)
@@ -520,6 +544,8 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                     continue
 
             # Phase 2: Cross-Encoder Reranking
+            web_hits = await web_task
+            all_chunk_hits.extend(web_hits)
             hits = await _rerank_hits(client, req.question, all_chunk_hits, req.top_k)
             
             sources: list[RagSource] = []
@@ -540,33 +566,6 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                         collection=coll_name,
                     )
                 )
-
-            if not context_parts:
-                print(f"No local context found, trying web search for: {req.question}")
-                try:
-                    from duckduckgo_search import AsyncDDGS
-                    async with AsyncDDGS() as ddgs:
-                        # Duckduckgo max_results should be inside the async loop via islice or limit if using the async generator
-                        results = []
-                        async for r in ddgs.text(req.question, max_results=4):
-                            results.append(r)
-                            
-                        for i, r in enumerate(results):
-                            text = r.get("body", "")
-                            if text:
-                                context_parts.append(text)
-                            sources.append(
-                                RagSource(
-                                    doc_id=f"web-{i}",
-                                    chunk_index=i,
-                                    score=1.0,
-                                    text=text,
-                                    url=str(r.get("href", "")),
-                                    collection="web-search"
-                                )
-                            )
-                except Exception as e:
-                    print(f"Web search failed: {e}")
 
             if not context_parts:
                 raise HTTPException(status_code=404, detail=f"no context found in collection '{req.collection}' and web search failed")
