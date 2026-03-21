@@ -3,7 +3,7 @@ gunicorn==21.2.0
 uvicorn
 httpx
 pydantic
-smolagents
+smolagents[openai]
 mcp==1.4.0
 httpx==0.27.0
 python-dotenv==1.0.1
