@@ -17,6 +17,7 @@ app.add_middleware(
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME")
+REPO_OWNER = "mike-homelab"
 REPO_NAME = "homelab-k8s-platform"
 WORKSPACE_DIR = "/workspace"
 
@@ -24,7 +25,7 @@ WORKSPACE_DIR = "/workspace"
 if GITHUB_PAT and GITHUB_USERNAME:
     if not os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
         print(f"[*] Cloning repository to {WORKSPACE_DIR}")
-        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{GITHUB_USERNAME}/{REPO_NAME}.git"
+        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{REPO_OWNER}/{REPO_NAME}.git"
         subprocess.run(["git", "clone", repo_url, WORKSPACE_DIR], check=True)
 else:
     print("[!] Warning: GITHUB_PAT or GITHUB_USERNAME is missing. GitOps features may fail.")
@@ -144,7 +145,7 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
         subprocess.run("git add .", shell=True, cwd=WORKSPACE_DIR, check=True)
         subprocess.run(f"git commit -m '{title}'", shell=True, cwd=WORKSPACE_DIR, check=True)
         
-        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{GITHUB_USERNAME}/{REPO_NAME}.git"
+        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{REPO_OWNER}/{REPO_NAME}.git"
         subprocess.run(f"git push {repo_url} {branch_name}", shell=True, cwd=WORKSPACE_DIR, check=True)
         
         # Open PR using GitHub REST API
@@ -160,7 +161,7 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
             "Accept": "application/vnd.github.v3+json"
         }
         resp = httpx.post(
-            f"https://api.github.com/repos/{GITHUB_USERNAME}/{REPO_NAME}/pulls",
+            f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/pulls",
             json=pr_data,
             headers=headers
         )
