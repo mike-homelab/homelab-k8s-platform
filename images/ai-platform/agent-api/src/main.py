@@ -24,7 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from pydantic import BaseModel, Field
 from prometheus_fastapi_instrumentator import Instrumentator
 
-app = FastAPI(title="agent-api", version="0.12.0")
+app = FastAPI(title="agent-api", version="0.13.0")
 
 cors_allow_origins = [x.strip() for x in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if x.strip()]
 app.add_middleware(
@@ -470,6 +470,19 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
             for coll in collections_to_search:
                 try:
                     service = _infer_service(coll, req.question, req.service)
+                    
+                    if "git" in coll:
+                        must_filters = []
+                        if service and coll in {"docs-aws-git", "docs-azure-git"}:
+                            must_filters.append({"key": "service", "match": {"value": service}})
+                        query_filter = {"must": must_filters} if must_filters else None
+                        
+                        coll_chunk_hits = await _qdrant_search(client, coll, query_vec, max(req.top_k * 8, 20), query_filter)
+                        for h in coll_chunk_hits:
+                            h["__collection_name__"] = coll
+                        all_chunk_hits.extend(coll_chunk_hits)
+                        continue
+
                     summary_must = [{"key": "doc_type", "match": {"value": "summary"}}]
                     if service and coll in {"docs-aws-git", "docs-azure-git"}:
                         summary_must.append({"key": "service", "match": {"value": service}})
@@ -529,7 +542,34 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                 )
 
             if not context_parts:
-                raise HTTPException(status_code=404, detail=f"no context found in collection '{req.collection}'")
+                print(f"No local context found, trying web search for: {req.question}")
+                try:
+                    from duckduckgo_search import AsyncDDGS
+                    async with AsyncDDGS() as ddgs:
+                        # Duckduckgo max_results should be inside the async loop via islice or limit if using the async generator
+                        results = []
+                        async for r in ddgs.text(req.question, max_results=4):
+                            results.append(r)
+                            
+                        for i, r in enumerate(results):
+                            text = r.get("body", "")
+                            if text:
+                                context_parts.append(text)
+                            sources.append(
+                                RagSource(
+                                    doc_id=f"web-{i}",
+                                    chunk_index=i,
+                                    score=1.0,
+                                    text=text,
+                                    url=str(r.get("href", "")),
+                                    collection="web-search"
+                                )
+                            )
+                except Exception as e:
+                    print(f"Web search failed: {e}")
+
+            if not context_parts:
+                raise HTTPException(status_code=404, detail=f"no context found in collection '{req.collection}' and web search failed")
 
             messages = await _get_history(req.session_id)
             

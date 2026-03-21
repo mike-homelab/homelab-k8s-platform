@@ -9,3 +9,4 @@ opentelemetry-instrumentation-fastapi==0.56b0
 opentelemetry-instrumentation-httpx==0.56b0
 prometheus-fastapi-instrumentator==7.1.0
 redis==5.0.3
+duckduckgo-search==6.3.0
