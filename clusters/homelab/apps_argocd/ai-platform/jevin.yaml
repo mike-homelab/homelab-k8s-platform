@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jevin
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "22"
+spec:
+  project: ai-platform
+  source:
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/apps/ai-platform/jevin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ai-platform
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

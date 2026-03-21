@@ -1,8 +1,8 @@
 import os
 from mcp.server.fastmcp import FastMCP
 
-# Create an MCP server instance
-mcp = FastMCP("Michael-Homelab")
+# Create an MCP server instance bound to 0.0.0.0 to allow Jevin to connect
+mcp = FastMCP("Michael-Homelab", host="0.0.0.0", port=8080)
 
 # Determine the absolute path of the user's workspace
 WORKSPACE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__)))
@@ -48,4 +48,4 @@ def list_local_dir(path: str = "") -> str:
 if __name__ == "__main__":
     print(f"[*] Starting Local FastMCP Server targeting {WORKSPACE_DIR}")
     print("[*] Jevin will securely connect to this server over SSE.")
-    mcp.run(transport="sse", host="0.0.0.0", port=8080)
+    mcp.run(transport="sse")
