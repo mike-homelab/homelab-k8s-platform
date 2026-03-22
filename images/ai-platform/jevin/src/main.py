@@ -232,8 +232,11 @@ agent = CodeAgent(
 
 # --------- API Routes ---------
 
+from typing import Optional
+
 class ChatRequest(BaseModel):
     prompt: str
+    system_prompt: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
@@ -281,25 +284,28 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
     if not last_msg:
         raise HTTPException(status_code=400, detail="No user message found")
     
+    custom_sys = next((m.content for m in req.messages if m.role == "system"), None)
+    
     try:
-        # 1. Sync the workspace with latest GitOps changes so the agent always
-        # sees what the user most recently pushed from their local PC!
         if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
             subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR)
             
         repo_map = generate_repo_map()
-            
-        sys_prompt = (
-            "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
-            f"{repo_map}\n\n"
-            "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
-            "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-            "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
-            "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
-            "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
-            f"Request: {last_msg}"
-        )
+        
+        if custom_sys:
+            sys_prompt = f"{custom_sys}\n\nRequest: {last_msg}"
+        else:
+            sys_prompt = (
+                "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
+                "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+                f"{repo_map}\n\n"
+                "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
+                "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
+                "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
+                "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
+                "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+                f"Request: {last_msg}"
+            )
         # We run the agent synchronously for now as smolagents .run is blocking
         result = agent.run(sys_prompt)
         
@@ -321,17 +327,20 @@ def chat_endpoint(req: ChatRequest):
             
         repo_map = generate_repo_map()
         
-        sys_prompt = (
-            "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-            "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
-            f"{repo_map}\n\n"
-            "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
-            "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-            "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
-            "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
-            "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
-            f"Request: {req.prompt}"
-        )
+        if req.system_prompt:
+            sys_prompt = f"{req.system_prompt}\n\nRequest: {req.prompt}"
+        else:
+            sys_prompt = (
+                "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
+                "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+                f"{repo_map}\n\n"
+                "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
+                "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
+                "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
+                "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
+                "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+                f"Request: {req.prompt}"
+            )
         result = agent.run(sys_prompt)
         return ChatResponse(response=str(result))
     except Exception as e:
