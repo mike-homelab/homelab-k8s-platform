@@ -27,7 +27,7 @@ spec:
             - --gpu-memory-utilization
             - "0.85"
             - --max-model-len
-            - "32768"
+            - "65536"
             - --enable-prefix-caching
           envFrom:
             - configMapRef:
