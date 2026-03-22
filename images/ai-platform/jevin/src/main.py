@@ -88,19 +88,18 @@ def list_dir(path: str) -> str:
         return f"Error listing directory {path}: {e}"
 
 @tool
-def edit_code(path: str, instruction: str) -> str:
-    """A powerful tool that uses the agent's intelligence to apply a change to a file.
-    This tool should be used when you want to modify an existing file.
+def write_file(path: str, content: str) -> str:
+    """Writes the given textual content to a file at the absolute path. Overwrites the file if it exists.
     Args:
-        path: The absolute path to the file perfectly matching the workspace.
-        instruction: A precise description of what to change in the file.
+        path: The absolute path to the file.
+        content: The textual content to be written to the file.
     """
-    # In a full setup, this would use a localized diffing/editing algorithm or specialized LLM call.
-    # For now, we will return a string prompting the agent to use run_bash to write the code natively.
-    return (
-        f"To edit {path}, please use the `run_bash` tool with python, sed, or standard bash echoed "
-        f"commands to implement the following instruction: {instruction}"
-    )
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return f"Successfully wrote to file {path}"
+    except Exception as e:
+        return f"Error writing file {path}: {e}"
 
 @tool
 def run_bash(command: str) -> str:
@@ -111,7 +110,7 @@ def run_bash(command: str) -> str:
     """
     try:
         result = subprocess.run(
-            command, shell=True, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+            command, shell=True, check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=WORKSPACE_DIR
         )
         return f"STDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     except Exception as e:
@@ -224,9 +223,10 @@ model = OpenAIServerModel(
 )
 
 agent = CodeAgent(
-    tools=[read_file, list_dir, edit_code, run_bash, ask_gemini, ask_local_mcp, create_pull_request], 
+    tools=[read_file, list_dir, write_file, run_bash, ask_gemini, ask_local_mcp, create_pull_request], 
     model=model,
-    add_base_tools=False
+    add_base_tools=False,
+    additional_authorized_imports=["statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
 )
 
 
