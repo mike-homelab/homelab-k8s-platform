@@ -36,7 +36,7 @@ if GITHUB_PAT and GITHUB_USERNAME:
 else:
     print("[!] Warning: GITHUB_PAT or GITHUB_USERNAME is missing. GitOps features may fail.")
 
-def generate_repo_map(root_dir='/workspace', max_depth=2):
+def generate_repo_map(root_dir='/workspace', max_depth=1):
     """Generates a compressed folder tree of the workspace."""
     if not os.path.exists(root_dir):
         return "Workspace is empty."
