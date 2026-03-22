@@ -295,8 +295,10 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
             f"{repo_map}\n\n"
             "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
             "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-            "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
-            f"to persist your work to GitHub! Request: {last_msg}"
+            "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
+            "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
+            "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+            f"Request: {last_msg}"
         )
         # We run the agent synchronously for now as smolagents .run is blocking
         result = agent.run(sys_prompt)
@@ -325,8 +327,10 @@ def chat_endpoint(req: ChatRequest):
             f"{repo_map}\n\n"
             "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
             "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-            "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
-            f"to persist your work to GitHub! Request: {req.prompt}"
+            "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
+            "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
+            "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+            f"Request: {req.prompt}"
         )
         result = agent.run(sys_prompt)
         return ChatResponse(response=str(result))
