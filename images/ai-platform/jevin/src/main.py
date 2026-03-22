@@ -301,9 +301,9 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
                 f"{repo_map}\n\n"
                 "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
                 "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-                "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
-                "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
-                "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+                "If you are modifying files to complete the request, make the changes locally inside /workspace, "
+                "and then use the `run_bash` tool to run `git diff` to extract a Unified Diff patch string of your edits. "
+                "Return the Unified Diff string directly using the `final_answer()` tool instead of using `create_pull_request` or committing to Github.\n\n"
                 f"Request: {last_msg}"
             )
         # We run the agent synchronously for now as smolagents .run is blocking
@@ -336,9 +336,9 @@ def chat_endpoint(req: ChatRequest):
                 f"{repo_map}\n\n"
                 "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
                 "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-                "If you are modifying files to complete the request, you MUST use the `create_pull_request` tool "
-                "to persist your work to GitHub! However, if you are only asked for analysis, code reviews, "
-                "or answering questions, use the `final_answer` tool directly with your response instead.\n\n"
+                "If you are modifying files to complete the request, make the changes locally inside /workspace, "
+                "and then use the `run_bash` tool to run `git diff` to extract a Unified Diff patch string of your edits. "
+                "Return the Unified Diff string directly using the `final_answer()` tool instead of using `create_pull_request` or committing to Github.\n\n"
                 f"Request: {req.prompt}"
             )
         result = agent.run(sys_prompt)
