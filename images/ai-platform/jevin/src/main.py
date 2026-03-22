@@ -129,6 +129,26 @@ def ask_gemini(query: str) -> str:
     return "Simulated Gemini Response: Here is the code/answer you requested..."
 
 @tool
+def replace_file_content(path: str, target: str, replacement: str) -> str:
+    """Replaces a specific string match inside a file with new contents. Fits modular refactors easily.
+    Args:
+        path: Absolute path to the file inside /workspace.
+        target: The exact substring match to replace.
+        replacement: The new replacement string.
+    """
+    try:
+        with open(path, 'r') as f:
+            content = f.read()
+        if target not in content:
+            return f"Error: Target string not found in {path}"
+        new_content = content.replace(target, replacement)
+        with open(path, 'w') as f:
+            f.write(new_content)
+        return f"Successfully replaced content in {path}."
+    except Exception as e:
+        return f"Error replacing content: {str(e)}"
+
+@tool
 def create_pull_request(title: str, body: str, branch_name: str) -> str:
     """Creates a git commit of all current changes, pushes them to a new branch, and opens a GitHub Pull Request.
     This should be your FINAL step after you have modified all the necessary files to fulfill the user's request.
@@ -223,7 +243,7 @@ model = OpenAIServerModel(
 )
 
 agent = CodeAgent(
-    tools=[read_file, list_dir, write_file, run_bash, ask_gemini, create_pull_request], 
+    tools=[read_file, list_dir, write_file, replace_file_content, run_bash, ask_gemini, create_pull_request], 
     model=model,
     add_base_tools=False,
     additional_authorized_imports=["json", "statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
