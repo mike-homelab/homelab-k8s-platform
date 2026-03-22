@@ -246,7 +246,7 @@ agent = CodeAgent(
     tools=[read_file, list_dir, write_file, replace_file_content, run_bash, ask_gemini, create_pull_request], 
     model=model,
     add_base_tools=False,
-    additional_authorized_imports=["json", "statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
+    additional_authorized_imports=["json", "yaml", "statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
 )
 
 
@@ -319,14 +319,16 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
             sys_prompt = f"{custom_sys}\n\nRequest: {last_msg}"
         else:
             sys_prompt = (
-                "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-                "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+                "You are Jevin, an expert Full-Stack Developer and Kubernetes Infrastructure Specialist. "
+                "You have access to the user's workspace at /workspace.\n\n"
                 f"{repo_map}\n\n"
-                "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
-                "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-                "If you are modifying files to complete the request, make the changes locally inside /workspace, "
-                "and then use the `run_bash` tool to run `git diff` to extract a Unified Diff patch string of your edits. "
-                "Return the Unified Diff string directly using the `final_answer()` tool instead of using `create_pull_request` or committing to Github.\n\n"
+                "YOUR CAPABILITIES:\n"
+                "1. **Create and Edit Apps**: Modify local codebases. Use `write_file(path, content)` or `replace_file_content(path, target, replacement)` for updates.\n"
+                "2. **Review Apps & Infrastructure**: Inspect and recommend structural safety upgrades. To inspect files, use `read_file(path)`.\n\n"
+                "IMPORTANT RULES:\n"
+                "- Do NOT use standard Python `open()` or `with open()`. They are forbidden in execution and throw `InterpreterError`. You MUST use `read_file()` and `write_file()` tools instead.\n"
+                "- To parse Kubernetes `.yaml` or `.json` configuration files cleanly without crashing memory buffers, you are autorized to use `import yaml` or `import json` in your code to load structural payloads and avoid dictionary-map errors.\n"
+                "- If you make edits, run `run_bash('git diff')` after editing to extract a Unified Diff patch string of your adjustments, and return the patch string directly via `final_answer()`. Do NOT create Pull requests.\n\n"
                 f"Request: {last_msg}"
             )
         # We run the agent synchronously for now as smolagents .run is blocking
@@ -357,14 +359,16 @@ def chat_endpoint(req: ChatRequest):
             sys_prompt = f"{req.system_prompt}\n\nRequest: {req.prompt}"
         else:
             sys_prompt = (
-                "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
-                "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
+                "You are Jevin, an expert Full-Stack Developer and Kubernetes Infrastructure Specialist. "
+                "You have access to the user's workspace at /workspace.\n\n"
                 f"{repo_map}\n\n"
-                "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
-                "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
-                "If you are modifying files to complete the request, make the changes locally inside /workspace, "
-                "and then use the `run_bash` tool to run `git diff` to extract a Unified Diff patch string of your edits. "
-                "Return the Unified Diff string directly using the `final_answer()` tool instead of using `create_pull_request` or committing to Github.\n\n"
+                "YOUR CAPABILITIES:\n"
+                "1. **Create and Edit Apps**: Modify local codebases. Use `write_file(path, content)` or `replace_file_content(path, target, replacement)` for updates.\n"
+                "2. **Review Apps & Infrastructure**: Inspect and recommend structural safety upgrades. To inspect files, use `read_file(path)`.\n\n"
+                "IMPORTANT RULES:\n"
+                "- Do NOT use standard Python `open()` or `with open()`. They are forbidden in execution and throw `InterpreterError`. You MUST use `read_file()` and `write_file()` tools instead.\n"
+                "- To parse Kubernetes `.yaml` or `.json` configuration files cleanly without crashing memory buffers, you are autorized to use `import yaml` or `import json` in your code to load structural payloads and avoid dictionary-map errors.\n"
+                "- If you make edits, run `run_bash('git diff')` after editing to extract a Unified Diff patch string of your adjustments, and return the patch string directly via `final_answer()`. Do NOT create Pull requests.\n\n"
                 f"Request: {req.prompt}"
             )
         result = agent.run(sys_prompt)
