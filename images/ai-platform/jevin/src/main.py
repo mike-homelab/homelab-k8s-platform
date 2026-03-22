@@ -226,7 +226,7 @@ agent = CodeAgent(
     tools=[read_file, list_dir, write_file, run_bash, ask_gemini, create_pull_request], 
     model=model,
     add_base_tools=False,
-    additional_authorized_imports=["statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
+    additional_authorized_imports=["json", "statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
 )
 
 

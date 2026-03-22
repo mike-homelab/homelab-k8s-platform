@@ -18,7 +18,7 @@ spec:
       serviceAccountName: default
       containers:
         - name: jevin
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:1.1.7
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/jevin:1.1.8
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
