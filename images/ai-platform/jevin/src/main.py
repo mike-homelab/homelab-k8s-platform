@@ -223,7 +223,7 @@ model = OpenAIServerModel(
 )
 
 agent = CodeAgent(
-    tools=[read_file, list_dir, write_file, run_bash, ask_gemini, ask_local_mcp, create_pull_request], 
+    tools=[read_file, list_dir, write_file, run_bash, ask_gemini, create_pull_request], 
     model=model,
     add_base_tools=False,
     additional_authorized_imports=["statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
@@ -293,6 +293,8 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
             "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
             "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
             f"{repo_map}\n\n"
+            "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
+            "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
             "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
             f"to persist your work to GitHub! Request: {last_msg}"
         )
@@ -321,6 +323,8 @@ def chat_endpoint(req: ChatRequest):
             "You are Jevin, an autonomous coding agent. You have access to the user's workspace "
             "at /workspace. Your goal is to fulfill the user's request by modifying files in the codebase.\n\n"
             f"{repo_map}\n\n"
+            "IMPORTANT: Do NOT use standard Python built-ins like `open()` for reading or writing files. "
+            "Your execution environment blocks them. You MUST use the provided tools: `read_file(path)` and `write_file(path, content)` instead.\n\n"
             "When you are finished completing the user's edits, you MUST use the `create_pull_request` tool "
             f"to persist your work to GitHub! Request: {req.prompt}"
         )
