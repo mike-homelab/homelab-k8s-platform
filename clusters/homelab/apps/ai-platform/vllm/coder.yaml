@@ -27,8 +27,11 @@ spec:
             - --gpu-memory-utilization
             - "0.85"
             - --max-model-len
-            - "32768"
+            - "65536"
             - --enable-prefix-caching
+          env:
+            - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+              value: "1"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env
