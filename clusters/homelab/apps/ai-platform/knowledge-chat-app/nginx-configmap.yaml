@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: knowledge-chat-web-nginx
+  name: knowledge-chat-app-nginx
   namespace: ai-platform
 data:
   default.conf: |

@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: knowledge-chat-web
+  name: knowledge-chat-app
   namespace: ai-platform
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: knowledge-chat-web
+      app: knowledge-chat-app
   template:
     metadata:
       labels:
-        app: knowledge-chat-web
+        app: knowledge-chat-app
     spec:
       containers:
         - name: web
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-web:0.12.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-app:1.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
@@ -49,4 +49,4 @@ spec:
       volumes:
         - name: nginx-config
           configMap:
-            name: knowledge-chat-web-nginx
+            name: knowledge-chat-app-nginx

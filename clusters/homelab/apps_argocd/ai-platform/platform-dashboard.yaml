@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: knowledge-chat-web
+  name: platform-dashboard
   namespace: argocd
   annotations:
     argocd.argoproj.io/sync-wave: "22"
@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/ai-platform/knowledge-chat-web
+    path: clusters/homelab/apps/ai-platform/platform-dashboard
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform

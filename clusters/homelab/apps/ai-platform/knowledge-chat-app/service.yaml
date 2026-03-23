@@ -1,10 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: knowledge-chat-web
+  name: knowledge-chat-app
   namespace: ai-platform
   labels:
-    app: knowledge-chat-web
+    app: knowledge-chat-app
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/path: /metrics
@@ -12,7 +12,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: knowledge-chat-web
+    app: knowledge-chat-app
   ports:
     - name: http
       port: 80
