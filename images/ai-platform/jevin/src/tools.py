@@ -63,14 +63,22 @@ def run_bash(command: str) -> str:
 
 @tool
 def ask_gemini(query: str) -> str:
-    """The ultimate fallback tool for high-level advice."""
+    """The ultimate fallback tool for high-level advice.
+    Args:
+        query: The high-level instruction or question for Gemini.
+    """
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key: return "Error: External API Key not configured."
     return "Simulated Gemini Response..."
 
 @tool
 def replace_file_content(path: str, target: str, replacement: str) -> str:
-    """Replaces a specific string match inside a file with new contents."""
+    """Replaces a specific string match inside a file with new contents.
+    Args:
+        path: The absolute path to the file.
+        target: The exact string sequence to find and replace.
+        replacement: The new content to insert in place of the target.
+    """
     try:
         with open(path, 'r') as f: content = f.read()
         if target not in content: return f"Error: Target string not found in {path}"
