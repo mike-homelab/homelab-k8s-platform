@@ -20,9 +20,11 @@ app.add_middleware(
 if GITHUB_PAT and GITHUB_USERNAME:
     if not os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
         print(f"[*] Cloning repository to {WORKSPACE_DIR}")
-        repo_url = f"https://github.com/{REPO_OWNER}/{REPO_NAME}.git"
+        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{REPO_OWNER}/{REPO_NAME}.git"
         try:
-            subprocess.run(["git", "clone", repo_url, WORKSPACE_DIR], check=True, capture_output=True, text=True)
+            # More robust initialization that works in non-empty directories (like K8s volumes with lost+found)
+            subprocess.run(f"git init && git remote add origin {repo_url} && git fetch --depth 1 && git reset --hard origin/main", 
+                           shell=True, cwd=WORKSPACE_DIR, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as e:
             # Mask the PAT in the output for security
             safe_url = repo_url.replace(GITHUB_PAT, "***")

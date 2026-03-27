@@ -19,4 +19,3 @@ agent = CodeAgent(
     add_base_tools=False,
     additional_authorized_imports=["json", "yaml", "statistics", "math", "re", "unicodedata", "datetime", "queue", "time", "itertools", "stat", "random", "collections", "os"]
 )
- Indiana = os.path.exists

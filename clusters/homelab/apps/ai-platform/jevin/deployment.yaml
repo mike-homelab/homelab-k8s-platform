@@ -49,6 +49,10 @@ spec:
                 secretKeyRef:
                   name: jevin-github-auth
                   key: github-username
+            - name: REPO_OWNER
+              value: "mike-homelab"
+            - name: REPO_NAME
+              value: "homelab-k8s-platform"
           volumeMounts:
             - name: user-workspace
               mountPath: /workspace

@@ -4,8 +4,8 @@ from smolagents import tool
 
 GITHUB_PAT = os.environ.get("GITHUB_PAT")
 GITHUB_USERNAME = os.environ.get("GITHUB_USERNAME")
-REPO_OWNER = "mike-homelab"
-REPO_NAME = "homelab-k8s-platform"
+REPO_OWNER = os.environ.get("REPO_OWNER", "mike-homelab")
+REPO_NAME = os.environ.get("REPO_NAME", "homelab-k8s-platform")
 WORKSPACE_DIR = "/workspace"
 
 # Tool methods
