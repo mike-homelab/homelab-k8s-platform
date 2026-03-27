@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes import router as api_router
 from .tools import GITHUB_PAT, GITHUB_USERNAME, REPO_OWNER, REPO_NAME, WORKSPACE_DIR
 
-app = FastAPI(title="Jevin Agent API", version="1.0.3")
+app = FastAPI(title="Jevin Agent API", version="1.2.4")
 
 app.add_middleware(
     CORSMiddleware,

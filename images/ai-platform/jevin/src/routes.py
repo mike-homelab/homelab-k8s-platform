@@ -41,8 +41,10 @@ def openai_chat_endpoint(req: OpenAIChatRequest):
     
     try:
         if os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
-            try: subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR, timeout=15)
-            except: pass
+            try:
+                subprocess.run("git fetch && git reset --hard origin/main && git clean -fd", shell=True, cwd=WORKSPACE_DIR, timeout=15)
+            except:
+                pass
             
         repo_map = generate_repo_map()
         
@@ -67,4 +69,4 @@ def chat_endpoint(req: ChatRequest):
         result = agent.run(sys_prompt)
         return ChatResponse(response=str(result))
     except Exception as e:
-         raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
