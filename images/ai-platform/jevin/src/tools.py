@@ -101,7 +101,7 @@ def create_pull_request(title: str, body: str, branch_name: str) -> str:
         subprocess.run(f"git commit -m '{title}'", shell=True, cwd=WORKSPACE_DIR, check=True)
         
         repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{REPO_OWNER}/{REPO_NAME}.git"
-        subprocess.run(f"git push {repo_url} {branch_name}", shell=True, cwd=WORKSPACE_DIR, check=True)
+        subprocess.run(f'git push "{repo_url}" {branch_name}', shell=True, cwd=WORKSPACE_DIR, check=True)
         
         # Open PR using GitHub REST API
         import httpx
