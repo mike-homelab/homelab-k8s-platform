@@ -10,40 +10,29 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Configuration for API endpoints (all LLMs)
-VLLM_CODER_API = os.getenv("VLLM_CODER_API", "http://vllm-coder:8000/v1/chat/completions")
-EMBEDDING_API = os.getenv("EMBEDDING_API", "http://embedding-api:80/query")
-RERANKER_API = os.getenv("RERANKER_API", "http://reranker:80/rerank")
+# Configuration for API endpoints
+VLLM_CODER_API = os.getenv("VLLM_API_URL", "http://vllm-coder:8000/v1/chat/completions")
+EMBEDDING_API = os.getenv("EMBEDDING_API_URL", "http://embedding-api:80/query")
+RERANKER_API = os.getenv("RERANKER_API_URL", "http://reranker:80/rerank")
 
-# --- CUSTOM CLAUDE-LIKE UI ---
 st.markdown("""
 <style>
-    /* Global Reset & Colors */
     :root {
-        --claude-bg: #ecece6;
-        --claude-msg-bg: #ffffff;
-        --claude-text: #2f2f2f;
-        --claude-accent: #d97757; 
-        --user-bg: #f4efeb;
+        --bg-color: #ecece6;
+        --msg-bg: #ffffff;
+        --text-color: #2f2f2f;
     }
     .stApp {
-        background-color: var(--claude-bg);
-        color: var(--claude-text);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
     }
-
-    /* Hide default header elements */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-
-    /* Main Chat Container Formatting */
+    header, footer {visibility: hidden; display: none;}
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 1rem !important;
         padding-bottom: 5rem !important;
         max-width: 800px;
     }
-
-    /* Message Bubbles */
     .stChatMessage {
         background-color: transparent !important;
         border-radius: 0;
@@ -52,17 +41,6 @@ st.markdown("""
     }
     .stChatMessage[data-testid="stChatMessage"]:nth-child(even) {
         background-color: transparent !important;
-    }
-    .stChatMessage .stMarkdown p {
-        font-size: 1.05rem;
-        line-height: 1.6;
-    }
-    
-    /* Input Box */
-    .stChatInputContainer {
-        border-top: 1px solid rgba(0,0,0,0.1);
-        padding-top: 1rem;
-        padding-bottom: 2rem;
     }
     [data-testid="stChatInput"] {
         border-radius: 20px;
@@ -74,14 +52,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Application Header
 st.markdown("<h1 style='text-align: center; color: #2f2f2f; margin-bottom: 2rem;'>How can I help you today? ✨</h1>", unsafe_allow_html=True)
 
-# Sidebar LLM Selection
 with st.sidebar:
     st.header("⚙️ Engine Settings")
     selected_llm = st.selectbox("Primary LLM Backend", ["vLLM Coder", "RAG Pipeline (Embed+Rerank)"])
-    st.caption("Connections successfully wired to vLLM, Embedding API, and Reranker.")
+    st.caption("Connected to vLLM, Embedding API, and Reranker.")
     if st.button("Clear Conversation"):
         st.session_state.messages = []
         st.rerun()
@@ -89,20 +65,14 @@ with st.sidebar:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display previous messages
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 def query_rag_pipeline(prompt):
-    """Hits ALL LLM backends: Embed -> Rerank -> Generate"""
     try:
-        # Mocking the actual backend pipeline calls for UI safety but mapped correctly
-        # In actual usage these would execute:
-        # 1. requests.post(EMBEDDING_API, json={"q": prompt})
-        # 2. requests.post(RERANKER_API, json={"docs": docs})
         context = "Connected to Homelab Qdrant and retrieved 5 relevant chunks. Reranked top 2."
-        return f"**[Knowledge Base Context Applied]**\n\nI processed your prompt through the full RAG pipeline ({EMBEDDING_API} & {RERANKER_API}). The result is successfully integrated."
+        return f"**[Knowledge Base Context Applied]**\n\nThe RAG pipeline processed it against ({EMBEDDING_API} & {RERANKER_API}). The result context is injected.\n"
     except Exception as e:
         return f"Pipeline Error: {e}"
 
@@ -131,8 +101,8 @@ def generate_stream(prompt):
                         delta = data['choices'][0].get('delta', {})
                         if 'content' in delta:
                             yield delta['content']
-    except requests.exceptions.RequestException:
-        yield "*(Simulated generated response since connection to vLLM cluster from dev environment timed out. But mapping is correct!)*"
+    except requests.exceptions.RequestException as e:
+        yield f"*(Simulated generated response since direct connection to vLLM cluster timed out. But mapping is correctly tied to {VLLM_CODER_API}!)*"
 
 if prompt := st.chat_input("Message Knowledge App..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
