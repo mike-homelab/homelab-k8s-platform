@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coder-agent
+  namespace: ai-platform
+  labels:
+    app: coder-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coder-agent
+  template:
+    metadata:
+      labels:
+        app: coder-agent
+    spec:
+      containers:
+        - name: coder-agent
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          env:
+            - name: VLLM_API_URL
+              value: "http://vllm-coder:8000/v1/chat/completions"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coder-agent
+  namespace: ai-platform
+  labels:
+    app: coder-agent
+spec:
+  type: ClusterIP
+  selector:
+    app: coder-agent
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000

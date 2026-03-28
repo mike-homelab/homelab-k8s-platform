@@ -1,40 +1,70 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import httpx
 import os
-import subprocess
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import re
 
-from .routes import router as api_router
-from .tools import GITHUB_PAT, GITHUB_USERNAME, REPO_OWNER, REPO_NAME, WORKSPACE_DIR
+app = FastAPI(title="Jevin Orchestrator API", description="Multi-agent orchestrator for delegating tasks.")
 
-app = FastAPI(title="Jevin Agent API", version="1.2.5")
+class ChatRequest(BaseModel):
+    prompt: str
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+class ChatResponse(BaseModel):
+    response: str
+    agent_used: str
 
-# On boot, clone the repository into the ephemeral volume
-if GITHUB_PAT and GITHUB_USERNAME:
-    if not os.path.exists(os.path.join(WORKSPACE_DIR, ".git")):
-        print(f"[*] Cloning repository to {WORKSPACE_DIR}")
-        repo_url = f"https://{GITHUB_USERNAME}:{GITHUB_PAT}@github.com/{REPO_OWNER}/{REPO_NAME}.git"
+# Define subagent URLs
+CODER_URL = os.getenv("CODER_AGENT_URL", "http://coder-agent:8000/task")
+RESEARCHER_URL = os.getenv("RESEARCH_AGENT_URL", "http://research-agent:8000/task")
+VLLM_API_URL = os.getenv("VLLM_API_URL", "http://vllm-coder:8000/v1/chat/completions")
+
+@app.post("/agent/chat", response_model=ChatResponse)
+async def agent_chat(request: ChatRequest):
+    prompt = request.prompt.lower()
+    
+    # Simple keyword-based routing for subagents, or we could use the LLM to decide
+    # Let's do a simple heuristic first
+    if any(word in prompt for word in ["code", "debug", "refactor", "function", "script", "kubernetes", "yaml"]):
         try:
-            # More robust initialization that works in non-empty directories (like K8s volumes with lost+found)
-            subprocess.run(f'git init && git remote add origin "{repo_url}" && git fetch --depth 1 && git reset --hard origin/main', 
-                           shell=True, cwd=WORKSPACE_DIR, check=True, capture_output=True, text=True)
-        except subprocess.CalledProcessError as e:
-            # Mask the PAT in the output for security
-            safe_url = repo_url.replace(GITHUB_PAT, "***")
-            stderr_msg = e.stderr.replace(GITHUB_PAT, "***") if e.stderr else "No stderr returned."
-            raise RuntimeError(f"Git clone failed for {safe_url}. STDERR: {stderr_msg}")
-else:
-    print("[!] Warning: GITHUB_PAT or GITHUB_USERNAME is missing. GitOps features may fail.")
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                res = await client.post(CODER_URL, json={"prompt": request.prompt})
+                res.raise_for_status()
+                data = res.json()
+                return ChatResponse(response=data.get("result", "No result"), agent_used="coder-agent")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Coder agent failed: {e}")
+            
+    elif any(word in prompt for word in ["research", "explain", "summarize", "find", "what is"]):
+        try:
+            async with httpx.AsyncClient(timeout=300.0) as client:
+                res = await client.post(RESEARCHER_URL, json={"prompt": request.prompt})
+                res.raise_for_status()
+                data = res.json()
+                return ChatResponse(response=data.get("result", "No result"), agent_used="research-agent")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Research agent failed: {e}")
 
-app.include_router(api_router)
+    # Fallback default response from Jevin directly if no specific agent was selected
+    # This acts as a generic orchestrator fallback
+    try:
+        # We can reach out directly to VLLM here
+        payload = {
+            "model": "casperhansen/llama-3-70b-instruct-awq",
+            "messages": [
+                {"role": "system", "content": "You are Jevin, the main orchestrator agent. I handle general inquiries and delegate tasks to my subagents when appropriate."},
+                {"role": "user", "content": request.prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 1024
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(VLLM_API_URL, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            return ChatResponse(response=data["choices"][0]["message"]["content"], agent_used="jevin-orchestrator")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM call failed directly: {e}")
 
 @app.get("/health")
-async def health():
+def health_check():
     return {"status": "ok"}
