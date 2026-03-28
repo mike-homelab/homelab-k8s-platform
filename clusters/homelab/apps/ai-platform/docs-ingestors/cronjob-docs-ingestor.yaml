@@ -1,0 +1,31 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: docs-ingestor-job
+  namespace: ai-platform
+  labels:
+    app: docs-ingestor
+spec:
+  schedule: "30 17 * * *" # 17:30 UTC = 23:00/11PM IST
+  concurrencyPolicy: Replace
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: docs-ingestor
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: docs-ingestor
+              image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/docs-ingestor:0.1.0
+              imagePullPolicy: Always
+              env:
+                - name: QDRANT_API_URL
+                  value: "http://qdrant:6333"
+                - name: EMBEDDING_API_URL
+                  value: "http://embedding-api:80/embed"
+                - name: REDIS_URL
+                  value: "redis://redis:6379/0"

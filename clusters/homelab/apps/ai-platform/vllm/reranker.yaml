@@ -20,7 +20,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       containers:
         - name: reranker
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/reranker:1.0.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/reranker:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80

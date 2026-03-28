@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/platform-dashboard:1.0.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/platform-dashboard:0.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 80

@@ -1,5 +1,0 @@
-resources:
-  - configmap.yaml
-  - cronjob-aws-git-ingestor.yaml
-  - cronjob-azure-git-ingestor.yaml
-  - cronjob-kubernetes-git-ingestor.yaml

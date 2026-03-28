@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: research-agent
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:1.0.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:0.1.0
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
