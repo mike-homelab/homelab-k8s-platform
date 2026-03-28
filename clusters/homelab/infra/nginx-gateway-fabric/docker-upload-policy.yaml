@@ -11,5 +11,3 @@ spec:
   body:
     maxSize: "0"
     timeout: 300s
-  keepAlive:
-    timeout: 300s
