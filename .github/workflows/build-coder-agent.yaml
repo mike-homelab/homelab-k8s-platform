@@ -1,26 +1,24 @@
-name: Build vLLM Router Image
-# trigger rebuild marker: 2026-03-08
+name: Build Coder Agent Image
 
 on:
   push:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/router/**
-      - .github/workflows/build-vllm-router.yaml
+      - 'images/ai-platform/agents/coder/**'
+      - '.github/workflows/build-coder-agent.yaml'
   pull_request:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/router/**
-      - .github/workflows/build-vllm-router.yaml
+      - 'images/ai-platform/agents/coder/**'
+      - '.github/workflows/build-coder-agent.yaml'
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push vLLM Router
+    name: Build & Push Coder Agent
     runs-on: [self-hosted]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +26,7 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(cat images/ai-platform/vllm/router/VERSION)
+          VERSION=$(cat images/ai-platform/agents/coder/VERSION)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Log in to Nexus Docker registry
@@ -41,13 +39,14 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-router:${{ steps.version.outputs.version }} \
-            images/ai-platform/vllm/router
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:${{ steps.version.outputs.version }} \
+            images/ai-platform/agents/coder
 
       - name: Push Docker image
         run: |
-          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-router:${{ steps.version.outputs.version }}
+          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:${{ steps.version.outputs.version }}
+          
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-router:${{ steps.version.outputs.version }} || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:${{ steps.version.outputs.version }} || true

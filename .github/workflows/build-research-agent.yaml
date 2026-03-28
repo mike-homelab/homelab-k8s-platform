@@ -1,26 +1,24 @@
-name: Build vLLM Planner Image
-# trigger rebuild marker: 2026-03-08
+name: Build Research Agent Image
 
 on:
   push:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/planner/**
-      - .github/workflows/build-vllm-planner.yaml
+      - 'images/ai-platform/agents/research/**'
+      - '.github/workflows/build-research-agent.yaml'
   pull_request:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/planner/**
-      - .github/workflows/build-vllm-planner.yaml
+      - 'images/ai-platform/agents/research/**'
+      - '.github/workflows/build-research-agent.yaml'
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push vLLM Planner
+    name: Build & Push Research Agent
     runs-on: [self-hosted]
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +26,7 @@ jobs:
       - name: Read version
         id: version
         run: |
-          VERSION=$(cat images/ai-platform/vllm/planner/VERSION)
+          VERSION=$(cat images/ai-platform/agents/research/VERSION)
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Log in to Nexus Docker registry
@@ -41,13 +39,14 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-planner:${{ steps.version.outputs.version }} \
-            images/ai-platform/vllm/planner
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:${{ steps.version.outputs.version }} \
+            images/ai-platform/agents/research
 
       - name: Push Docker image
         run: |
-          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-planner:${{ steps.version.outputs.version }}
+          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:${{ steps.version.outputs.version }}
+          
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-planner:${{ steps.version.outputs.version }} || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:${{ steps.version.outputs.version }} || true
