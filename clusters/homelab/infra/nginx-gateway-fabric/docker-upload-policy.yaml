@@ -10,3 +10,6 @@ spec:
     name: nginx-gateway
   body:
     maxSize: "0"
+  timeout:
+    read: 300s
+    send: 300s

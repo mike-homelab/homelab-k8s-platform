@@ -46,7 +46,10 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-code:${{ steps.version.outputs.version }}
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-code:${{ steps.version.outputs.version }}...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-code:${{ steps.version.outputs.version }} && break || sleep 15;
+          done
       - name: Clean up Docker image
         if: always()
         run: |
