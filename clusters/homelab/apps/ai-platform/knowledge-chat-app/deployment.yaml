@@ -15,18 +15,18 @@ spec:
     spec:
       containers:
         - name: web
-          image: ghcr.io/open-webui/open-webui:main
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-app:0.1.1
           imagePullPolicy: Always
           ports:
-            - containerPort: 8080
+            - containerPort: 80
               name: http
           env:
-            - name: OPENAI_API_BASE_URL
-              value: "http://agent-api:8000/v1"
-            - name: OPENAI_API_KEY
-              value: "sk-vllm-coder-homelab"
-            - name: WEBUI_AUTH
-              value: "False"
+            - name: VLLM_API_URL
+              value: "http://agent-api:8000/v1/chat/completions"
+            - name: EMBEDDING_API_URL
+              value: "http://embedding-api:80/query"
+            - name: RERANKER_API_URL
+              value: "http://reranker:80/rerank"
           resources:
             requests:
               cpu: "100m"
