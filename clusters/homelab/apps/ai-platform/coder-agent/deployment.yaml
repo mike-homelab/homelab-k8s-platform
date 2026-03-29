@@ -17,13 +17,17 @@ spec:
     spec:
       containers:
         - name: coder-agent
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:0.1.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/coder-agent:0.1.1
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:
             - name: VLLM_API_URL
-              value: "http://vllm-coder:8000/v1/chat/completions"
+              value: "http://agent-api:8000/v1/chat/completions"
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
 ---
 apiVersion: v1
 kind: Service
