@@ -23,6 +23,9 @@ st.markdown("""
         background-color: #efece5 !important;
         border-right: 1px solid #dcd8cf;
     }
+    [data-testid="stSidebar"] * {
+        color: #3b3a36 !important;
+    }
     header {visibility: hidden;}
     [data-testid="stChatMessage"] {
         background-color: transparent !important;
@@ -38,7 +41,7 @@ st.markdown("""
     [data-testid="stChatInput"] textarea {
         color: #000000 !important;
     }
-    h1 {
+    h1, h2, h3, h4, h5, h6, span {
         color: #000000 !important;
     }
     .stMarkdown p {
