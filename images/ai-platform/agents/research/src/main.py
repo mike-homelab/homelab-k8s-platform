@@ -11,7 +11,7 @@ class TaskRequest(BaseModel):
 class TaskResponse(BaseModel):
     result: str
 
-VLLM_API_URL = os.getenv("VLLM_API_URL", "http://vllm-coder:8000/v1/chat/completions")
+VLLM_API_URL = os.getenv("VLLM_API_URL", "http://agent-api:8000/v1/chat/completions")
 EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "http://embedding-api:80/query")
 
 @app.post("/task", response_model=TaskResponse)

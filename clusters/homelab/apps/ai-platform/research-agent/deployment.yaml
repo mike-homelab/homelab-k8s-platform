@@ -17,13 +17,13 @@ spec:
     spec:
       containers:
         - name: research-agent
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:0.1.0
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/research-agent:0.1.1
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           env:
             - name: VLLM_API_URL
-              value: "http://vllm-coder:8000/v1/chat/completions"
+              value: "http://agent-api:8000/v1/chat/completions"
             - name: EMBEDDING_API_URL
               value: "http://embedding-api:80/query"
 ---
