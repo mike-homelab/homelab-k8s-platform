@@ -22,7 +22,7 @@ spec:
               name: http
           env:
             - name: OPENAI_API_BASE_URL
-              value: "http://vllm-coder:8000/v1"
+              value: "http://agent-api:8000/v1"
             - name: OPENAI_API_KEY
               value: "sk-vllm-coder-homelab"
             - name: WEBUI_AUTH
