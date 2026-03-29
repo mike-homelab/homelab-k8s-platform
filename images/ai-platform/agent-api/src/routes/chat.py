@@ -170,7 +170,7 @@ async def rag_ask(req: RagAskRequest) -> RagAskResponse:
                 )
 
             if not context_parts:
-                raise HTTPException(status_code=404, detail=f"no context found and web search failed")
+                context_parts.append("No context found in local knowledge base or web search. Please answer to the best of your ability without external references.")
 
             messages = await _get_history(req.session_id)
             
