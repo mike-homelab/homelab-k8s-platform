@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-app:0.1.1
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/knowledge-chat-app:0.1.2
           imagePullPolicy: Always
           ports:
             - containerPort: 80
