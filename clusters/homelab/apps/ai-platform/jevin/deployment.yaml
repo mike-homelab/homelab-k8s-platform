@@ -23,8 +23,8 @@ spec:
           ports:
             - containerPort: 8000
           env:
-            - name: VLLM_CODER_BASE_URL
-              value: "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1"
+            - name: VLLM_API_URL
+              value: "http://vllm-coder.ai-platform.svc.cluster.local:8000/v1/chat/completions"
             - name: VLLM_CODER_MODEL_ID
               value: "Qwen/Qwen2.5-Coder-3B-Instruct"
             - name: HOST_IP

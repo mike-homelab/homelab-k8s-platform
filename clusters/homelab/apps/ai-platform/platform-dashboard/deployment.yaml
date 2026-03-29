@@ -21,10 +21,12 @@ spec:
             - containerPort: 80
               name: http
           env:
-            - name: VLLM_API_URL
-              value: "http://vllm-coder:8000"
-            - name: QDRANT_API_URL
-              value: "http://qdrant:6333"
+            - name: LOKI_URL
+              value: "http://loki-gateway.monitoring.svc.cluster.local:80/loki/api/v1/query_range"
+            - name: PROMETHEUS_URL
+              value: "http://mimir.monitoring.svc.cluster.local:8080/api/v1/query"
+            - name: REDIS_URL
+              value: "redis://redis.ai-platform.svc.cluster.local:6379/0"
           resources:
             requests:
               cpu: "100m"
