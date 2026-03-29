@@ -35,6 +35,9 @@ st.markdown("""
         border-radius: 12px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.03);
     }
+    [data-testid="stChatInput"] textarea {
+        color: #000000 !important;
+    }
     .stMarkdown p {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
         font-size: 1.05rem;
