@@ -1,5 +1,0 @@
-streamlit==1.32.2
-requests==2.31.0
-pandas==2.2.1
-numpy==1.26.4
-redis==5.0.3

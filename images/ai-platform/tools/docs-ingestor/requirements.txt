@@ -1,3 +1,0 @@
-# Using standard requests and typical text tools for scraping documentation.
-requests==2.31.0
-redis==5.0.3

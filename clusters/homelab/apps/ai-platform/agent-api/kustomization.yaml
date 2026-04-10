@@ -1,8 +1,0 @@
-resources:
-  - configmap.yaml
-  - serviceaccount.yaml
-  - rbac-ai-platform.yaml
-  - rbac-argocd.yaml
-  - deployment.yaml
-  - service.yaml
-  - httproute.yaml

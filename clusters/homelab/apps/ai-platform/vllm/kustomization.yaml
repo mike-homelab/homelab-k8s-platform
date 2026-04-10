@@ -1,5 +1,3 @@
 resources:
   - otel-configmap.yaml
   - coder.yaml
-  - embedding.yaml
-  - reranker.yaml
