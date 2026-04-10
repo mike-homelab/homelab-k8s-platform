@@ -3,5 +3,3 @@ resources:
   - coder.yaml
   - gemma.yaml
   - embedding.yaml
-  - qdrant.yaml
-  - token-scope.yaml

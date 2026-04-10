@@ -19,8 +19,8 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm
-          image: vllm/vllm-openai:v0.9.2
-          imagePullPolicy: IfNotPresent
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest
+          imagePullPolicy: Always
           args:
             - --model
             - google/gemma-4-e4b-it

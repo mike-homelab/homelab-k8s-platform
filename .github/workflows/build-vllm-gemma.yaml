@@ -1,0 +1,44 @@
+name: Build vLLM Gemma Code Image
+# trigger rebuild marker: 2026-04-10
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/vllm/gemma/**
+      - .github/workflows/build-vllm-gemma.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push vLLM Gemma
+    runs-on: [self-hosted]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login docker.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest \
+            images/ai-platform/vllm/gemma
+
+      - name: Push Docker image
+        run: |
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest && break || sleep 15;
+          done
+      - name: Clean up Docker image
+        if: always()
+        run: |
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest || true
