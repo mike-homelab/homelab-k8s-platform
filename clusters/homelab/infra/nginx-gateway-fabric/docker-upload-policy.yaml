@@ -9,5 +9,5 @@ spec:
     kind: Gateway
     name: nginx-gateway
   body:
-    maxSize: "10G"
+    maxSize: "10g"
     timeout: 1800s
