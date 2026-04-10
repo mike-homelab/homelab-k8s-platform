@@ -18,26 +18,39 @@ spec:
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
-        - name: infinity
-          image: ghcr.io/michaelfeil/infinity:latest
+        - name: vllm-embed-rerank
+          image: vllm/vllm-openai:v0.9.2
           imagePullPolicy: IfNotPresent
-          args:
-            - v2
-            - --model-id
-            - BAAI/bge-large-en-v1.5
-            - --model-id
-            - BAAI/bge-reranker-large
-            - --port
-            - "7997"
+          command: ["/bin/bash"]
+          args: 
+            - "-c"
+            - |
+              python3 -m vllm.entrypoints.openai.api_server \
+                --model BAAI/bge-large-en-v1.5 \
+                --port 8000 \
+                --gpu-memory-utilization 0.45 \
+                --max-model-len 512 \
+                --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
+              
+              python3 -m vllm.entrypoints.openai.api_server \
+                --model BAAI/bge-reranker-large \
+                --port 8001 \
+                --gpu-memory-utilization 0.45 \
+                --max-model-len 512 \
+                --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
+              
+              wait
           env:
-            - name: INFINITY_OTEL_TRACING
+            - name: VLLM_OTEL_TRACING
               value: "1"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env
           ports:
-            - name: http
-              containerPort: 7997
+            - name: embed
+              containerPort: 8000
+            - name: rerank
+              containerPort: 8001
           resources:
             requests:
               cpu: "4"
@@ -49,7 +62,7 @@ spec:
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
-              mountPath: /app/.cache
+              mountPath: /root/.cache/huggingface
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
@@ -72,6 +85,9 @@ spec:
   selector:
     app: infinity-embedding
   ports:
-    - name: http
-      port: 7997
-      targetPort: http
+    - name: embed
+      port: 8000
+      targetPort: 8000
+    - name: rerank
+      port: 8001
+      targetPort: 8001
