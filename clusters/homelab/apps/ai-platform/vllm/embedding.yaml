@@ -19,7 +19,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
         - name: infinity
-          image: michaelfeil/infinity:latest
+          image: ghcr.io/michaelfeil/infinity:latest
           imagePullPolicy: IfNotPresent
           args:
             - v2
