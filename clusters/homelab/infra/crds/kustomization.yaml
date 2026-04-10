@@ -1,2 +1,3 @@
 resources:
   - nginix/nginix-gateway-crd.yaml
+  - nginix/snippetsfilters.gateway.nginx.org.yaml

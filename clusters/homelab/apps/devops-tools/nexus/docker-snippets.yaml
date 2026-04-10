@@ -1,0 +1,12 @@
+apiVersion: gateway.nginx.org/v1alpha1
+kind: SnippetsFilter
+metadata:
+  name: nexus-docker-proxy-buffering
+  namespace: devops-tools
+spec:
+  snippets:
+    - context: http.server.location
+      value: |
+        proxy_request_buffering off;
+        proxy_read_timeout 1800s;
+        proxy_send_timeout 1800s;

@@ -98,6 +98,7 @@ rules:
   - nginxproxies
   - clientsettingspolicies
   - observabilitypolicies
+  - snippetsfilters
   verbs:
   - list
   - watch
@@ -107,6 +108,7 @@ rules:
   - nginxgateways/status
   - clientsettingspolicies/status
   - observabilitypolicies/status
+  - snippetsfilters/status
   verbs:
   - update
 - apiGroups:
@@ -214,6 +216,7 @@ spec:
         - --metrics-port=9113
         - --health-port=8081
         - --leader-election-lock-name=nginx-gateway-leader-election
+        - --snippets-filters
         env:
         - name: POD_IP
           valueFrom:
