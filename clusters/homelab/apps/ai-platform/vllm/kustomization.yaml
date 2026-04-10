@@ -1,3 +1,7 @@
 resources:
   - otel-configmap.yaml
   - coder.yaml
+  - gemma.yaml
+  - embedding.yaml
+  - qdrant.yaml
+  - token-scope.yaml

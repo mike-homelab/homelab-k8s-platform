@@ -1,38 +1,38 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: vllm-coder
+  name: vllm-gemma
   namespace: ai-platform
 spec:
-  serviceName: vllm-coder
+  serviceName: vllm-gemma
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-coder
+      app: vllm-gemma
   template:
     metadata:
       labels:
-        app: vllm-coder
+        app: vllm-gemma
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm
           image: vllm/vllm-openai:v0.9.2
           imagePullPolicy: IfNotPresent
           args:
             - --model
-            - Qwen/Qwen2.5-Coder-3B-Instruct
+            - google/gemma-4-e4b-it
             - --gpu-memory-utilization
             - "0.90"
             - --max-model-len
-            - "65536"
+            - "131072"
             - --enable-prefix-caching
             - --swap-space
             - "4"
             - --quantization
-            - awq
+            - fp8
             - --kv-cache-dtype
             - fp8
             - --otlp-traces-endpoint
@@ -48,13 +48,13 @@ spec:
               containerPort: 8000
           resources:
             requests:
-               cpu: "2"
-               memory: "16Gi"
-               nvidia.com/gpu: "1"
+              cpu: "4"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
             limits:
-               cpu: "4"
-               memory: "16Gi"
-               nvidia.com/gpu: "1"
+              cpu: "6"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
@@ -71,10 +71,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-coder
+  name: vllm-gemma
   namespace: ai-platform
   labels:
-    app: vllm-coder
+    app: vllm-gemma
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/path: /metrics
@@ -82,7 +82,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: vllm-coder
+    app: vllm-gemma
   ports:
     - name: http
       port: 8000

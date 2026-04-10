@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: infinity-embedding
+  namespace: ai-platform
+spec:
+  serviceName: infinity-embedding
+  replicas: 1
+  selector:
+    matchLabels:
+      app: infinity-embedding
+  template:
+    metadata:
+      labels:
+        app: infinity-embedding
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
+      containers:
+        - name: infinity
+          image: michaelfeil/infinity:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - v2
+            - --model-id
+            - BAAI/bge-large-en-v1.5
+            - --model-id
+            - BAAI/bge-reranker-large
+            - --port
+            - "7997"
+          env:
+            - name: INFINITY_OTEL_TRACING
+              value: "1"
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
+          ports:
+            - name: http
+              containerPort: 7997
+          resources:
+            requests:
+              cpu: "4"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "6"
+              memory: "10Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /app/.cache
+  volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        storageClassName: mayastor-single-replica
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: infinity-embedding
+  namespace: ai-platform
+  labels:
+    app: infinity-embedding
+spec:
+  type: ClusterIP
+  selector:
+    app: infinity-embedding
+  ports:
+    - name: http
+      port: 7997
+      targetPort: http
