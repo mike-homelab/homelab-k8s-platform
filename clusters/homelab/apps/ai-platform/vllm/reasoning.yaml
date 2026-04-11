@@ -31,6 +31,7 @@ spec:
             - --max-model-len
             - "128000"
             - --enable-prefix-caching
+            - --disable-sliding-window
             - --kv-cache-dtype
             - fp8
             - --otlp-traces-endpoint

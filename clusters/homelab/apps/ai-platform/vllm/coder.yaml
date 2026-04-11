@@ -31,8 +31,6 @@ spec:
             - --max-model-len
             - "128000"
             - --enable-prefix-caching
-            - --quantization
-            - awq
             - --kv-cache-dtype
             - fp8
             - --otlp-traces-endpoint
