@@ -30,8 +30,6 @@ spec:
             - --max-model-len
             - "128000"
             - --enable-prefix-caching
-            - --swap-space
-            - "4"
             - --quantization
             - awq
             - --kv-cache-dtype
