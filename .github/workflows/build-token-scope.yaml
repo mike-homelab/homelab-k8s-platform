@@ -6,13 +6,13 @@ on:
     branches:
       - main
     paths:
-      - images/ai-platform/token-scope/**
+      - images/ai-application/token-scope/**
       - .github/workflows/build-token-scope.yaml
   pull_request:
     branches:
       - main
     paths:
-      - images/ai-platform/token-scope/**
+      - images/ai-application/token-scope/**
       - .github/workflows/build-token-scope.yaml
   workflow_dispatch:
 
@@ -35,16 +35,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/token-scope:latest \
-            images/ai-platform/token-scope
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-application/token-scope:latest \
+            images/ai-application/token-scope
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/token-scope:latest...";
-            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/token-scope:latest && break || sleep 15;
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-application/token-scope:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-application/token-scope:latest && break || sleep 15;
           done
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/token-scope:latest || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-application/token-scope:latest || true
