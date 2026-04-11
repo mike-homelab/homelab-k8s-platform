@@ -1,4 +1,4 @@
-name: Build vLLM Gemma Image
+name: Build vLLM reasoning Image
 # trigger rebuild marker: 2026-04-10
 
 on:
