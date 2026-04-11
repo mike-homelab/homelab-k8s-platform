@@ -22,7 +22,6 @@ spec:
           image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest
           imagePullPolicy: Always
           args:
-            - --model
             - ibm-granite/granite-3b-code-instruct-128k
             - --gpu-memory-utilization
             - "0.95"
@@ -36,7 +35,7 @@ spec:
             - --quantization
             - awq
             - --kv-cache-dtype
-            - turboquant
+            - fp8
             - --otlp-traces-endpoint
             - $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:

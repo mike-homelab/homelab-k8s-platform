@@ -22,7 +22,6 @@ spec:
           image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest
           imagePullPolicy: Always
           args:
-            - --model
             - microsoft/Phi-3.5-mini-instruct
             - --gpu-memory-utilization
             - "0.95"
@@ -34,7 +33,7 @@ spec:
             - --swap-space
             - "4"
             - --kv-cache-dtype
-            - turboquant
+            - fp8
             - --otlp-traces-endpoint
             - $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:
