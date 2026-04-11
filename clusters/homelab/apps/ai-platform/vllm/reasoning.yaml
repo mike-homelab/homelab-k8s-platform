@@ -1,40 +1,40 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: vllm-gemma
+  name: vllm-reasoning
   namespace: ai-platform
 spec:
-  serviceName: vllm-gemma
+  serviceName: vllm-reasoning
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-gemma
+      app: vllm-reasoning
   template:
     metadata:
       labels:
-        app: vllm-gemma
+        app: vllm-reasoning
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       containers:
         - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest
           imagePullPolicy: Always
           args:
             - --model
-            - google/gemma-4-e4b-it
+            - microsoft/Phi-3.5-mini-instruct
             - --gpu-memory-utilization
-            - "0.90"
+            - "0.95"
+            - --cpu-offload-gb
+            - "8"
             - --max-model-len
-            - "131072"
+            - "128000"
             - --enable-prefix-caching
             - --swap-space
             - "4"
-            - --quantization
-            - fp8
             - --kv-cache-dtype
-            - fp8
+            - turboquant
             - --otlp-traces-endpoint
             - $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:
@@ -51,11 +51,11 @@ spec:
           resources:
             requests:
               cpu: "4"
-              memory: "24Gi"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "6"
-              memory: "32Gi"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
@@ -73,10 +73,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-gemma
+  name: vllm-reasoning
   namespace: ai-platform
   labels:
-    app: vllm-gemma
+    app: vllm-reasoning
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/path: /metrics
@@ -84,7 +84,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: vllm-gemma
+    app: vllm-reasoning
   ports:
     - name: http
       port: 8000

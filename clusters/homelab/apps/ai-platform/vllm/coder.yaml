@@ -16,25 +16,27 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm
           image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest
           imagePullPolicy: Always
           args:
             - --model
-            - Qwen/Qwen2.5-Coder-3B-Instruct-AWQ
+            - ibm-granite/granite-3b-code-instruct-128k
             - --gpu-memory-utilization
-            - "0.90"
+            - "0.95"
+            - --cpu-offload-gb
+            - "8"
             - --max-model-len
-            - "65536"
+            - "128000"
             - --enable-prefix-caching
             - --swap-space
             - "4"
             - --quantization
             - awq
             - --kv-cache-dtype
-            - fp8
+            - turboquant
             - --otlp-traces-endpoint
             - $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:

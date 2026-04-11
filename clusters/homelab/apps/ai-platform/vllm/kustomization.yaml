@@ -1,5 +1,5 @@
 resources:
   - otel-configmap.yaml
   - coder.yaml
-  - gemma.yaml
+  - reasoning.yaml
   - embedding.yaml
