@@ -40,6 +40,8 @@ spec:
           env:
             - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
               value: "1"
+            - name: VLLM_ATTENTION_BACKEND
+              value: "FLASHINFER"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env
