@@ -6,13 +6,13 @@ on:
     branches:
       - main
     paths:
-      - images/ai-platform/vllm/gemma/**
-      - .github/workflows/build-vllm-gemma.yaml
+      - images/ai-platform/vllm/reasoning/**
+      - .github/workflows/build-vllm-reasoning.yaml
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push vLLM Gemma
+    name: Build & Push vLLM Reasoning
     runs-on: [self-hosted]
 
     steps:
@@ -29,16 +29,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest \
-            images/ai-platform/vllm/gemma
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest \
+            images/ai-platform/vllm/reasoning
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest...";
-            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest && break || sleep 15;
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest && break || sleep 15;
           done
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-gemma:latest || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest || true
