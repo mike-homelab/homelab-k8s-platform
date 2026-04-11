@@ -29,16 +29,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest \
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3 \
             images/ai-platform/vllm/coder
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest...";
-            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest && break || sleep 15;
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3 && break || sleep 15;
           done
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3 || true

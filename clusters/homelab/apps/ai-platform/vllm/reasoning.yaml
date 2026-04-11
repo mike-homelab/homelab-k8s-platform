@@ -19,7 +19,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       containers:
         - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:latest
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:v0.7.3
           imagePullPolicy: Always
           args:
             - microsoft/Phi-3.5-mini-instruct
@@ -39,6 +39,8 @@ spec:
               value: "1"
             - name: VLLM_ATTENTION_BACKEND
               value: "FLASHINFER"
+            - name: VLLM_USE_V1
+              value: "0"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env

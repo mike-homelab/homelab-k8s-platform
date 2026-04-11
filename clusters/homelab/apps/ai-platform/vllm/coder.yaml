@@ -19,7 +19,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:latest
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3
           imagePullPolicy: Always
           args:
             - ibm-granite/granite-3b-code-instruct-128k
@@ -41,6 +41,8 @@ spec:
               value: "1"
             - name: VLLM_ATTENTION_BACKEND
               value: "FLASHINFER"
+            - name: VLLM_USE_V1
+              value: "0"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env
