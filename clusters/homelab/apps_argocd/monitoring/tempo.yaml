@@ -24,8 +24,8 @@ spec:
             s3:
               endpoint: minio.monitoring.svc:9000
               bucket: tempo
-              access_key: ZSJvCnLiRyfKtObUY7xi
-              secret_key: ZxIXAUzI67A38F1g3neRaIyGmClirEQrI1LDevQD
+              access_key: 17uuYRVLzEsc3HMa9lQ5
+              secret_key: gmYROYuVNQCAzx3EpkXk4W8EP2Nc9FKDJhRzJX1U
               insecure: true
 
         tempo:

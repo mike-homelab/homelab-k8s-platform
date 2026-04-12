@@ -40,8 +40,8 @@ spec:
           storage_config:
             aws:
               endpoint: minio.monitoring.svc:9000
-              access_key_id: ZSJvCnLiRyfKtObUY7xi
-              secret_access_key: ZxIXAUzI67A38F1g3neRaIyGmClirEQrI1LDevQD
+              access_key_id: 17uuYRVLzEsc3HMa9lQ5
+              secret_access_key: gmYROYuVNQCAzx3EpkXk4W8EP2Nc9FKDJhRzJX1U
               s3forcepathstyle: true
               insecure: true
 
