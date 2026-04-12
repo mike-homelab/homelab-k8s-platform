@@ -17,38 +17,47 @@ spec:
       nodeSelector:
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
-      containers:
-        - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:blackwell
-          imagePullPolicy: Always
+      initContainers:
+        - name: pull-model
+          image: ollama/ollama:latest
+          command: ["sh", "-c"]
           args:
-            - --model
-            - microsoft/Phi-3.5-mini-instruct
-            - --gpu-memory-utilization
-            - "0.95"
-            - --cpu-offload-gb
-            - "8"
-            - --max-model-len
-            - "128000"
-            - --enable-prefix-caching
-            - --disable-sliding-window
-            - --kv-cache-dtype
-            - fp8
-            - --otlp-traces-endpoint
-            - $(OTEL_EXPORTER_OTLP_ENDPOINT)
+            - |
+              ollama serve &
+              sleep 5
+              ollama pull phi3.5
+              pkill ollama
           env:
-            - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+            - name: OLLAMA_MODELS
+              value: /models
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+              nvidia.com/gpu: "1"
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          args: ["serve"]
+          env:
+            - name: OLLAMA_MODELS
+              value: /models
+            - name: OLLAMA_NUM_CTX
+              value: "128000"
+            - name: OLLAMA_FLASH_ATTENTION
               value: "1"
-            - name: VLLM_ATTENTION_BACKEND
-              value: "FLASHINFER"
-            - name: VLLM_USE_V1
-              value: "0"
-          envFrom:
-            - configMapRef:
-                name: vllm-otel-env
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: 11434
           resources:
             requests:
               cpu: "4"
@@ -60,7 +69,7 @@ spec:
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
-              mountPath: /root/.cache/huggingface
+              mountPath: /models
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
@@ -80,13 +89,13 @@ metadata:
     app: vllm-reasoning
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/path: /metrics
-    prometheus.io/port: "8000"
+    prometheus.io/path: /api/version
+    prometheus.io/port: "11434"
 spec:
   type: ClusterIP
   selector:
     app: vllm-reasoning
   ports:
     - name: http
-      port: 8000
+      port: 11434
       targetPort: http
