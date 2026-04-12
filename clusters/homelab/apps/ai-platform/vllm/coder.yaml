@@ -19,7 +19,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:v0.7.3
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-coder:blackwell
           imagePullPolicy: Always
           args:
             - --model

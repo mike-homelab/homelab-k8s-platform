@@ -19,7 +19,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       containers:
         - name: vllm
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:v0.7.3
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-reasoning:blackwell
           imagePullPolicy: Always
           args:
             - --model
