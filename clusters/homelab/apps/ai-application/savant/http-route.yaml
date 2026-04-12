@@ -9,7 +9,7 @@ spec:
     - name: nginx-gateway
       namespace: nginx-gateway
   hostnames:
-    - akashic-chat.michaelhomelab.work
+    - raphael.michaelhomelab.work
   rules:
     - matches:
         - path:

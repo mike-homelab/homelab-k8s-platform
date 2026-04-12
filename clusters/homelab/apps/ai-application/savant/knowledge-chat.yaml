@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: knowledge-chat
+  name: savant
   namespace: ai-platform
   labels:
-    app: knowledge-chat
+    app: savant
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: knowledge-chat
+      app: savant
   template:
     metadata:
       labels:
-        app: knowledge-chat
+        app: savant
     spec:
       containers:
-        - name: knowledge-chat
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/knowledge-chat:latest
+        - name: savant
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/savant:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -43,14 +43,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: knowledge-chat
+  name: savant
   namespace: ai-platform
   labels:
-    app: knowledge-chat
+    app: savant
 spec:
   type: ClusterIP
   selector:
-    app: knowledge-chat
+    app: savant
   ports:
     - name: http
       port: 80
