@@ -89,7 +89,7 @@ metadata:
     app: vllm-coder
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/path: /api/version
+    prometheus.io/path: /api/metrics
     prometheus.io/port: "11434"
 spec:
   type: ClusterIP

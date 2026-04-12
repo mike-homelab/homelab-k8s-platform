@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel
+  namespace: ai-platform
+  labels:
+    app: sentinel
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sentinel
+  template:
+    metadata:
+      labels:
+        app: sentinel
+    spec:
+      containers:
+        - name: sentinel
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/sentinel:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: LOKI_URL
+              value: "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1"
+            - name: TEMPO_URL
+              value: "http://tempo-query-frontend.monitoring.svc.cluster.local:3100"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sentinel
+  namespace: ai-platform
+  labels:
+    app: sentinel
+spec:
+  type: ClusterIP
+  selector:
+    app: sentinel
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80

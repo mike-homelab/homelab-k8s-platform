@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: knowledge-chat
+  namespace: ai-platform
+  labels:
+    app: knowledge-chat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: knowledge-chat
+  template:
+    metadata:
+      labels:
+        app: knowledge-chat
+    spec:
+      containers:
+        - name: knowledge-chat
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/knowledge-chat:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: OLLAMA_URL
+              value: "http://vllm-reasoning.ai-platform.svc.cluster.local:11434"
+            - name: OLLAMA_MODEL
+              value: "phi3.5"
+            - name: QDRANT_URL
+              value: "http://qdrant.ai-platform.svc.cluster.local:6333"
+            - name: QDRANT_COLLECTION
+              value: "knowledge"
+            - name: EMBED_URL
+              value: "http://infinity-embedding.ai-platform.svc.cluster.local:8000"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledge-chat
+  namespace: ai-platform
+  labels:
+    app: knowledge-chat
+spec:
+  type: ClusterIP
+  selector:
+    app: knowledge-chat
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
