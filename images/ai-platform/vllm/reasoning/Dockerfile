@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN ln -sf /usr/bin/python3 /usr/bin/python
 
-# Install a pinned PyTorch nightly build that supports CUDA 12.8 / sm_120.
-# Pin the exact nightly date to avoid pip resolver loops on subsequent runs.
+# Install stable PyTorch with CUDA 12.8 support (stable channel, never expires).
+# torch 2.11.0 includes sm_120 (Blackwell) kernel support via CUDA 12.8.
 RUN pip install --no-cache-dir \
-    torch==2.7.0.dev20250312+cu128 \
-    torchvision==0.22.0.dev20250312+cu128 \
-    torchaudio==2.7.0.dev20250312+cu128 \
-    --index-url https://download.pytorch.org/whl/nightly/cu128
+    torch==2.11.0+cu128 \
+    torchvision==0.26.0+cu128 \
+    torchaudio==2.11.0+cu128 \
+    --index-url https://download.pytorch.org/whl/cu128
 
 # Clone vLLM at a fixed tag and build against the torch already installed above.
 # use_existing_torch.py removes torch from pyproject.toml so pip won't re-resolve it.
