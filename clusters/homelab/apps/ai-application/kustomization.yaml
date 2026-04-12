@@ -3,4 +3,6 @@ kind: Kustomization
 
 resources:
   - sentinel/sentinel.yaml
+  - sentinel/http-route.yaml
   - knowledge-chat/knowledge-chat.yaml
+  - knowledge-chat/http-route.yaml
