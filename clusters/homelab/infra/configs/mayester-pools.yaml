@@ -19,14 +19,3 @@ spec:
   node: kubeworker02
   disks:
     - /dev/disk/by-id/nvme-WD_Blue_SN580_500GB_24455X411160
-
----
-apiVersion: openebs.io/v1beta3
-kind: DiskPool
-metadata:
-  name: nvme-03
-  namespace: mayastor
-spec:
-  node: kubeworker03
-  disks:
-    - /dev/disk/by-id/nvme-SKHynix_HFM256GD3HX015N_FJB3N542212103E4G
