@@ -52,7 +52,7 @@ spec:
     - metadata:
         name: redis-data
       spec:
-        storageClassName: mayastor-single-replica
+        storageClassName: longhorn
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:

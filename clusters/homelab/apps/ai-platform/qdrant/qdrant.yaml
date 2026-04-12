@@ -37,7 +37,7 @@ spec:
     - metadata:
         name: qdrant-data
       spec:
-        storageClassName: mayastor-single-replica
+        storageClassName: longhorn
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:

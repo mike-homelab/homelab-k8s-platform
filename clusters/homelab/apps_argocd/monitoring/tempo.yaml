@@ -85,7 +85,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: mayastor-single-replica
+            storageClass: longhorn
           resources:
             requests:
               cpu: 50m

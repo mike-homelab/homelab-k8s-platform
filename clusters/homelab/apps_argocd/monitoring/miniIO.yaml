@@ -36,7 +36,7 @@ spec:
 
         persistence:
           enabled: true
-          storageClass: mayastor-single-replica
+          storageClass: longhorn
           size: 200Gi
 
         # Optional: still pin if you want predictable locality

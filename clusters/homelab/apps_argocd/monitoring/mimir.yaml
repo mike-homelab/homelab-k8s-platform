@@ -62,7 +62,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: mayastor-single-replica
+            storageClass: longhorn
 
         store_gateway:
           replicas: 3
@@ -75,7 +75,7 @@ spec:
           persistence:
             enabled: true
             size: 10Gi
-            storageClass: mayastor-single-replica
+            storageClass: longhorn
 
         distributor:
           replicas: 2
