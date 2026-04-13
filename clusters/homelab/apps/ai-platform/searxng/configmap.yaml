@@ -17,12 +17,17 @@ data:
         - html
         - json
     engines:
-      - name: bing
-        engine: bing
-        shortcut: bi
-      - name: duckduckgo
-        engine: duckduckgo
-        shortcut: ddg
       - name: google
         engine: google
-        shortcut: go
+      - name: duckduckgo
+        engine: duckduckgo
+      - name: bing
+        engine: bing
+      - name: brave
+        engine: brave
+      - name: wikipedia
+        engine: wikipedia
+      - name: qwant
+        engine: qwant
+      - name: startpage
+        engine: startpage
