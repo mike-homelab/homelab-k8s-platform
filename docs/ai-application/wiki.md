@@ -272,6 +272,7 @@ All agents use a unified ingress at `llm.michaelhomelab.work` with path-based ro
 
 | Date | Change |
 |---|---|
+| 2026-04-14 | **Longhorn CRD Sync Fix**: Added `ignoreDifferences` for `preserveUnknownFields` in `clusters/homelab/apps_argocd/infra/longhorn.yaml` to resolve ArgoCD sync validation errors on deprecated fields. |
 | 2026-04-13 | **Ai Agents & Unified Routing**: Created `ai-agents` project with Researcher, Coder, Reviewer, and Writer workflows. Exposed all LLM/Embedding endpoints via `llm.michaelhomelab.work` with path-based routing. |
 | 2026-04-13 | **Savant → Watchtower telemetry wiring**: Savant backend now pushes `input_tokens`, `output_tokens`, `duration_ms`, and `source` to Watchtower after every completed chat stream. |
 | 2026-04-13 | **PostgreSQL added**: New StatefulSet (`postgres:16-alpine`, 10 Gi Longhorn PVC) deployed under ArgoCD sync-wave 10. Watchtower uses it as the durable store for `savant_inference` events. |
