@@ -7,7 +7,7 @@ import json
 from typing import AsyncGenerator
 from fastapi.responses import StreamingResponse
 
-app = FastAPI(title="Knowledge Chat API")
+app = FastAPI(title="Savant")
 
 app.add_middleware(
     CORSMiddleware,

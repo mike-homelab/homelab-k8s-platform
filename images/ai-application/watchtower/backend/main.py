@@ -7,7 +7,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-app = FastAPI(title="Sentinel API")
+app = FastAPI(title="watchtower API")
 
 app.add_middleware(
     CORSMiddleware,

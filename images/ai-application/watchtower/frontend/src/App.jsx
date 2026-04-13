@@ -156,13 +156,13 @@ export default function App() {
   }
 
   return (
-    <div className="sentinel-layout">
-      <header className="sentinel-header">
-        <div className="sentinel-wordmark">
+    <div className="watchtower-layout">
+      <header className="watchtower-header">
+        <div className="watchtower-wordmark">
           <Eye size={22} />
           <div>
-            <div className="sentinel-title">Sentinel</div>
-            <div className="sentinel-subtitle">LLM Request Feed · AI Platform</div>
+            <div className="watchtower-title">watchtower</div>
+            <div className="watchtower-subtitle">LLM Request Feed · AI Platform</div>
           </div>
         </div>
         <button className={`refresh-btn${refreshing ? ' spinning' : ''}`} onClick={handleRefresh}>

@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: sentinel
+  name: watchtower
   namespace: ai-platform
   labels:
-    app: sentinel
+    app: watchtower
 spec:
   replicas: 1
   selector:
@@ -16,8 +16,8 @@ spec:
         app: watchtower
     spec:
       containers:
-        - name: sentinel
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/sentinel:latest
+        - name: watchtower
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/watchtower:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80

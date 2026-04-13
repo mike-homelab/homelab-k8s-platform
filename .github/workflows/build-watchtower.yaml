@@ -1,17 +1,17 @@
-name: Build Sentinel Image
+name: Build watchtower Image
 
 on:
   push:
     branches:
       - main
     paths:
-      - images/ai-application/sentinel/**
-      - .github/workflows/build-sentinel.yaml
+      - images/ai-application/watchtower/**
+      - .github/workflows/build-watchtower.yaml
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build & Push Sentinel
+    name: Build & Push watchtower
     runs-on: [self-hosted]
     timeout-minutes: 30
 
@@ -29,17 +29,17 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t docker.michaelhomelab.work/homelab-docker-repo/ai-application/sentinel:latest \
-            images/ai-application/sentinel
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-application/watchtower:latest \
+            images/ai-application/watchtower
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing sentinel:latest...";
-            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-application/sentinel:latest && break || sleep 15;
+            echo "Attempt $i: Pushing watchtower:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-application/watchtower:latest && break || sleep 15;
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-application/sentinel:latest || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-application/watchtower:latest || true

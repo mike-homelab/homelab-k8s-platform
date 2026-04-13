@@ -32,14 +32,14 @@ body {
 }
 
 /* ── Layout ── */
-.sentinel-layout {
+.watchtower-layout {
   max-width: 900px;
   margin: 0 auto;
   padding: 0 16px 80px;
 }
 
 /* ── Header ── */
-.sentinel-header {
+.watchtower-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -48,21 +48,21 @@ body {
   margin-bottom: 28px;
 }
 
-.sentinel-wordmark {
+.watchtower-wordmark {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.sentinel-wordmark svg { color: var(--accent); }
+.watchtower-wordmark svg { color: var(--accent); }
 
-.sentinel-title {
+.watchtower-title {
   font-size: 20px;
   font-weight: 600;
   letter-spacing: -0.3px;
 }
 
-.sentinel-subtitle {
+.watchtower-subtitle {
   font-size: 12px;
   color: var(--text-muted);
   margin-top: 1px;
