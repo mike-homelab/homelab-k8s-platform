@@ -32,6 +32,10 @@ spec:
               value: "knowledge"
             - name: EMBED_URL
               value: "http://infinity-embedding.ai-platform.svc.cluster.local:8000"
+            - name: SEARXNG_URL
+              value: "http://searxng.ai-platform.svc.cluster.local:8080"
+            - name: RERANK_URL
+              value: "http://infinity-embedding.ai-platform.svc.cluster.local:8001"
             - name: WATCHTOWER_URL
               value: "http://watchtower.ai-platform.svc.cluster.local"
           resources:
