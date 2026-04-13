@@ -22,6 +22,14 @@ function fmtTs(iso) {
   } catch { return iso }
 }
 
+function SourceBadge({ source }) {
+  if (!source || source === 'none') return null
+  const labels = { qdrant: '🗄️ KB', web: '🌐 Web', none: null }
+  const label = labels[source]
+  if (!label) return null
+  return <span className="tag" style={{ background: 'var(--badge-bg, rgba(255,255,255,0.08))', color: 'var(--text-dim)' }}>{label}</span>
+}
+
 function FeedCard({ item }) {
   const [expanded, setExpanded] = useState(false)
   const prompt = item.prompt || ''
@@ -50,6 +58,7 @@ function FeedCard({ item }) {
       )}
 
       <div className="card-tags">
+        {item.source && item.source !== 'none' && <SourceBadge source={item.source} />}
         {(item.input_tokens > 0) && (
           <span className="tag tag-in">
             <Zap size={11} /> {item.input_tokens} in

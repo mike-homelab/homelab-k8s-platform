@@ -32,6 +32,8 @@ spec:
               value: "knowledge"
             - name: EMBED_URL
               value: "http://infinity-embedding.ai-platform.svc.cluster.local:8000"
+            - name: WATCHTOWER_URL
+              value: "http://watchtower.ai-platform.svc.cluster.local"
           resources:
             requests:
               cpu: 100m

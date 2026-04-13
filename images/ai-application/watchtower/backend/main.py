@@ -1,13 +1,28 @@
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import httpx
 import os
 import re
 import json
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 app = FastAPI(title="watchtower API")
+
+# ── In-memory event store (Savant pushes here) ────────────────────────────────
+# Stores the last 500 Savant inference events so Reasoning tab always has data
+_savant_events: deque = deque(maxlen=500)
+
+
+class SavantEvent(BaseModel):
+    message: str          # user's input message
+    input_tokens: int
+    output_tokens: int
+    duration_ms: float
+    model: str
+    source: str = "none"  # qdrant | web | none
 
 app.add_middleware(
     CORSMiddleware,
@@ -128,6 +143,21 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/api/ingest/savant")
+async def ingest_savant(event: SavantEvent):
+    """Receive an inference event pushed by Savant after each chat completion."""
+    _savant_events.appendleft({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model": event.model,
+        "input_tokens": event.input_tokens,
+        "output_tokens": event.output_tokens,
+        "duration_ms": event.duration_ms,
+        "prompt": event.message[:300],  # truncate for display
+        "source": event.source,
+    })
+    return {"ok": True}
+
+
 @app.get("/api/feed/coder")
 async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
     """Ollama coder feed — parsed from Loki logs."""
@@ -142,14 +172,33 @@ async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
 
 @app.get("/api/feed/reasoning")
 async def feed_reasoning(search: str = "", limit: int = 50, hours: int = 6):
-    """Ollama reasoning feed — parsed from Loki logs."""
-    logql = '{namespace="ai-platform", app="vllm-reasoning"}'
+    """Reasoning feed — merges Savant push events with Loki log parsing.
+
+    Savant events are the primary source (always available).
+    Loki events are appended if they parse successfully (best-effort).
+    """
+    # 1. Pull from in-memory Savant event store
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    savant_items = [
+        e for e in _savant_events
+        if datetime.fromisoformat(e["timestamp"]) >= cutoff
+    ]
+
+    # 2. Try Loki as supplementary source (may be empty / unreachable)
+    loki_items: list = []
+    try:
+        logql = '{namespace="ai-platform", app="vllm-reasoning"}'
+        if search:
+            logql = f'{logql} |~ `(?i){re.escape(search)}`'
+        loki_items = await loki_query(logql, limit=limit * 3, hours=hours)
+    except Exception:
+        pass  # Loki unavailable — silently fall back to savant events only
+
+    # 3. Merge, de-duplicate (savant events take priority), filter & cap
+    combined = savant_items + loki_items
     if search:
-        logql = f'{logql} |~ `(?i){re.escape(search)}`'
-    items = await loki_query(logql, limit=limit * 3, hours=hours)
-    if search:
-        items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
-    return {"items": items[:limit]}
+        combined = [i for i in combined if search.lower() in (i.get("prompt") or "").lower()]
+    return {"items": combined[:limit]}
 
 
 @app.get("/api/feed/embedding")

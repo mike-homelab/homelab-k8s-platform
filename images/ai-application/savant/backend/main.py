@@ -22,6 +22,7 @@ EMBED_URL    = os.getenv("EMBED_URL",    "http://infinity-embedding.ai-platform.
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3.5")
 SEARCH_API   = os.getenv("SEARCH_API",   "https://api.duckduckgo.com/")
 COLLECTION   = os.getenv("QDRANT_COLLECTION", "knowledge")
+WATCHTOWER_URL = os.getenv("WATCHTOWER_URL", "http://watchtower.ai-platform.svc.cluster.local")
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -108,8 +109,16 @@ def build_prompt(user_msg: str, context: str, source: str) -> str:
     return "\n\n".join(parts)
 
 
-async def stream_ollama(prompt: str, model: str) -> AsyncGenerator[str, None]:
-    """Stream response from Ollama and yield SSE chunks."""
+async def stream_ollama(
+    prompt: str,
+    model: str,
+    stats_out: dict,
+) -> AsyncGenerator[str, None]:
+    """Stream response from Ollama and yield SSE chunks.
+
+    Populates *stats_out* with prompt_tokens / completion_tokens / duration_ms
+    once Ollama signals the stream is done.
+    """
     payload = {
         "model": model,
         "prompt": prompt,
@@ -128,13 +137,21 @@ async def stream_ollama(prompt: str, model: str) -> AsyncGenerator[str, None]:
                     if token:
                         yield f"data: {json.dumps({'token': token})}\n\n"
                     if chunk.get("done"):
-                        stats = {
+                        pt = chunk.get("prompt_eval_count", 0)
+                        ct = chunk.get("eval_count", 0)
+                        dm = round(chunk.get("total_duration", 0) / 1e6, 1)
+                        stats_out.update(
+                            prompt_tokens=pt,
+                            completion_tokens=ct,
+                            duration_ms=dm,
+                        )
+                        sse_stats = {
                             "done": True,
-                            "prompt_tokens":     chunk.get("prompt_eval_count", 0),
-                            "completion_tokens": chunk.get("eval_count", 0),
-                            "duration_ms":       round(chunk.get("total_duration", 0) / 1e6, 1),
+                            "prompt_tokens":     pt,
+                            "completion_tokens": ct,
+                            "duration_ms":       dm,
                         }
-                        yield f"data: {json.dumps(stats)}\n\n"
+                        yield f"data: {json.dumps(sse_stats)}\n\n"
                 except json.JSONDecodeError:
                     pass
 
@@ -175,12 +192,34 @@ async def chat(req: ChatRequest):
     # 4. Build prompt
     prompt = build_prompt(user_msg, context, source)
 
-    # 5. Stream response
+    # 5. Stream response, collect stats, then push to Watchtower
+    stats: dict = {}
+
     async def event_stream():
-        # First send metadata about the source
+        # First send metadata about the context source
         meta = {"source": source, "has_context": bool(context)}
         yield f"data: {json.dumps({'meta': meta})}\n\n"
-        async for chunk in stream_ollama(prompt, OLLAMA_MODEL):
+
+        async for chunk in stream_ollama(prompt, OLLAMA_MODEL, stats):
             yield chunk
+
+        # After the stream closes, fire-and-forget to Watchtower
+        if stats:
+            try:
+                payload = {
+                    "message":       user_msg,
+                    "input_tokens":  stats.get("prompt_tokens", 0),
+                    "output_tokens": stats.get("completion_tokens", 0),
+                    "duration_ms":   stats.get("duration_ms", 0.0),
+                    "model":         OLLAMA_MODEL,
+                    "source":        source,
+                }
+                async with httpx.AsyncClient(timeout=3) as client:
+                    await client.post(
+                        f"{WATCHTOWER_URL}/api/ingest/savant",
+                        json=payload,
+                    )
+            except Exception:
+                pass  # Never block the user response due to telemetry failure
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
