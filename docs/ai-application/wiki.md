@@ -218,12 +218,148 @@ ArgoCD sync-wave 15  →  qdrant     (vector store available)
 
 ---
 
+---
+
+## 6. Ai Agents
+
+**Ai Agents** is a project focused on automating repository maintenance, research, and documentation tasks using specialized agentic workflows powered by in-cluster LLMs and local MCP execution.
+
+- **ArgoCD Project**: `ai-agents`
+- **Location**: `clusters/homelab/apps_argocd/ai-agents/`
+- **Workflow Directory**: `.agent/workflows/`
+
+### Specialized Agents
+
+| Agent | Role | Details |
+|---|---|---|
+| **Researcher** | Discovery | Web search + in-cluster reranking via `BAAI/bge-reranker-large` |
+| **Coder** | Execution | Planning via `phi3.5`/`IBM Granite` + Local workspace patching via `FastMCP` |
+| **Reviewer** | Observability | CI/CD watchdog using `gh` CLI to monitor and auto-heal failed GitHub Actions |
+| **Writer** | Maintenance | Analyzes code changes and updates Markdown documentation/Wiki via MCP |
+
+### Request Flow
+
+```
+User Prompt (e.g. "Build feature X")
+  ↓
+1. Researcher: Gathers latest docs + Rerank at https://llm.michaelhomelab.work/rerank
+  ↓
+2. Coder: Reason at https://llm.michaelhomelab.work/coder
+  ↓
+3. Coder: Patch workspace via host_mcp_server.py:8080
+  ↓
+4. Git Push → GitHub Action triggered
+  ↓
+5. Reviewer: Monitor gh runs; if fail, feed logs back to Coder for self-healing
+  ↓
+6. Writer: Update docs/ai-application/wiki.md with new architecture details
+```
+
+### Unified LLM Routing
+
+All agents use a unified ingress at `llm.michaelhomelab.work` with path-based routing to ensure reliable access from the host machine:
+
+| Path | Target Backend | Port | Model / Purpose |
+|---|---|---|---|
+| `/coder` | `vllm-coder` | 11434 | `ibm-granite/granite3.1-dense:2b` |
+| `/reasoning` | `vllm-reasoning` | 11434 | `phi3.5` |
+| `/embedding` | `infinity-embedding` | 8000 | `BAAI/bge-large-en-v1.5` |
+| `/rerank` | `infinity-embedding` | 8001 | `BAAI/bge-reranker-large` |
+
+---
+
 ## Recent Updates
 
 | Date | Change |
 |---|---|
+| 2026-04-13 | **Ai Agents & Unified Routing**: Created `ai-agents` project with Researcher, Coder, Reviewer, and Writer workflows. Exposed all LLM/Embedding endpoints via `llm.michaelhomelab.work` with path-based routing. |
 | 2026-04-13 | **Savant → Watchtower telemetry wiring**: Savant backend now pushes `input_tokens`, `output_tokens`, `duration_ms`, and `source` to Watchtower after every completed chat stream. |
 | 2026-04-13 | **PostgreSQL added**: New StatefulSet (`postgres:16-alpine`, 10 Gi Longhorn PVC) deployed under ArgoCD sync-wave 10. Watchtower uses it as the durable store for `savant_inference` events. |
 | 2026-04-13 | **Redis cache-aside**: Watchtower's `/api/feed/reasoning` endpoint now caches results in Redis (30s TTL). Cache is busted on each ingest event. |
 | 2026-04-13 | **Watchtower backend rewrite**: Replaced in-memory `deque` with `asyncpg` (Postgres) + `redis[asyncio]`. Added FastAPI `lifespan` for clean connection pool lifecycle. Added DDL auto-creation on startup. |
 | 2026-04-13 | **Renaming completed**: `knowledge-chat` → `savant`, `sentinel` → `watchtower`. All manifests, workflows, and UI text updated. |
+
+---
+
+## 7. DevOps & Registry
+
+The homelab uses **Nexus Repository Manager** as a centralized hub for Docker images and build artifacts.
+
+- **ArgoCD Application**: `clusters/homelab/apps_argocd/devops-tools/nexus.yaml`
+- **K8s manifests**: `clusters/homelab/apps/devops-tools/nexus/`
+
+### Registry Endpoints
+
+| Service | Domain | Internal Port | Details |
+|---|---|---|---|
+| **Nexus UI** | `nexus.michaelhomelab.work` | 8081 | Admin interface, repository browsing |
+| **Docker Registry** | `docker.michaelhomelab.work` | 5000 | Private registry for custom AI images |
+
+### Image Build Pipelines
+
+Custom images (Savant, Watchtower, VLLM Embedding) are built via GitHub Actions and pushed to the local Nexus registry.
+
+- **CI Location**: `.github/workflows/`
+- **Base Registry**: `docker.michaelhomelab.work/homelab-docker-repo/`
+
+---
+
+## 8. Security & TLS
+
+- **TLS Termination**: Handled by **Nginx Gateway Fabric**.
+- **Certificate Management**: `cert-manager` with `ClusterIssuer` using DNS-01 challenge for wildcard certificates via Cloudflare.
+- **Wildcard Secret**: `homelab-wildcard-tls` in `nginx-gateway` namespace.
+- **RBAC**: Namespace isolation is enforced via ArgoCD `AppProject` definitions (`ai-platform`, `ai-application`, `devops-tools`).
+
+---
+
+## Agentic Memory Database (Context Blocks)
+
+> [!NOTE]
+> These JSON blocks are designed to be used by LLM agents as a high-fidelity system context. Copy-paste these into your system prompt to understand the environment.
+
+### 1. Platform Topology
+```json
+{
+  "topology": {
+    "namespace": "ai-platform",
+    "ingress_gateway": "nginx-gateway.nginx-gateway.svc.cluster.local",
+    "gateway_external_ip": "10.0.0.10",
+    "load_balancer_range": "10.0.0.10-10.0.0.50",
+    "storage_class": "longhorn",
+    "vram_nodes": {
+      "rtx_5070_ti": "16GB - vllm-coder",
+      "rtx_5060_ti": "16GB - vllm-reasoning",
+      "rtx_3060": "12GB - infinity-embedding"
+    }
+  }
+}
+```
+
+### 2. Service Registry
+```json
+{
+  "services": {
+    "llm_gateway": "https://llm.michaelhomelab.work",
+    "savant": "https://raphael.michaelhomelab.work",
+    "watchtower": "https://watchtower.michaelhomelab.work",
+    "nexus": "https://nexus.michaelhomelab.work",
+    "docker_registry": "docker.michaelhomelab.work"
+  }
+}
+```
+
+### 3. Workflow Endpoints
+```json
+{
+  "endpoints": {
+    "coder": "https://llm.michaelhomelab.work/coder",
+    "reasoning": "https://llm.michaelhomelab.work/reasoning",
+    "embedding": "https://llm.michaelhomelab.work/embedding",
+    "rerank": "https://llm.michaelhomelab.work/rerank",
+    "vector_db": "http://qdrant.ai-platform.svc.cluster.local:6333",
+    "telemetry": "http://watchtower.ai-platform.svc.cluster.local/api/ingest/savant",
+    "mcp_server": "127.0.0.1:8080 (SSE)"
+  }
+}
+```
