@@ -6,28 +6,33 @@ metadata:
 data:
   settings.yml: |
     use_default_settings: true
-    server:
-      port: 8080
-      bind_address: "0.0.0.0"
-      secret_key: "homelabsearxngkey"
-      limiter: false
-      image_proxy: false
     search:
+      safe_search: 0
+      autocomplete: ""
       formats:
         - html
         - json
     engines:
-      - name: google
-        engine: google
       - name: duckduckgo
         engine: duckduckgo
       - name: bing
         engine: bing
       - name: brave
         engine: brave
-      - name: wikipedia
-        engine: wikipedia
       - name: qwant
         engine: qwant
-      - name: startpage
-        engine: startpage
+      - name: google
+        engine: google
+      - name: wikipedia
+        engine: wikipedia
+    enabled_plugins:
+      - 'Hash plugin'
+      - 'Self-contained snippets'
+    ui:
+      static_use_hash: true
+    server:
+      port: 8080
+      bind_address: "0.0.0.0"
+      secret_key: "homelabsearxngkey"
+      limiter: false
+      image_proxy: false

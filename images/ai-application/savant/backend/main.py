@@ -91,26 +91,32 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[
 
 async def web_search(query: str) -> str:
     """SearxNG web search followed by reranking."""
+    url = f"{SEARXNG_URL}/search"
+    print(f"[*] Web search started: {url}")
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(SEARXNG_URL, params={"q": query, "format": "json"})
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url, params={"q": query, "format": "json", "engines": "google,duckduckgo,wikipedia,brave"})
             r.raise_for_status()
             data = r.json()
             results = data.get("results", [])
+            print(f"[*] SearxNG raw results: {len(results)}")
             
             docs: list[str] = []
-            for res in results[:10]:
+            for res in results[:20]: # Fetch more for reranking
                 content = res.get("content") or res.get("title", "")
-                if content:
+                if len(content) > 10:
                     docs.append(content)
             
             if not docs:
+                print("[!] No snippets extracted from SearxNG")
                 return ""
             
             # Pipe results to the inference reranker
-            top_docs = await rerank_documents(query, docs)
+            top_docs = await rerank_documents(query, docs, top_k=5)
+            print(f"[*] After reranking: {len(top_docs)} docs")
             return "\n\n".join(top_docs) if top_docs else ""
-    except Exception:
+    except Exception as e:
+        print(f"[!] Web search error: {e}")
         return ""
 
 
