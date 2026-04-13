@@ -201,25 +201,34 @@ async def chat(req: ChatRequest):
     if not user_msg:
         raise HTTPException(400, "Empty message")
 
-    # 1. Embed the user message
-    embedding = await get_embedding(user_msg)
+    print(f"[*] Processing query: {user_msg}")
 
+    # 1. Start both searches concurrently for speed (Hybrid RAG)
+    embedding = await get_embedding(user_msg)
+    
+    local_hits: list[str] = []
+    if embedding:
+        local_hits = await search_qdrant(embedding)
+        print(f"[*] Qdrant hits: {len(local_hits)}")
+
+    # 2. Always check web fallback if local hits are low or as a primary for "latest" intent
+    web_results = await web_search(user_msg)
+    web_hits = web_results.split("\n\n") if web_results else []
+    print(f"[*] Web search hits (after rerank): {len(web_hits) if web_hits else 0}")
+
+    # 3. Consolidate and categorize
     context = ""
     source  = "none"
 
-    if embedding:
-        # 2. Search Qdrant
-        hits = await search_qdrant(embedding)
-        if hits:
-            context = "\n\n---\n\n".join(hits)
-            source  = "qdrant"
-
-    if not context:
-        # 3. Fallback: web search
-        web_ctx = await web_search(user_msg)
-        if web_ctx:
-            context = web_ctx
-            source  = "web"
+    if web_hits:
+        # If we have web hits, they are likely more current
+        context = "\n\n---\n\n".join(web_hits)
+        source  = "web"
+        if local_hits:
+            context += "\n\n--- [Internal Background] ---\n\n" + "\n\n---\n\n".join(local_hits[:2])
+    elif local_hits:
+        context = "\n\n---\n\n".join(local_hits)
+        source  = "qdrant"
 
     # 4. Build messages
     messages = build_messages(user_msg, context, source)
