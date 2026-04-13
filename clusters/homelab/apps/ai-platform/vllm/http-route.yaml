@@ -1,0 +1,65 @@
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vllm-route
+  namespace: ai-platform
+spec:
+  parentRefs:
+    - name: nginx-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - llm.michaelhomelab.work
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /coder
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: vllm-coder
+          port: 11434
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /reasoning
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: vllm-reasoning
+          port: 11434
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /embedding
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: infinity-embedding
+          port: 8000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /rerank
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: infinity-embedding
+          port: 8001

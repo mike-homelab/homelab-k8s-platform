@@ -3,3 +3,4 @@ resources:
   - coder.yaml
   - reasoning.yaml
   - embedding.yaml
+  - http-route.yaml
