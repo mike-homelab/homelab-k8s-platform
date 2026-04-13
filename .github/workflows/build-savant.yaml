@@ -1,4 +1,4 @@
-name: Build Knowledge Chat Image
+name: Build savant Image
 
 on:
   push:
