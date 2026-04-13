@@ -21,6 +21,8 @@ QDRANT_URL   = os.getenv("QDRANT_URL",   "http://qdrant.ai-platform.svc.cluster.
 EMBED_URL    = os.getenv("EMBED_URL",    "http://infinity-embedding.ai-platform.svc.cluster.local:8000")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3.5")
 SEARCH_API   = os.getenv("SEARCH_API",   "https://api.duckduckgo.com/")
+SEARXNG_URL  = os.getenv("SEARXNG_URL",  "http://searxng.ai-platform.svc.cluster.local:8080")
+RERANK_URL   = os.getenv("RERANK_URL",   "http://infinity-embedding.ai-platform.svc.cluster.local:8001")
 COLLECTION   = os.getenv("QDRANT_COLLECTION", "knowledge")
 WATCHTOWER_URL = os.getenv("WATCHTOWER_URL", "http://watchtower.ai-platform.svc.cluster.local")
 
@@ -63,20 +65,51 @@ async def search_qdrant(embedding: list[float], top_k: int = 5) -> list[str]:
         return []
 
 
-async def web_search(query: str) -> str:
-    """DuckDuckGo instant-answer fallback."""
+async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[str]:
+    """Rerank documents using BAAI/bge-reranker-large."""
+    if not docs:
+        return []
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(SEARCH_API, params={"q": query, "format": "json", "no_html": "1"})
+            r = await client.post(
+                f"{RERANK_URL}/v1/rerank",
+                json={
+                    "model": "BAAI/bge-reranker-large",
+                    "query": query,
+                    "documents": docs,
+                    "top_n": top_k
+                }
+            )
+            r.raise_for_status()
+            results = r.json().get("results", [])
+            # Filter results by relevance_score > 0.2
+            filtered_docs = [docs[res["index"]] for res in results if res.get("relevance_score", 0) > 0.2]
+            return filtered_docs
+    except Exception:
+        # Fallback to returning top_k without filtering if reranker fails
+        return docs[:top_k]
+
+async def web_search(query: str) -> str:
+    """SearxNG web search followed by reranking."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(SEARXNG_URL, params={"q": query, "format": "json"})
             r.raise_for_status()
             data = r.json()
-            results = []
-            if data.get("AbstractText"):
-                results.append(data["AbstractText"])
-            for rel in data.get("RelatedTopics", [])[:3]:
-                if isinstance(rel, dict) and rel.get("Text"):
-                    results.append(rel["Text"])
-            return "\n\n".join(results) if results else ""
+            results = data.get("results", [])
+            
+            docs: list[str] = []
+            for res in results[:10]:
+                content = res.get("content") or res.get("title", "")
+                if content:
+                    docs.append(content)
+            
+            if not docs:
+                return ""
+            
+            # Pipe results to the inference reranker
+            top_docs = await rerank_documents(query, docs)
+            return "\n\n".join(top_docs) if top_docs else ""
     except Exception:
         return ""
 

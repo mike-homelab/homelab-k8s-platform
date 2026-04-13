@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: ai-platform
+  labels:
+    app: searxng
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+    spec:
+      containers:
+      - name: searxng
+        image: searxng/searxng:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: searxng-settings
+          mountPath: /etc/searxng/settings.yml
+          subPath: settings.yml
+      volumes:
+      - name: searxng-settings
+        configMap:
+          name: searxng-settings

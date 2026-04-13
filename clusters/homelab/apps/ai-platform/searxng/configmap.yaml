@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: searxng-settings
+  namespace: ai-platform
+data:
+  settings.yml: |
+    use_default_settings: true
+    server:
+      port: 8080
+      bind_address: "0.0.0.0"
+      secret_key: "homelabsearxngkey"
+    search:
+      formats:
+        - html
+        - json
+    engines:
+      - name: bing
+        engine: bing
+        shortcut: bi
+      - name: duckduckgo
+        engine: duckduckgo
+        shortcut: ddg
+      - name: google
+        engine: google
+        shortcut: go

@@ -23,7 +23,7 @@ This document outlines the architecture, components, and purpose of the applicat
 | Embedding | `infinity-embedding` | Model: `BAAI/bge-large-en-v1.5` |
 | Vector DB | Qdrant | Collection: `knowledge` |
 | Reasoning LLM | `vllm-reasoning` | Ollama-compat, model: `phi3.5` |
-| Fallback Search | DuckDuckGo | Instant-answer API for queries with no Qdrant context |
+| Fallback Search | SearxNG & Reranker | Aggregates Google/DuckDuckGo, scored via `infinity-embedding:8001/v1/rerank` |
 
 ### Request Flow
 
@@ -34,13 +34,17 @@ User query
   ↓
 2. Semantic search in Qdrant (score > 0.6 threshold)
   ↓  (if no hits)
-3. Fallback: DuckDuckGo web search
+3. Fallback: SearxNG web search API (returns 10 text snippets)
   ↓
-4. Build context-aware prompt (system + context block + user message)
+4. Reranker: infinity-embedding instances BAAI/bge-reranker-large scores the 10 snippets
   ↓
-5. Stream response from Ollama phi3.5
+5. Filter: Top 3 snippets (score > 0.2) form prompt context
   ↓
-6. On stream "done": fire-and-forget POST → Watchtower /api/ingest/savant
+6. Build context-aware prompt (system + context block + user message)
+  ↓
+7. Stream response from Ollama phi3.5
+  ↓
+8. On stream "done": fire-and-forget POST → Watchtower /api/ingest/savant
      payload: { message, input_tokens, output_tokens, duration_ms, model, source }
 ```
 
@@ -272,6 +276,7 @@ All agents use a unified ingress at `llm.michaelhomelab.work` with path-based ro
 
 | Date | Change |
 |---|---|
+| 2026-04-14 | **Savant SearxNG & Reranker Integration**: Upgraded fallback search from DuckDuckGo Instant Answer to local SearxNG deployment. Piped SearxNG results directly to `infinity-embedding:8001` to logically extract and score snippets >0.2 before ingestion into Ollama. |
 | 2026-04-14 | **Longhorn CRD Sync Fix**: Added `ignoreDifferences` for `preserveUnknownFields` in `clusters/homelab/apps_argocd/infra/longhorn.yaml` to resolve ArgoCD sync validation errors on deprecated fields. |
 | 2026-04-13 | **Ai Agents & Unified Routing**: Created `ai-agents` project with Researcher, Coder, Reviewer, and Writer workflows. Exposed all LLM/Embedding endpoints via `llm.michaelhomelab.work` with path-based routing. |
 | 2026-04-13 | **Savant → Watchtower telemetry wiring**: Savant backend now pushes `input_tokens`, `output_tokens`, `duration_ms`, and `source` to Watchtower after every completed chat stream. |
