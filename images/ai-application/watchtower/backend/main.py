@@ -1,28 +1,79 @@
-from fastapi import FastAPI, Query, HTTPException
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import asyncpg
+import redis.asyncio as aioredis
 import httpx
 import os
 import re
 import json
-from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-app = FastAPI(title="watchtower API")
+# ── Config ────────────────────────────────────────────────────────────────────
 
-# ── In-memory event store (Savant pushes here) ────────────────────────────────
-# Stores the last 500 Savant inference events so Reasoning tab always has data
-_savant_events: deque = deque(maxlen=500)
+LOKI_URL     = os.getenv("LOKI_URL",     "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1")
+TEMPO_URL    = os.getenv("TEMPO_URL",    "http://tempo-query-frontend.monitoring.svc.cluster.local:3100")
+POSTGRES_DSN = os.getenv("POSTGRES_DSN", "postgresql://watchtower:watchtower@postgres.ai-platform.svc.cluster.local:5432/watchtower")
+REDIS_URL    = os.getenv("REDIS_URL",    "redis://redis.ai-platform.svc.cluster.local:6379/0")
+
+CACHE_TTL = 30  # seconds — matches the frontend 30s auto-refresh interval
+
+# ── Schema DDL ────────────────────────────────────────────────────────────────
+
+DDL = """
+CREATE TABLE IF NOT EXISTS savant_inference (
+    id            BIGSERIAL PRIMARY KEY,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    model         TEXT,
+    input_tokens  INT  NOT NULL DEFAULT 0,
+    output_tokens INT  NOT NULL DEFAULT 0,
+    duration_ms   FLOAT,
+    prompt        TEXT,
+    source        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_savant_created ON savant_inference (created_at DESC);
+"""
+
+# ── Application state (shared across requests via app.state) ──────────────────
+
+class AppState:
+    db: asyncpg.Pool
+    cache: aioredis.Redis
 
 
-class SavantEvent(BaseModel):
-    message: str          # user's input message
-    input_tokens: int
-    output_tokens: int
-    duration_ms: float
-    model: str
-    source: str = "none"  # qdrant | web | none
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Create DB pool + Redis client on startup, close cleanly on shutdown."""
+    state = AppState()
+
+    # Postgres connection pool (min 1, max 5 — single-pod low traffic)
+    state.db = await asyncpg.create_pool(
+        POSTGRES_DSN,
+        min_size=1,
+        max_size=5,
+        command_timeout=10,
+    )
+    async with state.db.acquire() as conn:
+        await conn.execute(DDL)
+    print("DB ready — savant_inference table ensured")
+
+    # Redis client
+    state.cache = aioredis.from_url(REDIS_URL, decode_responses=True)
+    await state.cache.ping()
+    print("Redis ready")
+
+    app.state.db    = state.db
+    app.state.cache = state.cache
+
+    yield  # ── app running ──
+
+    await state.db.close()
+    await state.cache.aclose()
+
+
+app = FastAPI(title="watchtower API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -31,10 +82,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-LOKI_URL  = os.getenv("LOKI_URL",  "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1")
-TEMPO_URL = os.getenv("TEMPO_URL", "http://tempo-query-frontend.monitoring.svc.cluster.local:3100")
 
-# ── helpers ─────────────────────────────────────────────────────────────────
+# ── Pydantic model for Savant push events ─────────────────────────────────────
+
+class SavantEvent(BaseModel):
+    message: str          # user's input message (stored as prompt)
+    input_tokens: int
+    output_tokens: int
+    duration_ms: float
+    model: str
+    source: str = "none"  # qdrant | web | none
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def now_ns() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1e9)
@@ -42,20 +102,76 @@ def now_ns() -> int:
 def hours_ago_ns(h: int = 6) -> int:
     return int((datetime.now(timezone.utc) - timedelta(hours=h)).timestamp() * 1e9)
 
+def _cache_key(hours: int, search: str, limit: int) -> str:
+    return f"feed:reasoning:h{hours}:l{limit}:s{search}"
 
-# ── OLLAMA log parser (Loki) ─────────────────────────────────────────────────
-# Ollama emits lines like:
-#   {"level":"INFO","msg":"inference done","model":"phi3.5","prompt_eval_count":42,
-#    "eval_count":318,"total_duration":4123456789,"prompt_eval_duration":123456789,
-#    "eval_duration":4000000000}
 
-OLLAMA_LOG_RE = re.compile(
-    r'"model"\s*:\s*"(?P<model>[^"]+)".*?'
-    r'"prompt_eval_count"\s*:\s*(?P<prompt_tokens>\d+).*?'
-    r'"eval_count"\s*:\s*(?P<completion_tokens>\d+).*?'
-    r'"total_duration"\s*:\s*(?P<total_duration_ns>\d+)',
-    re.DOTALL,
-)
+# ── Postgres helpers ──────────────────────────────────────────────────────────
+
+async def db_insert_event(db: asyncpg.Pool, event: SavantEvent):
+    await db.execute(
+        """
+        INSERT INTO savant_inference
+            (model, input_tokens, output_tokens, duration_ms, prompt, source)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """,
+        event.model,
+        event.input_tokens,
+        event.output_tokens,
+        event.duration_ms,
+        event.message[:300],
+        event.source,
+    )
+
+
+async def db_query_reasoning(
+    db: asyncpg.Pool,
+    hours: int,
+    limit: int,
+    search: str,
+) -> list[dict]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    if search:
+        rows = await db.fetch(
+            """
+            SELECT created_at, model, input_tokens, output_tokens, duration_ms, prompt, source
+            FROM savant_inference
+            WHERE created_at >= $1
+              AND prompt ILIKE $2
+            ORDER BY created_at DESC
+            LIMIT $3
+            """,
+            cutoff,
+            f"%{search}%",
+            limit,
+        )
+    else:
+        rows = await db.fetch(
+            """
+            SELECT created_at, model, input_tokens, output_tokens, duration_ms, prompt, source
+            FROM savant_inference
+            WHERE created_at >= $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            cutoff,
+            limit,
+        )
+    return [
+        {
+            "timestamp":     r["created_at"].isoformat(),
+            "model":         r["model"] or "unknown",
+            "input_tokens":  r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "duration_ms":   r["duration_ms"],
+            "prompt":        r["prompt"] or "",
+            "source":        r["source"] or "none",
+        }
+        for r in rows
+    ]
+
+
+# ── OLLAMA log parser (Loki) — kept as a supplementary source ─────────────────
 
 def parse_ollama_line(raw: str, ts_ns: int) -> Optional[dict]:
     try:
@@ -64,37 +180,35 @@ def parse_ollama_line(raw: str, ts_ns: int) -> Optional[dict]:
         return None
     if data.get("msg") not in ("inference done", "request", "response"):
         return None
-    prompt_tokens = data.get("prompt_eval_count", 0)
+    prompt_tokens     = data.get("prompt_eval_count", 0)
     completion_tokens = data.get("eval_count", 0)
-    total_ns = data.get("total_duration", 0)
+    total_ns          = data.get("total_duration", 0)
     if not (prompt_tokens or completion_tokens or total_ns):
         return None
     return {
-        "timestamp": datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
-        "model": data.get("model", "unknown"),
-        "input_tokens": prompt_tokens,
+        "timestamp":     datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
+        "model":         data.get("model", "unknown"),
+        "input_tokens":  prompt_tokens,
         "output_tokens": completion_tokens,
-        "duration_ms": round(total_ns / 1e6, 1),
-        "prompt": data.get("prompt", "")[:300],
+        "duration_ms":   round(total_ns / 1e6, 1),
+        "prompt":        data.get("prompt", "")[:300],
+        "source":        "loki",
     }
 
 
-# ── Loki query helper ─────────────────────────────────────────────────────────
-
 async def loki_query(logql: str, limit: int = 100, hours: int = 6) -> list[dict]:
     params = {
-        "query": logql,
-        "limit": limit,
-        "start": hours_ago_ns(hours),
-        "end":   now_ns(),
+        "query":     logql,
+        "limit":     limit,
+        "start":     hours_ago_ns(hours),
+        "end":       now_ns(),
         "direction": "backward",
     }
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{LOKI_URL}/query_range", params=params)
         r.raise_for_status()
-    data = r.json()
     results = []
-    for stream in data.get("data", {}).get("result", []):
+    for stream in r.json().get("data", {}).get("result", []):
         for ts_str, line in stream.get("values", []):
             parsed = parse_ollama_line(line, int(ts_str))
             if parsed:
@@ -108,9 +222,9 @@ async def tempo_search(service: str, limit: int = 50, hours: int = 6) -> list[di
     start = datetime.now(timezone.utc) - timedelta(hours=hours)
     params = {
         "service.name": service,
-        "limit": limit,
-        "start": start.isoformat(),
-        "end":   datetime.now(timezone.utc).isoformat(),
+        "limit":        limit,
+        "start":        start.isoformat(),
+        "end":          datetime.now(timezone.utc).isoformat(),
     }
     async with httpx.AsyncClient(timeout=10) as client:
         r = await client.get(f"{TEMPO_URL}/api/search", params=params)
@@ -125,13 +239,13 @@ async def tempo_search(service: str, limit: int = 50, hours: int = 6) -> list[di
             return attrs.get(key, {}).get("Value", {}).get("StringValue") or \
                    attrs.get(key, {}).get("Value", {}).get("IntValue") or default
         spans.append({
-            "timestamp": trace.get("startTimeUnixNano", ""),
-            "trace_id":  trace.get("traceID", ""),
-            "model":     ga("gen_ai.request.model", "unknown"),
-            "input_tokens":  int(ga("gen_ai.usage.prompt_tokens",     0)),
-            "output_tokens": int(ga("gen_ai.usage.completion_tokens",  0)),
-            "duration_ms": round(int(trace.get("durationMs", 0)), 1),
-            "prompt": ga("gen_ai.request.messages", "")[:300],
+            "timestamp":     trace.get("startTimeUnixNano", ""),
+            "trace_id":      trace.get("traceID", ""),
+            "model":         ga("gen_ai.request.model", "unknown"),
+            "input_tokens":  int(ga("gen_ai.usage.prompt_tokens",    0)),
+            "output_tokens": int(ga("gen_ai.usage.completion_tokens", 0)),
+            "duration_ms":   round(int(trace.get("durationMs", 0)), 1),
+            "prompt":        ga("gen_ai.request.messages", "")[:300],
         })
     return spans
 
@@ -145,17 +259,69 @@ async def health():
 
 @app.post("/api/ingest/savant")
 async def ingest_savant(event: SavantEvent):
-    """Receive an inference event pushed by Savant after each chat completion."""
-    _savant_events.appendleft({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "model": event.model,
-        "input_tokens": event.input_tokens,
-        "output_tokens": event.output_tokens,
-        "duration_ms": event.duration_ms,
-        "prompt": event.message[:300],  # truncate for display
-        "source": event.source,
-    })
+    """Receive an inference event pushed by Savant after each chat completion.
+
+    Writes to Postgres for durable storage, then invalidates affected Redis
+    cache keys so the next feed poll gets fresh data immediately.
+    """
+    await db_insert_event(app.state.db, event)
+
+    # Invalidate all reasoning feed cache keys so the next poll is fresh
+    pattern = "feed:reasoning:*"
+    cursor = 0
+    while True:
+        cursor, keys = await app.state.cache.scan(cursor, match=pattern, count=100)
+        if keys:
+            await app.state.cache.delete(*keys)
+        if cursor == 0:
+            break
+
     return {"ok": True}
+
+
+@app.get("/api/feed/reasoning")
+async def feed_reasoning(search: str = "", limit: int = 50, hours: int = 6):
+    """Reasoning feed — served from Redis cache (30s TTL), backed by Postgres.
+
+    On cache miss:
+      1. Query Postgres for Savant inference events (primary source)
+      2. Try Loki for supplementary Ollama log events (best-effort)
+      3. Merge, cap to limit, store in Redis, return
+    """
+    cache_key = _cache_key(hours, search, limit)
+
+    # ── Cache HIT ──
+    cached = await app.state.cache.get(cache_key)
+    if cached:
+        return {"items": json.loads(cached), "cache": "hit"}
+
+    # ── Cache MISS — query Postgres ──
+    pg_items: list[dict] = []
+    try:
+        pg_items = await db_query_reasoning(app.state.db, hours, limit, search)
+    except Exception as exc:
+        print(f"Postgres query error: {exc}")
+
+    # ── Supplementary: Loki (best-effort) ──
+    loki_items: list[dict] = []
+    try:
+        logql = '{namespace="ai-platform", app="vllm-reasoning"}'
+        if search:
+            logql = f'{logql} |~ `(?i){re.escape(search)}`'
+        loki_items = await loki_query(logql, limit=limit * 3, hours=hours)
+    except Exception:
+        pass  # Loki unavailable — silently skip
+
+    combined = pg_items + loki_items
+    combined = combined[:limit]
+
+    # ── Populate cache ──
+    try:
+        await app.state.cache.setex(cache_key, CACHE_TTL, json.dumps(combined))
+    except Exception:
+        pass  # Cache write failure is non-fatal
+
+    return {"items": combined, "cache": "miss"}
 
 
 @app.get("/api/feed/coder")
@@ -168,37 +334,6 @@ async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
     if search:
         items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
     return {"items": items[:limit]}
-
-
-@app.get("/api/feed/reasoning")
-async def feed_reasoning(search: str = "", limit: int = 50, hours: int = 6):
-    """Reasoning feed — merges Savant push events with Loki log parsing.
-
-    Savant events are the primary source (always available).
-    Loki events are appended if they parse successfully (best-effort).
-    """
-    # 1. Pull from in-memory Savant event store
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-    savant_items = [
-        e for e in _savant_events
-        if datetime.fromisoformat(e["timestamp"]) >= cutoff
-    ]
-
-    # 2. Try Loki as supplementary source (may be empty / unreachable)
-    loki_items: list = []
-    try:
-        logql = '{namespace="ai-platform", app="vllm-reasoning"}'
-        if search:
-            logql = f'{logql} |~ `(?i){re.escape(search)}`'
-        loki_items = await loki_query(logql, limit=limit * 3, hours=hours)
-    except Exception:
-        pass  # Loki unavailable — silently fall back to savant events only
-
-    # 3. Merge, de-duplicate (savant events take priority), filter & cap
-    combined = savant_items + loki_items
-    if search:
-        combined = [i for i in combined if search.lower() in (i.get("prompt") or "").lower()]
-    return {"items": combined[:limit]}
 
 
 @app.get("/api/feed/embedding")
