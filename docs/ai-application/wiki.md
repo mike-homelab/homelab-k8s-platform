@@ -369,3 +369,6 @@ Custom images (Savant, Watchtower, VLLM Embedding) are built via GitHub Actions 
   }
 }
 ```
+
+
+<!-- Auth Verification: Tue Apr 14 02:18:33 AM IST 2026 -->
