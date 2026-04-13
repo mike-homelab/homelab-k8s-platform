@@ -114,59 +114,58 @@ async def web_search(query: str) -> str:
         return ""
 
 
-def build_prompt(user_msg: str, context: str, source: str) -> str:
+def build_messages(user_msg: str, context: str, source: str) -> list[dict]:
+    """Build a list of messages for Ollama /api/chat."""
     if source == "qdrant":
         system = (
             "You are a helpful assistant with access to an internal knowledge base. "
             "Use the provided context to answer the user's question accurately and concisely. "
             "If the context doesn't fully answer the question, say so."
         )
-        ctx_block = f"[Internal Knowledge]\n{context}"
+        ctx_msg = f"Internal Knowledge:\n{context}"
     elif source == "web":
         system = (
-            "You are a helpful assistant. The internal knowledge base had no relevant information, "
-            "so the following context was retrieved from the internet. Use it to answer the question."
+            "You are a helpful assistant. The following information was retrieved from the internet. "
+            "Use it to answer the question concisely."
         )
-        ctx_block = f"[Web Search Results]\n{context}"
+        ctx_msg = f"Web Search Context:\n{context}"
     else:
         system = (
-            "You are a helpful assistant. Neither the internal knowledge base nor web search "
-            "returned relevant results. Answer based on your general knowledge, and be transparent about it."
+            "You are a helpful assistant. Provide the best answer based on your general knowledge."
         )
-        ctx_block = ""
+        ctx_msg = ""
 
-    parts = [f"System: {system}"]
-    if ctx_block:
-        parts.append(ctx_block)
-    parts.append(f"User: {user_msg}")
-    return "\n\n".join(parts)
+    messages = [{"role": "system", "content": system}]
+    if ctx_msg:
+        messages.append({"role": "user", "content": f"Context for my next question:\n{ctx_msg}"})
+        messages.append({"role": "assistant", "content": "Understood. I will use that context. What is your question?"})
+    
+    messages.append({"role": "user", "content": user_msg})
+    return messages
 
 
 async def stream_ollama(
-    prompt: str,
+    messages: list[dict],
     model: str,
     stats_out: dict,
 ) -> AsyncGenerator[str, None]:
-    """Stream response from Ollama and yield SSE chunks.
-
-    Populates *stats_out* with prompt_tokens / completion_tokens / duration_ms
-    once Ollama signals the stream is done.
-    """
+    """Stream response from Ollama /api/chat and yield SSE chunks."""
     payload = {
         "model": model,
-        "prompt": prompt,
+        "messages": messages,
         "stream": True,
-        "options": {"num_ctx": 8192},
+        "options": {"num_ctx": 8192, "stop": ["<|end|>", "User:", "Assistant:"]}
     }
     async with httpx.AsyncClient(timeout=120) as client:
-        async with client.stream("POST", f"{OLLAMA_URL}/api/generate", json=payload) as resp:
+        async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as resp:
             resp.raise_for_status()
             async for line in resp.aiter_lines():
                 if not line:
                     continue
                 try:
                     chunk = json.loads(line)
-                    token = chunk.get("response", "")
+                    message = chunk.get("message", {})
+                    token = message.get("content", "")
                     if token:
                         yield f"data: {json.dumps({'token': token})}\n\n"
                     if chunk.get("done"):
@@ -222,8 +221,8 @@ async def chat(req: ChatRequest):
             context = web_ctx
             source  = "web"
 
-    # 4. Build prompt
-    prompt = build_prompt(user_msg, context, source)
+    # 4. Build messages
+    messages = build_messages(user_msg, context, source)
 
     # 5. Stream response, collect stats, then push to Watchtower
     stats: dict = {}
@@ -233,7 +232,7 @@ async def chat(req: ChatRequest):
         meta = {"source": source, "has_context": bool(context)}
         yield f"data: {json.dumps({'meta': meta})}\n\n"
 
-        async for chunk in stream_ollama(prompt, OLLAMA_MODEL, stats):
+        async for chunk in stream_ollama(messages, OLLAMA_MODEL, stats):
             yield chunk
 
         # After the stream closes, fire-and-forget to Watchtower
@@ -253,6 +252,6 @@ async def chat(req: ChatRequest):
                         json=payload,
                     )
             except Exception:
-                pass  # Never block the user response due to telemetry failure
+                pass 
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
