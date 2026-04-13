@@ -91,33 +91,46 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[
 
 async def web_search(query: str) -> str:
     """SearxNG web search followed by reranking."""
-    url = f"{SEARXNG_URL}/search"
-    print(f"[*] Web search started: {url}")
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(url, params={"q": query, "format": "json", "engines": "google,duckduckgo,wikipedia,brave"})
-            r.raise_for_status()
-            data = r.json()
-            results = data.get("results", [])
-            print(f"[*] SearxNG raw results: {len(results)}")
+    # Try the base endpoint first, then /search
+    endpoints = [SEARXNG_URL, f"{SEARXNG_URL}/search"]
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json"
+    }
+    
+    for url in endpoints:
+        print(f"[*] Attempting web search: {url}")
+        try:
+            async with httpx.AsyncClient(timeout=15, headers=headers) as client:
+                r = await client.get(url, params={"q": query, "format": "json"})
+                if r.status_code != 200:
+                    print(f"[!] {url} returned {r.status_code}")
+                    continue
+                
+                data = r.json()
+                results = data.get("results", [])
+                print(f"[*] {url} results: {len(results)}")
+                
+                if not results:
+                    continue
+
+                docs: list[str] = []
+                for res in results[:20]:
+                    content = res.get("content") or res.get("title", "")
+                    if len(content) > 10:
+                        docs.append(content)
+                
+                if not docs:
+                    continue
+                
+                top_docs = await rerank_documents(query, docs, top_k=5)
+                return "\n\n".join(top_docs) if top_docs else ""
+        except Exception as e:
+            print(f"[!] Error hitting {url}: {e}")
+            continue
             
-            docs: list[str] = []
-            for res in results[:20]: # Fetch more for reranking
-                content = res.get("content") or res.get("title", "")
-                if len(content) > 10:
-                    docs.append(content)
-            
-            if not docs:
-                print("[!] No snippets extracted from SearxNG")
-                return ""
-            
-            # Pipe results to the inference reranker
-            top_docs = await rerank_documents(query, docs, top_k=5)
-            print(f"[*] After reranking: {len(top_docs)} docs")
-            return "\n\n".join(top_docs) if top_docs else ""
-    except Exception as e:
-        print(f"[!] Web search error: {e}")
-        return ""
+    print("[!] All web search endpoints failed or returned no results")
+    return ""
 
 
 def build_messages(user_msg: str, context: str, source: str) -> list[dict]:
