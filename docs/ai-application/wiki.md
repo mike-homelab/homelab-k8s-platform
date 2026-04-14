@@ -44,24 +44,26 @@ User query
   ↓
 7. Stream response from Ollama phi3.5
   ↓
-8. On stream "done": fire-and-forget POST → Watchtower /api/ingest/savant
-     payload: { message, input_tokens, output_tokens, duration_ms, model, source }
+8. Internal Telemetry: During RAG steps (Embedding, Reranking), fire-and-forget POST → Watchtower /api/ingest/telemetry
+     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "embed" | "rerank" }
+9. On Chat "done": POST → Watchtower /api/ingest/telemetry
+     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "web" | "qdrant" | "none" }
 ```
 
-### Watchtower Telemetry Push
-
-After every completed chat response, Savant's backend captures token counts and duration from Ollama's final `done` chunk and pushes them to Watchtower (fire-and-forget, 3s timeout, silent on failure):
-
+### Watchtower Telemetry Ingestion
+ 
+Savant's backend captures performance data for all LLM-related operations and pushes them to Watchtower's centralized ingest endpoint:
+ 
 ```python
 # env var: WATCHTOWER_URL (default: http://watchtower.ai-platform.svc.cluster.local)
-POST /api/ingest/savant
+POST /api/ingest/telemetry
 {
-  "message":       "<user input>",
-  "input_tokens":  <prompt_eval_count from Ollama>,
-  "output_tokens": <eval_count from Ollama>,
-  "duration_ms":   <total_duration / 1e6>,
-  "model":         "phi3.5",
-  "source":        "qdrant" | "web" | "none"
+  "message":       "<query_text>",
+  "input_tokens":  <count>,
+  "output_tokens": <count>,
+  "duration_ms":   <latency>,
+  "model":         "<model_name>",
+  "source":        "embed" | "rerank" | "web" | "qdrant" | "none"
 }
 ```
 
@@ -103,10 +105,10 @@ POST /api/ingest/savant
 
 | Tab | Primary Source | Supplementary |
 |---|---|---|
-| **Reasoning** | PostgreSQL (`savant_inference` table, pushed by Savant) | Loki `vllm-reasoning` logs (best-effort) |
+| **Reasoning** | PostgreSQL (pushed by Savant) | Loki `vllm-reasoning` logs |
 | **Coder** | Loki `vllm-coder` logs | — |
-| **Embedding** | Tempo traces (`/v1/embeddings`) | — |
-| **Reranker** | Tempo traces (`/v1/rerank`) | — |
+| **Embedding** | PostgreSQL (source: `embed`) | Tempo traces (legacy) |
+| **Reranker** | PostgreSQL (source: `rerank`) | Tempo traces (legacy) |
 
 ### Reasoning Feed — Data Path
 
@@ -276,6 +278,7 @@ All agents use a unified ingress at `llm.michaelhomelab.work` with path-based ro
 
 | Date | Change |
 |---|---|
+| 2026-04-14 | **Centralized Telemetry & Retention**: Unified ingestion for Savant, Reranker, and Embedding metrics into a single Postgres-backed feed system. Implemented automated 24-hour data pruning via Kubernetes CronJob. Enabled JSON logging for Coder models to ensure dashboard visibility. |
 | 2026-04-14 | **Savant SearxNG & Reranker Integration**: Upgraded fallback search from DuckDuckGo Instant Answer to local SearxNG deployment. Piped SearxNG results directly to `infinity-embedding:8001` to logically extract and score snippets >0.2 before ingestion into Ollama. |
 | 2026-04-14 | **Longhorn CRD Sync Fix**: Added `ignoreDifferences` for `preserveUnknownFields` in `clusters/homelab/apps_argocd/infra/longhorn.yaml` to resolve ArgoCD sync validation errors on deprecated fields. |
 | 2026-04-13 | **Ai Agents & Unified Routing**: Created `ai-agents` project with Researcher, Coder, Reviewer, and Writer workflows. Exposed all LLM/Embedding endpoints via `llm.michaelhomelab.work` with path-based routing. |
@@ -364,7 +367,7 @@ Custom images (Savant, Watchtower, VLLM Embedding) are built via GitHub Actions 
     "embedding": "https://llm.michaelhomelab.work/embedding",
     "rerank": "https://llm.michaelhomelab.work/rerank",
     "vector_db": "http://qdrant.ai-platform.svc.cluster.local:6333",
-    "telemetry": "http://watchtower.ai-platform.svc.cluster.local/api/ingest/savant",
+    "telemetry": "http://watchtower.ai-platform.svc.cluster.local/api/ingest/telemetry",
     "mcp_server": "127.0.0.1:8080 (SSE)"
   }
 }
