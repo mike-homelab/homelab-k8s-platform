@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, Brain, Target, Layers, Code, Activity, Cpu, Zap, Eye, Globe, Database } from 'lucide-react'
+import { Search, RefreshCw, Brain, Target, Layers, Code, Activity, Cpu, Zap, Eye, Database, Sparkle } from 'lucide-react'
 
 function fmtDuration(ms) {
   if (!ms && ms !== 0) return '—'
@@ -11,16 +11,16 @@ function fmtTs(iso) {
   if (!iso) return '—'
   try {
     const d = new Date(iso)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   } catch { return iso }
 }
 
 function StepRow({ step, type }) {
   const configs = {
-    embedding: { label: 'Embedding', icon: <Layers size={14} />, color: 'var(--tag-ms-text)' },
-    reranker:  { label: 'Reranker',  icon: <Target size={14} />, color: 'var(--tag-out-text)' },
-    reasoning: { label: 'Reasoning', icon: <Brain size={14}  />, color: 'var(--tag-in-text)'  },
-    coder:     { label: 'Coder',     icon: <Code size={14}   />, color: 'var(--accent)'      },
+    embedding: { label: 'Embedding', icon: <Layers size={14} />, color: '#4a5568' },
+    reranker:  { label: 'Reranker',  icon: <Target size={14} />, color: '#c05621' },
+    reasoning: { label: 'Reasoning', icon: <Sparkle size={14} />, color: '#2d3748' },
+    coder:     { label: 'Coder',     icon: <Code size={14}   />, color: '#1a202c' },
   }
   const config = configs[type] || { label: type, icon: <Activity size={14} /> }
 
@@ -29,8 +29,8 @@ function StepRow({ step, type }) {
       <div className="step-label">
         {config.icon}
         <span style={{ color: config.color }}>{config.label}</span>
-        <span className="step-model">({step.model})</span>
       </div>
+      <div className="step-model">{step.model}</div>
       <div className="step-metrics">
         {type === 'embedding' && step.input_tokens > 0 && (
            <span className="tag tag-chunks"><Database size={11} /> {step.input_tokens} chunks</span>
@@ -53,17 +53,17 @@ function UnifiedRequestCard({ item }) {
   // Sort steps into logical categories
   const embedding = item.steps?.find(s => s.source === 'embed')
   const reranker  = item.steps?.find(s => s.source === 'rerank')
-  const reasoning = item.steps?.find(s => ['web', 'qdrant', 'none'].includes(s.source))
+  const reasoning = item.steps?.find(s => ['web', 'qdrant', 'none', 'savant'].includes(s.source))
   const coder     = item.steps?.find(s => s.source === 'coder' || s.model?.includes('coder'))
 
   return (
     <div className="request-card">
       <div className="card-header">
-        <div className="card-title">User Request</div>
+        <div className="card-title">User Interaction</div>
         <div className="card-ts">{fmtTs(item.timestamp)}</div>
       </div>
       
-      <div className="card-prompt">{item.prompt || 'Stream processing...'}</div>
+      <div className="card-prompt">{item.prompt || 'No message captured'}</div>
 
       <div className="steps-list">
         {embedding && <StepRow step={embedding} type="embedding" />}
@@ -84,11 +84,18 @@ function Feed({ search }) {
     setLoading(true)
     setError(null)
     try {
-      const url = `/api/feed/unified?limit=50&hours=6${search ? `&search=${encodeURIComponent(search)}` : ''}`
+      const url = `/api/feed/unified?limit=50&hours=24${search ? `&search=${encodeURIComponent(search)}` : ''}`
       const r = await fetch(url)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const data = await r.json()
-      setItems(data.items || [])
+
+      // Invert steps within items because the grouping loop might have them reversed
+      const itemsProcessed = (data.items || []).map(it => ({
+        ...it,
+        steps: [...it.steps].reverse() // The query was ORDER DESC, so grouping might need re-sorting
+      }))
+
+      setItems(itemsProcessed)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -104,22 +111,23 @@ function Feed({ search }) {
 
   if (loading && !items.length) return (
     <div className="state-box">
-      <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite' }} />
-      <span>Loading unified request feed…</span>
+      <RefreshCw size={24} style={{ animation: 'spin 2s linear infinite' }} />
+      <span>Fetching platform activity…</span>
     </div>
   )
 
   if (error) return (
     <div className="state-box">
-      <Eye size={32} />
-      <span style={{ color: '#ef4444' }}>{error}</span>
+      <Eye size={24} />
+      <span style={{ color: '#c05621' }}>{error}</span>
+      <button className="refresh-btn" style={{marginTop: 10}} onClick={fetchData}>Try again</button>
     </div>
   )
 
   if (!items.length) return (
-    <div className="state-box">
-      <Activity size={32} />
-      <span>No requests recorded in the last 6 hours</span>
+    <div className="state-box" style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e5e2da' }}>
+      < ब्रेन size={32} style={{ opacity: 0.15 }} />
+      <span>No requests found. Generating telemetry will populate this feed.</span>
     </div>
   )
 
@@ -146,21 +154,23 @@ export default function App() {
 
   const handleRefresh = () => {
     setRefreshing(true)
-    window.location.reload() // Simple hard refresh for state cleanup
+    setTimeout(() => {
+      window.location.reload()
+    }, 500)
   }
 
   return (
     <div className="watchtower-layout">
       <header className="watchtower-header">
         <div className="watchtower-wordmark">
-          <Eye size={28} />
+          <Brain size={28} />
           <div>
             <div className="watchtower-title">watchtower</div>
-            <div className="watchtower-subtitle">Unified AI Platform Observability</div>
+            <div className="watchtower-subtitle">Platform Observability · Est. 2026</div>
           </div>
         </div>
         <button className={`refresh-btn${refreshing ? ' spinning' : ''}`} onClick={handleRefresh}>
-          <RefreshCw size={14} /> Refresh
+          <RefreshCw size={14} /> Update
         </button>
       </header>
 
@@ -169,18 +179,17 @@ export default function App() {
         <input
           className="search-input"
           type="text"
-          placeholder="Filter by message content…"
+          placeholder="Filter conversation by message..."
           value={search}
           onChange={e => handleSearch(e.target.value)}
         />
       </div>
 
       <div className="feed-meta">
-        <span>Activity Feed · Last 6 Hours</span>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-             <div style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%' }} /> Live
-           </span>
+        <span>Daily Activity Summary</span>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+           <div style={{ width: 6, height: 6, background: '#22c55e', borderRadius: '50%' }} />
+           <span>Live Monitoring</span>
         </div>
       </div>
 
