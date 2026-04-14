@@ -16,7 +16,7 @@ spec:
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:24.0.2
-          args: ["start", "--db=postgres", "--import-realm"]
+          args: ["start-dev", "--db=postgres", "--import-realm"]
           env:
             - name: KC_DB
               value: "postgres"
