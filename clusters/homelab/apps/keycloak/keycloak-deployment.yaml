@@ -16,7 +16,7 @@ spec:
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:24.0.2
-          args: ["start", "--optimized"]
+          args: ["start", "--optimized", "--import-realm"]
           env:
             - name: KC_DB
               value: "postgres"
@@ -58,3 +58,10 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
+          volumeMounts:
+            - name: realm-config
+              mountPath: /opt/keycloak/data/import
+      volumes:
+        - name: realm-config
+          configMap:
+            name: keycloak-realm-config
