@@ -38,6 +38,8 @@ class ChatRequest(BaseModel):
 
 async def get_embedding(text: str) -> list[float] | None:
     """Get embedding from vLLM embedding service."""
+    from datetime import datetime
+    start_time = datetime.now()
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
@@ -48,6 +50,27 @@ async def get_embedding(text: str) -> list[float] | None:
             return r.json()["data"][0]["embedding"]
     except Exception:
         return None
+    finally:
+        # Push telemetry to Watchtower after embedding completes
+        if 'start_time' in locals() and 'r' in locals():
+            duration = (datetime.now() - start_time).total_seconds() * 1000
+            await push_telemetry(text, "embed", duration, "BAAI/bge-large-en-v1.5")
+
+async def push_telemetry(message: str, source: str, duration_ms: float, model: str, input_tokens: int = 0, output_tokens: int = 0):
+    """Fire-and-forget telemetry push to Watchtower."""
+    try:
+        payload = {
+            "message":       message[:300],
+            "input_tokens":  input_tokens,
+            "output_tokens": output_tokens,
+            "duration_ms":   duration_ms,
+            "model":         model,
+            "source":        source,
+        }
+        async with httpx.AsyncClient(timeout=2) as client:
+            await client.post(f"{WATCHTOWER_URL}/api/ingest/telemetry", json=payload)
+    except Exception:
+        pass
 
 
 async def search_qdrant(embedding: list[float], top_k: int = 5) -> list[str]:
@@ -69,6 +92,8 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[
     """Rerank documents using BAAI/bge-reranker-large."""
     if not docs:
         return []
+    from datetime import datetime
+    start_time = datetime.now()
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(
@@ -88,6 +113,10 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[
     except Exception:
         # Fallback to returning top_k without filtering if reranker fails
         return docs[:top_k]
+    finally:
+        if 'start_time' in locals():
+            duration = (datetime.now() - start_time).total_seconds() * 1000
+            await push_telemetry(query, "rerank", duration, "BAAI/bge-reranker-large", input_tokens=len(docs))
 
 async def web_search(query: str) -> str:
     """SearxNG web search followed by reranking."""

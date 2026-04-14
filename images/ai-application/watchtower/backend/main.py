@@ -171,6 +171,40 @@ async def db_query_reasoning(
     ]
 
 
+async def db_query_telemetry(
+    db: asyncpg.Pool,
+    source: str,
+    hours: int,
+    limit: int,
+) -> list[dict]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = await db.fetch(
+        """
+        SELECT created_at, model, input_tokens, output_tokens, duration_ms, prompt, source
+        FROM savant_inference
+        WHERE created_at >= $1
+          AND source = $2
+        ORDER BY created_at DESC
+        LIMIT $3
+        """,
+        cutoff,
+        source,
+        limit,
+    )
+    return [
+        {
+            "timestamp":     r["created_at"].isoformat(),
+            "model":         r["model"] or "unknown",
+            "input_tokens":  r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "duration_ms":   r["duration_ms"],
+            "prompt":        r["prompt"] or "",
+            "source":        r["source"],
+        }
+        for r in rows
+    ]
+
+
 # ── OLLAMA log parser (Loki) — kept as a supplementary source ─────────────────
 
 def parse_ollama_line(raw: str, ts_ns: int) -> Optional[dict]:
@@ -259,15 +293,32 @@ async def health():
 
 @app.post("/api/ingest/savant")
 async def ingest_savant(event: SavantEvent):
-    """Receive an inference event pushed by Savant after each chat completion.
-
-    Writes to Postgres for durable storage, then invalidates affected Redis
-    cache keys so the next feed poll gets fresh data immediately.
-    """
+    """Legacy ingest for Savant Chat events."""
     await db_insert_event(app.state.db, event)
+    # Invalidate reasoning feeds
+    await _invalidate_cache("feed:reasoning:*")
+    return {"ok": True}
 
-    # Invalidate all reasoning feed cache keys so the next poll is fresh
-    pattern = "feed:reasoning:*"
+
+@app.post("/api/ingest/telemetry")
+async def ingest_telemetry(event: SavantEvent):
+    """Generic ingest for any AI platform telemetry (savant, rerank, embed, coder)."""
+    await db_insert_event(app.state.db, event)
+    
+    # Invalidate relevant caches
+    if event.source == "rerank":
+        await _invalidate_cache("feed:reranker:*")
+    elif event.source == "embed":
+        await _invalidate_cache("feed:embedding:*")
+    elif event.source == "coder":
+        await _invalidate_cache("feed:coder:*")
+    else:
+        await _invalidate_cache("feed:reasoning:*")
+        
+    return {"ok": True}
+
+
+async def _invalidate_cache(pattern: str):
     cursor = 0
     while True:
         cursor, keys = await app.state.cache.scan(cursor, match=pattern, count=100)
@@ -275,8 +326,6 @@ async def ingest_savant(event: SavantEvent):
             await app.state.cache.delete(*keys)
         if cursor == 0:
             break
-
-    return {"ok": True}
 
 
 @app.get("/api/feed/reasoning")
@@ -338,8 +387,14 @@ async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
 
 @app.get("/api/feed/embedding")
 async def feed_embedding(search: str = "", limit: int = 50, hours: int = 6):
-    """vLLM embedding feed — from Tempo traces."""
-    items = await tempo_search("vllm-embedding", limit=limit, hours=hours)
+    """vLLM embedding feed — backed by Postgres."""
+    # 1. Try Postgres
+    items = await db_query_telemetry(app.state.db, "embed", hours, limit)
+    
+    # 2. Fallback to Tempo if PG is empty (legacy)
+    if not items:
+        items = await tempo_search("vllm-embedding", limit=limit, hours=hours)
+    
     if search:
         items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
     return {"items": items}
@@ -347,8 +402,14 @@ async def feed_embedding(search: str = "", limit: int = 50, hours: int = 6):
 
 @app.get("/api/feed/reranker")
 async def feed_reranker(search: str = "", limit: int = 50, hours: int = 6):
-    """vLLM reranker feed — from Tempo traces."""
-    items = await tempo_search("vllm-reranker", limit=limit, hours=hours)
+    """vLLM reranker feed — backed by Postgres."""
+    # 1. Try Postgres
+    items = await db_query_telemetry(app.state.db, "rerank", hours, limit)
+    
+    # 2. Fallback to Tempo if PG is empty (legacy)
+    if not items:
+        items = await tempo_search("vllm-reranker", limit=limit, hours=hours)
+        
     if search:
         items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
     return {"items": items}
