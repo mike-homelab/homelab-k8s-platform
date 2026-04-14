@@ -1,0 +1,21 @@
+{
+  "realm": "homelab",
+  "enabled": true,
+  "displayName": "Homelab SSO",
+  "clients": [
+    {
+      "clientId": "savant",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "redirectUris": ["https://raphael.michaelhomelab.work/*"]
+    },
+    {
+      "clientId": "watchtower",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "redirectUris": ["https://watchtower.michaelhomelab.work/*"]
+    }
+  ]
+}
