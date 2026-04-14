@@ -2,6 +2,8 @@
 
 This document outlines the architecture, components, and purpose of the applications running under the `ai-application` section of the Homelab Kubernetes Platform. These services provide higher-level AI capabilities and observability for the core AI platform infrastructure.
 
+> **SSO Security Layer (Added 2026-04-15)**: Savant and Watchtower are protected by Keycloak OIDC authentication. All access requires login via `sso.michaelhomelab.work` (homelab realm). Admin credentials are stored in the [Obsidian Wiki](file:///home/michael/obsidian/homelab-k8s-platform/Security/Credentials.md).
+
 ---
 
 ## 1. Savant (formerly Knowledge Chat)
