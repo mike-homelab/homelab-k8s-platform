@@ -16,7 +16,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       initContainers:
         - name: pull-model
           image: ollama/ollama:latest
