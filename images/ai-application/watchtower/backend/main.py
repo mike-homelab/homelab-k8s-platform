@@ -208,26 +208,56 @@ async def db_query_telemetry(
 # ── OLLAMA log parser (Loki) — kept as a supplementary source ─────────────────
 
 def parse_ollama_line(raw: str, ts_ns: int) -> Optional[dict]:
+    """Parse Ollama logs. Handles both JSON and legacy GIN formats."""
+    # 1. Try Structured JSON
     try:
         data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if data.get("msg") not in ("inference done", "request", "response"):
-        return None
-    prompt_tokens     = data.get("prompt_eval_count", 0)
-    completion_tokens = data.get("eval_count", 0)
-    total_ns          = data.get("total_duration", 0)
-    if not (prompt_tokens or completion_tokens or total_ns):
-        return None
-    return {
-        "timestamp":     datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
-        "model":         data.get("model", "unknown"),
-        "input_tokens":  prompt_tokens,
-        "output_tokens": completion_tokens,
-        "duration_ms":   round(total_ns / 1e6, 1),
-        "prompt":        data.get("prompt", "")[:300],
-        "source":        "loki",
-    }
+        if data.get("msg") in ("inference done", "request", "response"):
+            prompt_tokens     = data.get("prompt_eval_count", 0)
+            completion_tokens = data.get("eval_count", 0)
+            total_ns          = data.get("total_duration", 0)
+            if prompt_tokens or completion_tokens or total_ns:
+                return {
+                    "timestamp":     datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
+                    "model":         data.get("model", "unknown"),
+                    "input_tokens":  prompt_tokens,
+                    "output_tokens": completion_tokens,
+                    "duration_ms":   round(total_ns / 1e6, 1),
+                    "prompt":        data.get("prompt", "")[:300],
+                    "source":        "loki",
+                }
+    except Exception:
+        pass
+
+    # 2. Fallback: Parse GIN logs
+    # [GIN] 2026/04/14 - 10:34:40 | 200 |  1.264130923s |  10.244.251.131 | POST     "/api/generate"
+    if "[GIN]" in raw and "|" in raw:
+        try:
+            parts = raw.split("|")
+            if len(parts) >= 4:
+                status = parts[1].strip()
+                if status != "200": return None
+                
+                lat_str = parts[2].strip()
+                ms = 0.0
+                if "ms" in lat_str:  ms = float(lat_str.replace("ms", ""))
+                elif "µs" in lat_str: ms = float(lat_str.replace("µs", "")) / 1000
+                elif "s" in lat_str:   ms = float(lat_str.replace("s", "")) * 1000
+                
+                path = parts[4].strip() if len(parts) > 4 else "unknown"
+                return {
+                    "timestamp":     datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
+                    "model":         "ollama",
+                    "input_tokens":  0,
+                    "output_tokens": 0,
+                    "duration_ms":   round(ms, 1),
+                    "prompt":        f"API: {path}",
+                    "source":        "loki",
+                }
+        except Exception:
+            pass
+            
+    return None
 
 
 async def loki_query(logql: str, limit: int = 100, hours: int = 6) -> list[dict]:
@@ -388,13 +418,7 @@ async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
 @app.get("/api/feed/embedding")
 async def feed_embedding(search: str = "", limit: int = 50, hours: int = 6):
     """vLLM embedding feed — backed by Postgres."""
-    # 1. Try Postgres
     items = await db_query_telemetry(app.state.db, "embed", hours, limit)
-    
-    # 2. Fallback to Tempo if PG is empty (legacy)
-    if not items:
-        items = await tempo_search("vllm-embedding", limit=limit, hours=hours)
-    
     if search:
         items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
     return {"items": items}
@@ -403,13 +427,7 @@ async def feed_embedding(search: str = "", limit: int = 50, hours: int = 6):
 @app.get("/api/feed/reranker")
 async def feed_reranker(search: str = "", limit: int = 50, hours: int = 6):
     """vLLM reranker feed — backed by Postgres."""
-    # 1. Try Postgres
     items = await db_query_telemetry(app.state.db, "rerank", hours, limit)
-    
-    # 2. Fallback to Tempo if PG is empty (legacy)
-    if not items:
-        items = await tempo_search("vllm-reranker", limit=limit, hours=hours)
-        
     if search:
         items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
     return {"items": items}

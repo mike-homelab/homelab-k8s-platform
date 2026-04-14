@@ -51,13 +51,14 @@ async def get_embedding(text: str) -> list[float] | None:
     except Exception:
         return None
     finally:
-        # Push telemetry to Watchtower after embedding completes
-        if 'start_time' in locals() and 'r' in locals():
+        # Push telemetry after embedding completes
+        if 'start_time' in locals():
             duration = (datetime.now() - start_time).total_seconds() * 1000
             await push_telemetry(text, "embed", duration, "BAAI/bge-large-en-v1.5")
 
 async def push_telemetry(message: str, source: str, duration_ms: float, model: str, input_tokens: int = 0, output_tokens: int = 0):
     """Fire-and-forget telemetry push to Watchtower."""
+    print(f"[*] Pushing telemetry: {source} ({duration_ms:.1f}ms)")
     try:
         payload = {
             "message":       message[:300],
