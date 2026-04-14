@@ -45,9 +45,9 @@ User query
 7. Stream response from Ollama phi3.5
   ↓
 8. Internal Telemetry: During RAG steps (Embedding, Reranking), fire-and-forget POST → Watchtower /api/ingest/telemetry
-     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "embed" | "rerank" }
+     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "embed" | "rerank", request_id, session_id }
 9. On Chat "done": POST → Watchtower /api/ingest/telemetry
-     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "web" | "qdrant" | "none" }
+     payload: { message, input_tokens, output_tokens, duration_ms, model, source: "web" | "qdrant" | "none", request_id, session_id }
 ```
 
 ### Watchtower Telemetry Ingestion
@@ -63,7 +63,9 @@ POST /api/ingest/telemetry
   "output_tokens": <count>,
   "duration_ms":   <latency>,
   "model":         "<model_name>",
-  "source":        "embed" | "rerank" | "web" | "qdrant" | "none"
+  "source":        "embed" | "rerank" | "web" | "qdrant" | "none",
+  "request_id":    "<uuid>",
+  "session_id":    "<session_uuid>"
 }
 ```
 
@@ -82,7 +84,7 @@ POST /api/ingest/telemetry
 
 ## 2. Watchtower (formerly Sentinel)
 
-**Watchtower** is the LLM inference observability dashboard. It provides real-time visibility into the performance and usage of the AI platform's models. The **Reasoning tab** is powered by events pushed directly from Savant, stored durably in PostgreSQL, and served via a Redis cache.
+**Watchtower** is the LLM inference observability dashboard. It provides real-time visibility into the performance and usage of the AI platform's models. Watchtower uses a **Unified Request Card** system to group correlated telemetry events (Embedding, Reranking, Inference) into a single chronological feed with a premium, Claude-style (beige/minimalist) interface.
 
 - **Ingress domain**: `watchtower.michaelhomelab.work`
 - **Namespace**: `ai-platform`
@@ -101,28 +103,31 @@ POST /api/ingest/telemetry
 | Log source | Loki | Supplementary Ollama JSON log parsing for Coder feed |
 | Trace source | Tempo | OpenTelemetry traces for Embedding and Reranker feeds |
 
-### Feed Sources
+### Unified Feed — Correlation Path
 
-| Tab | Primary Source | Supplementary |
-|---|---|---|
-| **Reasoning** | PostgreSQL (pushed by Savant) | Loki `vllm-reasoning` logs |
-| **Coder** | Loki `vllm-coder` logs | — |
-| **Embedding** | PostgreSQL (source: `embed`) | Tempo traces (legacy) |
-| **Reranker** | PostgreSQL (source: `rerank`) | Tempo traces (legacy) |
+Watchtower replaces traditional tabbed views with a correlation layer that clusters events by `request_id`.
 
-### Reasoning Feed — Data Path
+| Component | Source | Correlation Key | UI Section |
+|---|---|---|---|
+| **Embedding** | Postgres (`embed`) | `request_id` | Chunks badge + latency |
+| **Reranking** | Postgres (`rerank`) | `request_id` | Input docs + latency |
+| **Reasoning** | Postgres (`savant`) | `request_id` | Tokens + Latency |
+| **Coder** | Loki (`vllm-coder`) | `timestamp` (proximity) | Legacy logs |
+
+### Data Path
 
 ```
-Savant POST /api/ingest/savant
+Savant initiates request
   ↓
-INSERT INTO savant_inference (model, input_tokens, output_tokens, duration_ms, prompt, source)
+Generate UUID (request_id)
   ↓
-SCAN + DELETE matching Redis keys (feed:reasoning:*)
+Push telemetry (source: embed) → Watchtower
+Push telemetry (source: rerank) → Watchtower
+Push telemetry (source: savant) → Watchtower
   ↓
-Frontend polls GET /api/feed/reasoning?hours=6&limit=50
+Watchtower API /api/feed/unified
   ↓
-  ├─ Redis cache HIT  → return immediately (TTL 30s)
-  └─ Redis cache MISS → SELECT from Postgres → try Loki → SET cache → return
+GROUP BY request_id → Serve high-fidelity "Request Clusters"
 ```
 
 ### Key Metrics Tracked
@@ -141,14 +146,17 @@ Frontend polls GET /api/feed/reasoning?hours=6&limit=50
 CREATE TABLE IF NOT EXISTS savant_inference (
     id            BIGSERIAL PRIMARY KEY,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    request_id    TEXT,
+    session_id    TEXT,
     model         TEXT,
     input_tokens  INT  NOT NULL DEFAULT 0,
     output_tokens INT  NOT NULL DEFAULT 0,
     duration_ms   FLOAT,
-    prompt        TEXT,       -- truncated to 300 chars
-    source        TEXT        -- qdrant | web | none
+    prompt        TEXT,
+    source        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_savant_created ON savant_inference (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_savant_request ON savant_inference (request_id);
 ```
 
 The schema is created automatically at startup via `lifespan` (`CREATE TABLE IF NOT EXISTS` DDL).
@@ -242,6 +250,7 @@ ArgoCD sync-wave 15  →  qdrant     (vector store available)
 | **Coder** | Execution | Planning via `phi3.5`/`IBM Granite` + Local workspace patching via `FastMCP` |
 | **Reviewer** | Observability | CI/CD watchdog using `gh` CLI to monitor and auto-heal failed GitHub Actions |
 | **Writer** | Maintenance | Analyzes code changes and updates Markdown documentation/Wiki via MCP |
+| **Tester** | Quality | Browser diagnostics; Console/Network auditing via `phi3.5` local analysis |
 
 ### Request Flow
 
@@ -259,6 +268,8 @@ User Prompt (e.g. "Build feature X")
 5. Reviewer: Monitor gh runs; if fail, feed logs back to Coder for self-healing
   ↓
 6. Writer: Update docs/ai-application/wiki.md with new architecture details
+  ↓
+7. Tester: Navigate to app via https://watchtower.michaelhomelab.work; check console/network logs; audit via local phi3.5
 ```
 
 ### Unified LLM Routing
@@ -337,8 +348,8 @@ Custom images (Savant, Watchtower, VLLM Embedding) are built via GitHub Actions 
     "load_balancer_range": "10.0.0.10-10.0.0.50",
     "storage_class": "longhorn",
     "vram_nodes": {
-      "rtx_5070_ti": "16GB - vllm-coder",
-      "rtx_5060_ti": "16GB - vllm-reasoning",
+      "rtx_5070_ti": "16GB - vllm-reasoning",
+      "rtx_5060_ti": "16GB - vllm-coder",
       "rtx_3060": "12GB - infinity-embedding"
     }
   }
