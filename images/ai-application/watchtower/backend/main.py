@@ -26,8 +26,6 @@ DDL = """
 CREATE TABLE IF NOT EXISTS savant_inference (
     id            BIGSERIAL PRIMARY KEY,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    request_id    TEXT,
-    session_id    TEXT,
     model         TEXT,
     input_tokens  INT  NOT NULL DEFAULT 0,
     output_tokens INT  NOT NULL DEFAULT 0,
@@ -35,6 +33,11 @@ CREATE TABLE IF NOT EXISTS savant_inference (
     prompt        TEXT,
     source        TEXT
 );
+
+-- Ensure schema evolution for existing tables
+ALTER TABLE savant_inference ADD COLUMN IF NOT EXISTS request_id TEXT;
+ALTER TABLE savant_inference ADD COLUMN IF NOT EXISTS session_id TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_savant_created ON savant_inference (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_savant_request ON savant_inference (request_id);
 """
