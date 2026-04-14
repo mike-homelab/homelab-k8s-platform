@@ -26,6 +26,8 @@ DDL = """
 CREATE TABLE IF NOT EXISTS savant_inference (
     id            BIGSERIAL PRIMARY KEY,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    request_id    TEXT,
+    session_id    TEXT,
     model         TEXT,
     input_tokens  INT  NOT NULL DEFAULT 0,
     output_tokens INT  NOT NULL DEFAULT 0,
@@ -34,6 +36,7 @@ CREATE TABLE IF NOT EXISTS savant_inference (
     source        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_savant_created ON savant_inference (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_savant_request ON savant_inference (request_id);
 """
 
 # ── Application state (shared across requests via app.state) ──────────────────
@@ -91,7 +94,9 @@ class SavantEvent(BaseModel):
     output_tokens: int
     duration_ms: float
     model: str
-    source: str = "none"  # qdrant | web | none
+    source: str = "none"  # qdrant | web | none | embed | rerank
+    request_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -112,8 +117,8 @@ async def db_insert_event(db: asyncpg.Pool, event: SavantEvent):
     await db.execute(
         """
         INSERT INTO savant_inference
-            (model, input_tokens, output_tokens, duration_ms, prompt, source)
-        VALUES ($1, $2, $3, $4, $5, $6)
+            (model, input_tokens, output_tokens, duration_ms, prompt, source, request_id, session_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         """,
         event.model,
         event.input_tokens,
@@ -121,6 +126,8 @@ async def db_insert_event(db: asyncpg.Pool, event: SavantEvent):
         event.duration_ms,
         event.message[:300],
         event.source,
+        event.request_id,
+        event.session_id,
     )
 
 
@@ -403,31 +410,43 @@ async def feed_reasoning(search: str = "", limit: int = 50, hours: int = 6):
     return {"items": combined, "cache": "miss"}
 
 
-@app.get("/api/feed/coder")
-async def feed_coder(search: str = "", limit: int = 50, hours: int = 6):
-    """Ollama coder feed — parsed from Loki logs."""
-    logql = '{namespace="ai-platform", app="vllm-coder"}'
-    if search:
-        logql = f'{logql} |~ `(?i){re.escape(search)}`'
-    items = await loki_query(logql, limit=limit * 3, hours=hours)
-    if search:
-        items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
-    return {"items": items[:limit]}
+@app.get("/api/feed/unified")
+async def feed_unified(search: str = "", limit: int = 50, hours: int = 6):
+    """Unified chronological feed grouping related operations by request_id."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    
+    # 1. Fetch raw rows
+    rows = await app.state.db.fetch(
+        """
+        SELECT created_at, model, input_tokens, output_tokens, duration_ms, prompt, source, request_id, session_id
+        FROM savant_inference
+        WHERE created_at >= $1
+        ORDER BY created_at DESC
+        LIMIT 200
+        """,
+        cutoff,
+    )
 
+    # 2. Group by request_id
+    groups = {}
+    for r in rows:
+        rid = r["request_id"] or f"legacy-{r['created_at'].timestamp()}"
+        if rid not in groups:
+            groups[rid] = {
+                "timestamp": r["created_at"].isoformat(),
+                "request_id": rid,
+                "session_id": r["session_id"],
+                "prompt": r["prompt"],
+                "steps": []
+            }
+        
+        groups[rid]["steps"].append({
+            "source": r["source"],
+            "model": r["model"],
+            "input_tokens": r["input_tokens"],
+            "output_tokens": r["output_tokens"],
+            "duration_ms": r["duration_ms"],
+        })
 
-@app.get("/api/feed/embedding")
-async def feed_embedding(search: str = "", limit: int = 50, hours: int = 6):
-    """vLLM embedding feed — backed by Postgres."""
-    items = await db_query_telemetry(app.state.db, "embed", hours, limit)
-    if search:
-        items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
-    return {"items": items}
-
-
-@app.get("/api/feed/reranker")
-async def feed_reranker(search: str = "", limit: int = 50, hours: int = 6):
-    """vLLM reranker feed — backed by Postgres."""
-    items = await db_query_telemetry(app.state.db, "rerank", hours, limit)
-    if search:
-        items = [i for i in items if search.lower() in (i.get("prompt") or "").lower()]
-    return {"items": items}
+    # Return as list, sorted by timestamp of the group (implicitly done by query order)
+    return {"items": list(groups.values())[:limit]}

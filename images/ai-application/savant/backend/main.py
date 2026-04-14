@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import httpx
 import os
 import json
+import uuid
 from typing import AsyncGenerator
 from fastapi.responses import StreamingResponse
 
@@ -36,7 +37,7 @@ class ChatRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-async def get_embedding(text: str) -> list[float] | None:
+async def get_embedding(text: str, request_id: str = None, session_id: str = None) -> list[float] | None:
     """Get embedding from vLLM embedding service."""
     from datetime import datetime
     start_time = datetime.now()
@@ -54,11 +55,11 @@ async def get_embedding(text: str) -> list[float] | None:
         # Push telemetry after embedding completes
         if 'start_time' in locals():
             duration = (datetime.now() - start_time).total_seconds() * 1000
-            await push_telemetry(text, "embed", duration, "BAAI/bge-large-en-v1.5")
+            await push_telemetry(text, "embed", duration, "BAAI/bge-large-en-v1.5", request_id=request_id, session_id=session_id)
 
-async def push_telemetry(message: str, source: str, duration_ms: float, model: str, input_tokens: int = 0, output_tokens: int = 0):
+async def push_telemetry(message: str, source: str, duration_ms: float, model: str, input_tokens: int = 0, output_tokens: int = 0, request_id: str = None, session_id: str = None):
     """Fire-and-forget telemetry push to Watchtower."""
-    print(f"[*] Pushing telemetry: {source} ({duration_ms:.1f}ms)")
+    print(f"[*] Pushing telemetry: {source} ({duration_ms:.1f}ms) rid={request_id}")
     try:
         payload = {
             "message":       message[:300],
@@ -67,6 +68,8 @@ async def push_telemetry(message: str, source: str, duration_ms: float, model: s
             "duration_ms":   duration_ms,
             "model":         model,
             "source":        source,
+            "request_id":    request_id,
+            "session_id":    session_id,
         }
         async with httpx.AsyncClient(timeout=2) as client:
             await client.post(f"{WATCHTOWER_URL}/api/ingest/telemetry", json=payload)
@@ -89,7 +92,7 @@ async def search_qdrant(embedding: list[float], top_k: int = 5) -> list[str]:
         return []
 
 
-async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[str]:
+async def rerank_documents(query: str, docs: list[str], top_k: int = 3, request_id: str = None, session_id: str = None) -> list[str]:
     """Rerank documents using BAAI/bge-reranker-large."""
     if not docs:
         return []
@@ -117,9 +120,9 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3) -> list[
     finally:
         if 'start_time' in locals():
             duration = (datetime.now() - start_time).total_seconds() * 1000
-            await push_telemetry(query, "rerank", duration, "BAAI/bge-reranker-large", input_tokens=len(docs))
+            await push_telemetry(query, "rerank", duration, "BAAI/bge-reranker-large", input_tokens=len(docs), request_id=request_id, session_id=session_id)
 
-async def web_search(query: str) -> str:
+async def web_search(query: str, request_id: str = None, session_id: str = None) -> str:
     """SearxNG web search followed by reranking."""
     # Try the base endpoint first, then /search
     endpoints = [SEARXNG_URL, f"{SEARXNG_URL}/search"]
@@ -153,7 +156,7 @@ async def web_search(query: str) -> str:
                 if not docs:
                     continue
                 
-                top_docs = await rerank_documents(query, docs, top_k=5)
+                top_docs = await rerank_documents(query, docs, top_k=5, request_id=request_id, session_id=session_id)
                 return "\n\n".join(top_docs) if top_docs else ""
         except Exception as e:
             print(f"[!] Error hitting {url}: {e}")
@@ -250,10 +253,14 @@ async def chat(req: ChatRequest):
     if not user_msg:
         raise HTTPException(400, "Empty message")
 
-    print(f"[*] Processing query: {user_msg}")
+    # 0. Generate Tracking IDs
+    request_id = str(uuid.uuid4())
+    session_id = "default-session" # TODO: Pull from request headers/body if available
+    
+    print(f"[*] Processing query [{request_id}]: {user_msg}")
 
     # 1. Start both searches concurrently for speed (Hybrid RAG)
-    embedding = await get_embedding(user_msg)
+    embedding = await get_embedding(user_msg, request_id=request_id, session_id=session_id)
     
     local_hits: list[str] = []
     if embedding:
@@ -261,7 +268,7 @@ async def chat(req: ChatRequest):
         print(f"[*] Qdrant hits: {len(local_hits)}")
 
     # 2. Always check web fallback if local hits are low or as a primary for "latest" intent
-    web_results = await web_search(user_msg)
+    web_results = await web_search(user_msg, request_id=request_id, session_id=session_id)
     web_hits = web_results.split("\n\n") if web_results else []
     print(f"[*] Web search hits (after rerank): {len(web_hits) if web_hits else 0}")
 
@@ -303,10 +310,12 @@ async def chat(req: ChatRequest):
                     "duration_ms":   stats.get("duration_ms", 0.0),
                     "model":         OLLAMA_MODEL,
                     "source":        source,
+                    "request_id":    request_id,
+                    "session_id":    session_id,
                 }
                 async with httpx.AsyncClient(timeout=3) as client:
                     await client.post(
-                        f"{WATCHTOWER_URL}/api/ingest/savant",
+                        f"{WATCHTOWER_URL}/api/ingest/telemetry", # Unified ingestion
                         json=payload,
                     )
             except Exception:

@@ -1,16 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Search, RefreshCw, Activity, Cpu, Zap, Eye } from 'lucide-react'
-
-const TABS = [
-  { id: 'reasoning', label: 'Reasoning',  endpoint: '/api/feed/reasoning' },
-  { id: 'coder',     label: 'Coder',       endpoint: '/api/feed/coder'     },
-  { id: 'embedding', label: 'Embedding',   endpoint: '/api/feed/embedding' },
-  { id: 'reranker',  label: 'Reranker',    endpoint: '/api/feed/reranker'  },
-]
+import { Search, RefreshCw, Brain, Target, Layers, Code, Activity, Cpu, Zap, Eye, Globe, Database } from 'lucide-react'
 
 function fmtDuration(ms) {
   if (!ms && ms !== 0) return '—'
-  if (ms < 1000) return `${ms}ms`
+  if (ms < 1000) return `${ms.toFixed(0)}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
 
@@ -22,85 +15,86 @@ function fmtTs(iso) {
   } catch { return iso }
 }
 
-function SourceBadge({ source }) {
-  if (!source || source === 'none') return null
-  const labels = { qdrant: '🗄️ KB', web: '🌐 Web', none: null }
-  const label = labels[source]
-  if (!label) return null
-  return <span className="tag" style={{ background: 'var(--badge-bg, rgba(255,255,255,0.08))', color: 'var(--text-dim)' }}>{label}</span>
-}
-
-function FeedCard({ item }) {
-  const [expanded, setExpanded] = useState(false)
-  const prompt = item.prompt || ''
-  const truncated = prompt.length > 200 && !expanded
+function StepRow({ step, type }) {
+  const configs = {
+    embedding: { label: 'Embedding', icon: <Layers size={14} />, color: 'var(--tag-ms-text)' },
+    reranker:  { label: 'Reranker',  icon: <Target size={14} />, color: 'var(--tag-out-text)' },
+    reasoning: { label: 'Reasoning', icon: <Brain size={14}  />, color: 'var(--tag-in-text)'  },
+    coder:     { label: 'Coder',     icon: <Code size={14}   />, color: 'var(--accent)'      },
+  }
+  const config = configs[type] || { label: type, icon: <Activity size={14} /> }
 
   return (
-    <div className="feed-card">
-      <div className="card-header">
-        <div>
-          <div className="card-model">{item.model || 'unknown'}</div>
-        </div>
-        <div className="card-ts">{fmtTs(item.timestamp)}</div>
+    <div className="step-item">
+      <div className="step-label">
+        {config.icon}
+        <span style={{ color: config.color }}>{config.label}</span>
+        <span className="step-model">({step.model})</span>
       </div>
-
-      {prompt ? (
-        <div
-          className="card-prompt"
-          style={{ cursor: prompt.length > 200 ? 'pointer' : 'default' }}
-          onClick={() => prompt.length > 200 && setExpanded(e => !e)}
-          title={prompt.length > 200 ? (expanded ? 'Click to collapse' : 'Click to expand') : ''}
-        >
-          {truncated ? prompt.slice(0, 200) + '…' : prompt}
-        </div>
-      ) : (
-        <div className="card-prompt-empty">No prompt captured</div>
-      )}
-
-      <div className="card-tags">
-        {item.source && item.source !== 'none' && <SourceBadge source={item.source} />}
-        {(item.input_tokens > 0) && (
-          <span className="tag tag-in">
-            <Zap size={11} /> {item.input_tokens} in
-          </span>
+      <div className="step-metrics">
+        {type === 'embedding' && step.input_tokens > 0 && (
+           <span className="tag tag-chunks"><Database size={11} /> {step.input_tokens} chunks</span>
         )}
-        {(item.output_tokens > 0) && (
-          <span className="tag tag-out">
-            <Activity size={11} /> {item.output_tokens} out
-          </span>
+        {step.input_tokens > 0 && type !== 'embedding' && (
+          <span className="tag tag-in"><Zap size={11} /> {step.input_tokens} in</span>
         )}
-        {(item.duration_ms > 0) && (
-          <span className="tag tag-ms">
-            <Cpu size={11} /> {fmtDuration(item.duration_ms)}
-          </span>
+        {step.output_tokens > 0 && (
+          <span className="tag tag-out"><Activity size={11} /> {step.output_tokens} out</span>
+        )}
+        {step.duration_ms > 0 && (
+          <span className="tag tag-ms"><Cpu size={11} /> {fmtDuration(step.duration_ms)}</span>
         )}
       </div>
     </div>
   )
 }
 
-function Feed({ tab, search }) {
+function UnifiedRequestCard({ item }) {
+  // Sort steps into logical categories
+  const embedding = item.steps?.find(s => s.source === 'embed')
+  const reranker  = item.steps?.find(s => s.source === 'rerank')
+  const reasoning = item.steps?.find(s => ['web', 'qdrant', 'none'].includes(s.source))
+  const coder     = item.steps?.find(s => s.source === 'coder' || s.model?.includes('coder'))
+
+  return (
+    <div className="request-card">
+      <div className="card-header">
+        <div className="card-title">User Request</div>
+        <div className="card-ts">{fmtTs(item.timestamp)}</div>
+      </div>
+      
+      <div className="card-prompt">{item.prompt || 'Stream processing...'}</div>
+
+      <div className="steps-list">
+        {embedding && <StepRow step={embedding} type="embedding" />}
+        {reranker  && <StepRow step={reranker}  type="reranker"  />}
+        {reasoning && <StepRow step={reasoning} type="reasoning" />}
+        {coder     && <StepRow step={coder}     type="coder"     />}
+      </div>
+    </div>
+  )
+}
+
+function Feed({ search }) {
   const [items, setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]   = useState(null)
-  const [count, setCount]   = useState(0)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const url = `${tab.endpoint}?limit=50&hours=6${search ? `&search=${encodeURIComponent(search)}` : ''}`
+      const url = `/api/feed/unified?limit=50&hours=6${search ? `&search=${encodeURIComponent(search)}` : ''}`
       const r = await fetch(url)
       if (!r.ok) throw new Error(`HTTP ${r.status}`)
       const data = await r.json()
       setItems(data.items || [])
-      setCount(data.items?.length || 0)
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [tab.endpoint, search])
+  }, [search])
 
   useEffect(() => {
     fetchData()
@@ -108,49 +102,41 @@ function Feed({ tab, search }) {
     return () => clearInterval(id)
   }, [fetchData])
 
-  if (loading) return (
+  if (loading && !items.length) return (
     <div className="state-box">
-      <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite' }} />
-      <span>Loading {tab.label} feed…</span>
+      <RefreshCw size={32} style={{ animation: 'spin 1s linear infinite' }} />
+      <span>Loading unified request feed…</span>
     </div>
   )
 
   if (error) return (
     <div className="state-box">
-      <Eye size={28} />
-      <span className="state-error">Failed to load: {error}</span>
-      <span style={{ fontSize: 12 }}>Is the backend running and Loki/Tempo reachable?</span>
+      <Eye size={32} />
+      <span style={{ color: '#ef4444' }}>{error}</span>
     </div>
   )
 
   if (!items.length) return (
     <div className="state-box">
-      <Activity size={28} />
+      <Activity size={32} />
       <span>No requests recorded in the last 6 hours</span>
-      {search && <span style={{ fontSize: 12 }}>Try clearing the search filter</span>}
     </div>
   )
 
   return (
-    <>
-      <div className="feed-meta">
-        <span>{count} request{count !== 1 ? 's' : ''} · last 6h</span>
-        <span>Auto-refreshes every 30s</span>
-      </div>
-      <div className="feed-list">
-        {items.map((item, i) => <FeedCard key={item.trace_id || `${item.timestamp}-${i}`} item={item} />)}
-      </div>
-    </>
+    <div className="feed-list">
+      {items.map((item) => (
+        <UnifiedRequestCard key={item.request_id} item={item} />
+      ))}
+    </div>
   )
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState(TABS[0])
   const [search, setSearch] = useState('')
   const [deferredSearch, setDeferredSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const debounce = useRef(null)
-  const [feedKey, setFeedKey] = useState(0)
 
   const handleSearch = (val) => {
     setSearch(val)
@@ -160,18 +146,17 @@ export default function App() {
 
   const handleRefresh = () => {
     setRefreshing(true)
-    setFeedKey(k => k + 1)
-    setTimeout(() => setRefreshing(false), 800)
+    window.location.reload() // Simple hard refresh for state cleanup
   }
 
   return (
     <div className="watchtower-layout">
       <header className="watchtower-header">
         <div className="watchtower-wordmark">
-          <Eye size={22} />
+          <Eye size={28} />
           <div>
             <div className="watchtower-title">watchtower</div>
-            <div className="watchtower-subtitle">LLM Request Feed · AI Platform</div>
+            <div className="watchtower-subtitle">Unified AI Platform Observability</div>
           </div>
         </div>
         <button className={`refresh-btn${refreshing ? ' spinning' : ''}`} onClick={handleRefresh}>
@@ -180,29 +165,26 @@ export default function App() {
       </header>
 
       <div className="search-wrap">
-        <Search size={16} />
+        <Search size={18} />
         <input
           className="search-input"
           type="text"
-          placeholder="Search requests…"
+          placeholder="Filter by message content…"
           value={search}
           onChange={e => handleSearch(e.target.value)}
         />
       </div>
 
-      <div className="tabs-bar">
-        {TABS.map(t => (
-          <button
-            key={t.id}
-            className={`tab-btn${activeTab.id === t.id ? ' active' : ''}`}
-            onClick={() => setActiveTab(t)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="feed-meta">
+        <span>Activity Feed · Last 6 Hours</span>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+             <div style={{ width: 8, height: 8, background: '#22c55e', borderRadius: '50%' }} /> Live
+           </span>
+        </div>
       </div>
 
-      <Feed key={`${activeTab.id}-${feedKey}`} tab={activeTab} search={deferredSearch} />
+      <Feed search={deferredSearch} />
     </div>
   )
 }
