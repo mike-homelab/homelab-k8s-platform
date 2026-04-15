@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "9"
 spec:
-  project: default
+  project: infrastructure
   source:
     repoURL: https://nvidia.github.io/gpu-operator
     chart: gpu-operator

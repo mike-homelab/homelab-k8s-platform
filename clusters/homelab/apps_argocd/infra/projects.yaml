@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: infrastructure
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  description: "Homelab Infrastructure Components"
+  sourceRepos:
+  - https://github.com/mike-homelab/homelab-k8s-platform
+  - https://charts.jetstack.io
+  - https://nvidia.github.io/gpu-operator
+  - https://charts.longhorn.io
+  - https://metallb.github.io/metallb
+  - https://helm.nginx.com/stable
+  - https://kubernetes-sigs.github.io/metrics-server/
+  destinations:
+  - namespace: '*'
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: '*'
+    kind: '*'
+  namespaceResourceWhitelist:
+  - group: '*'
+    kind: '*'

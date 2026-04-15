@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "6"
 spec:
-  project: default
+  project: infrastructure
   source:
     repoURL: https://github.com/kubernetes-sigs/gateway-api
     targetRevision: v1.1.0

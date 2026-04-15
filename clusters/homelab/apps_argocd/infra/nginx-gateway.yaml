@@ -6,11 +6,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "7"
 spec:
-  project: default
+  project: infrastructure
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/infra/nginx-gateway-fabric
+    path: clusters/homelab/apps/infra/nginx-gateway-fabric
     kustomize: {}
   destination:
     server: https://kubernetes.default.svc

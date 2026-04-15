@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-sysctl-fix
+  namespace: kube-system
+  labels:
+    app: node-sysctl-fix
+spec:
+  selector:
+    matchLabels:
+      app: node-sysctl-fix
+  template:
+    metadata:
+      labels:
+        app: node-sysctl-fix
+    spec:
+      hostPID: true
+      containers:
+      - name: sysctl-fix
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          sysctl -w fs.inotify.max_user_watches=524288
+          sysctl -w fs.inotify.max_user_instances=512
+          echo "Applied inotify fixes"
+          sleep infinity
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 10m
+            memory: 8Mi
+          limits:
+            cpu: 50m
+            memory: 16Mi

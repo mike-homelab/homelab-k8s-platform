@@ -6,11 +6,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "8"  # after cert-manager helm install
 spec:
-  project: default
+  project: infrastructure
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/infra/cert-manager-rbac
+    path: clusters/homelab/apps/infra/cert-manager-rbac
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
