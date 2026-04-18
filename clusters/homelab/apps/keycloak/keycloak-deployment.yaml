@@ -13,6 +13,10 @@ spec:
       labels:
         app: keycloak
     spec:
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.28
+          command: ['sh', '-c', "until nc -zv keycloak-db 5432; do echo waiting for db; sleep 2; done;"]
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:24.0.2
@@ -47,15 +51,15 @@ spec:
             httpGet:
               path: /health/ready
               port: 8080
-            initialDelaySeconds: 120
+            initialDelaySeconds: 60
             periodSeconds: 10
             failureThreshold: 20
           resources:
             requests:
-              cpu: "100m"
+              cpu: "500m"
               memory: "512Mi"
             limits:
-              cpu: "500m"
+              cpu: "1000m"
               memory: "1Gi"
           volumeMounts:
             - name: realm-config

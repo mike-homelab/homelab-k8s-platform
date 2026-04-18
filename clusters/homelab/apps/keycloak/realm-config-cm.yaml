@@ -26,10 +26,12 @@ data:
           "rootUrl": "https://savant.michaelhomelab.work",
           "baseUrl": "/",
           "redirectUris": [
-            "https://savant.michaelhomelab.work/*"
+            "https://savant.michaelhomelab.work/*",
+            "http://savant.michaelhomelab.work/*"
           ],
           "webOrigins": [
-            "https://savant.michaelhomelab.work"
+            "https://savant.michaelhomelab.work",
+            "http://savant.michaelhomelab.work"
           ],
           "attributes": {
             "pkce.code.challenge.method": "S256"
@@ -47,10 +49,12 @@ data:
           "rootUrl": "https://watchtower.michaelhomelab.work",
           "baseUrl": "/",
           "redirectUris": [
-            "https://watchtower.michaelhomelab.work/*"
+            "https://watchtower.michaelhomelab.work/*",
+            "http://watchtower.michaelhomelab.work/*"
           ],
           "webOrigins": [
-            "https://watchtower.michaelhomelab.work"
+            "https://watchtower.michaelhomelab.work",
+            "http://watchtower.michaelhomelab.work"
           ],
           "attributes": {
             "pkce.code.challenge.method": "S256"
