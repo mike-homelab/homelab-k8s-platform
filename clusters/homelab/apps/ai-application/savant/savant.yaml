@@ -25,7 +25,7 @@ spec:
             - name: OLLAMA_URL
               value: "http://vllm-reasoning.ai-platform.svc.cluster.local:11434"
             - name: OLLAMA_MODEL
-              value: "phi3.5"
+              value: "deepseek-r1:7b"
             - name: QDRANT_URL
               value: "http://qdrant.ai-platform.svc.cluster.local:6333"
             - name: QDRANT_COLLECTION

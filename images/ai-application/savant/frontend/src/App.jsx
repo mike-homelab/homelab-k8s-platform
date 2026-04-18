@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, BookOpen, Globe, Brain, Database } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const SUGGESTIONS = [
   'What is in the internal knowledge base?',
@@ -139,8 +141,8 @@ export default function App() {
       <header className="chat-header">
         <BookOpen size={20} className="chat-logo" />
         <div>
-          <div className="chat-brand">Knowledge Chat</div>
-          <div className="chat-tagline">Powered by Qdrant · Phi-3.5 · BGE Embeddings</div>
+          <div className="chat-brand">Savant</div>
+          <div className="chat-tagline">Powered by Local Knowledge & Web Search</div>
         </div>
       </header>
 
@@ -165,7 +167,13 @@ export default function App() {
           {messages.map(msg => (
             <div key={msg.id} className={`msg-row ${msg.role}`}>
               <div className={`msg-bubble ${msg.role}${msg.streaming ? ' streaming' : ''}`}>
-                {msg.content || (msg.streaming ? '' : '…')}
+                {msg.role === 'assistant' ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {msg.content || (msg.streaming ? '' : '…')}
+                  </ReactMarkdown>
+                ) : (
+                  msg.content
+                )}
               </div>
               {msg.role === 'assistant' && !msg.streaming && (
                 <div className="msg-meta">
@@ -203,7 +211,7 @@ export default function App() {
           </button>
         </form>
         <p className="input-hint">
-          Searches internal Qdrant DB → falls back to web search → answers with Phi-3.5
+          Searches internal Knowledge Base → falls back to web search → local reasoning.
         </p>
       </div>
     </div>

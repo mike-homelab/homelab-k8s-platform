@@ -20,7 +20,7 @@ app.add_middleware(
 OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://vllm-reasoning.ai-platform.svc.cluster.local:11434")
 QDRANT_URL   = os.getenv("QDRANT_URL",   "http://qdrant.ai-platform.svc.cluster.local:6333")
 EMBED_URL    = os.getenv("EMBED_URL",    "http://infinity-embedding.ai-platform.svc.cluster.local:8000")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "phi3.5")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1:7b")
 SEARCH_API   = os.getenv("SEARCH_API",   "https://api.duckduckgo.com/")
 SEARXNG_URL  = os.getenv("SEARXNG_URL",  "http://searxng.ai-platform.svc.cluster.local:8080")
 RERANK_URL   = os.getenv("RERANK_URL",   "http://infinity-embedding.ai-platform.svc.cluster.local:8001")
@@ -172,13 +172,14 @@ def build_messages(user_msg: str, context: str, source: str) -> list[dict]:
         system = (
             "You are a helpful assistant with access to an internal knowledge base. "
             "Use the provided context to answer the user's question accurately and concisely. "
+            "For comparisons or multi-entity analysis, always provide the output in a clean Markdown table. "
             "If the context doesn't fully answer the question, say so."
         )
         ctx_msg = f"Internal Knowledge:\n{context}"
     elif source == "web":
         system = (
             "You are a helpful assistant. The following information was retrieved from the internet. "
-            "Use it to answer the question concisely."
+            "Use it to answer the question concisely. For logical comparisons, prefer using Markdown tables."
         )
         ctx_msg = f"Web Search Context:\n{context}"
     else:
