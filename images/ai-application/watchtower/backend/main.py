@@ -28,16 +28,10 @@ class AppState:
 async def lifespan(app: FastAPI):
     """Create Redis client on startup, close cleanly on shutdown."""
     state = AppState()
-
-    # Redis client
     state.cache = aioredis.from_url(REDIS_URL, decode_responses=True)
     await state.cache.ping()
-    print("Redis ready")
-
     app.state.cache = state.cache
-
-    yield  # ── app running ──
-
+    yield
     await state.cache.aclose()
 
 
@@ -51,19 +45,6 @@ app.add_middleware(
 )
 
 
-# ── Pydantic model (kept for legacy reasons or empty) ─────────────────────────
-
-class SavantEvent(BaseModel):
-    message: str
-    input_tokens: int
-    output_tokens: int
-    duration_ms: float
-    model: str
-    source: str = "none"
-    request_id: Optional[str] = None
-    session_id: Optional[str] = None
-
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def now_ns() -> int:
@@ -72,55 +53,11 @@ def now_ns() -> int:
 def hours_ago_ns(h: int = 6) -> int:
     return int((datetime.now(timezone.utc) - timedelta(hours=h)).timestamp() * 1e9)
 
-def _cache_key(hours: int, search: str, limit: int) -> str:
-    return f"feed:reasoning:v2:h{hours}:l{limit}:s{search}"
+def _cache_key(hours: int, search: str, limit: int, prefix: str = "feed") -> str:
+    return f"{prefix}:v2:h{hours}:l{limit}:s{search}"
 
 
-# ── OLLAMA log parser (Loki) ──────────────────────────────────────────────────
-
-def parse_ollama_line(raw: str, ts_ns: int) -> Optional[dict]:
-    try:
-        data = json.loads(raw)
-        if data.get("msg") in ("inference done", "request", "response"):
-            prompt_tokens     = data.get("prompt_eval_count", 0)
-            completion_tokens = data.get("eval_count", 0)
-            total_ns          = data.get("total_duration", 0)
-            if prompt_tokens or completion_tokens or total_ns:
-                return {
-                    "timestamp":     datetime.fromtimestamp(ts_ns / 1e9, tz=timezone.utc).isoformat(),
-                    "model":         data.get("model", "unknown"),
-                    "input_tokens":  prompt_tokens,
-                    "output_tokens": completion_tokens,
-                    "duration_ms":   round(total_ns / 1e6, 1),
-                    "prompt":        data.get("prompt", "")[:300],
-                    "source":        "loki",
-                }
-    except Exception:
-        pass
-    return None
-
-
-async def loki_query(logql: str, limit: int = 100, hours: int = 6) -> list[dict]:
-    params = {
-        "query":     logql,
-        "limit":     limit,
-        "start":     hours_ago_ns(hours),
-        "end":       now_ns(),
-        "direction": "backward",
-    }
-    async with httpx.AsyncClient(timeout=10) as client:
-        r = await client.get(f"{LOKI_URL}/query_range", params=params)
-        r.raise_for_status()
-    results = []
-    for stream in r.json().get("data", {}).get("result", []):
-        for ts_str, line in stream.get("values", []):
-            parsed = parse_ollama_line(line, int(ts_str))
-            if parsed:
-                results.append(parsed)
-    return results
-
-
-# ── Tempo query (Primary Data Source now) ─────────────────────────────────────
+# ── Tempo query (Primary Data Source) ─────────────────────────────────────────
 
 async def tempo_search(service: str, limit: int = 50, hours: int = 6) -> list[dict]:
     """Search Tempo for Savant traces."""
@@ -138,11 +75,9 @@ async def tempo_search(service: str, limit: int = 50, hours: int = 6) -> list[di
     spans = []
     for trace in r.json().get("traces", []):
         root = trace.get("rootSpanName", "")
-        # We look for the main chat_request span or nested ollama spans
         if not any(x in root for x in ["chat_request", "ollama_chat"]):
             continue
             
-        # Extract attributes from the root span or first meaningful span
         span_sets = trace.get("spanSets", [])
         if not span_sets: continue
         
@@ -177,41 +112,46 @@ async def health():
 
 
 @app.get("/api/feed/reasoning")
-async def feed_reasoning(search: str = "", limit: int = 50, hours: int = 6):
-    """Reasoning feed — Primary source is now TEMPO (OTel Traces)."""
-    cache_key = _cache_key(hours, search, limit)
+@app.get("/api/feed/unified")  # Restoration of unified route for frontend compat
+async def feed_unified(search: str = "", limit: int = 50, hours: int = 6):
+    """Unified chronological feed grouping related operations by trace_id."""
+    cache_key = _cache_key(hours, search, limit, "feed_unified")
 
     cached = await app.state.cache.get(cache_key)
     if cached:
         return {"items": json.loads(cached), "cache": "hit"}
 
-    # 1. Query Tempo for Savant traces
-    tempo_items: list[dict] = []
+    # 1. Fetch traces from Tempo
+    items: list[dict] = []
     try:
-        tempo_items = await tempo_search("savant", limit=limit, hours=hours)
+        items = await tempo_search("savant", limit=limit, hours=hours)
     except Exception as exc:
         print(f"Tempo query error: {exc}")
 
-    # 2. Query Loki for fallback (In-cluster local logs)
-    loki_items: list[dict] = []
-    try:
-        logql = '{namespace="ai-platform", app="vllm-reasoning"}'
-        if search:
-            logql = f'{logql} |~ `(?i){re.escape(search)}`'
-        loki_items = await loki_query(logql, limit=limit, hours=hours)
-    except Exception:
-        pass
+    # 2. Sort and Cache
+    items.sort(key=lambda x: x["timestamp"], reverse=True)
+    
+    # 3. For the 'unified' view, we can wrap each item in a 'steps' array to match frontend expectations
+    # if the frontend expects a grouped structure.
+    unified_items = []
+    for it in items:
+        unified_items.append({
+            "timestamp": it["timestamp"],
+            "request_id": it["trace_id"], # Map trace ID to request ID
+            "prompt": it["prompt"],
+            "steps": [{
+                "source": it["source"],
+                "model": it["model"],
+                "input_tokens": it["input_tokens"],
+                "output_tokens": it["output_tokens"],
+                "duration_ms": it["duration_ms"]
+            }]
+        })
 
-    # Merge and sort (dedup by timestamp/prompt if needed, but simple merge for now)
-    combined = tempo_items + loki_items
-    combined.sort(key=lambda x: x["timestamp"], reverse=True)
-    combined = combined[:limit]
-
-    await app.state.cache.setex(cache_key, CACHE_TTL, json.dumps(combined))
-    return {"items": combined, "cache": "miss"}
+    await app.state.cache.setex(cache_key, CACHE_TTL, json.dumps(unified_items))
+    return {"items": unified_items}
 
 
 @app.post("/api/ingest/telemetry")
-async def ingest_telemetry(event: SavantEvent):
-    """Legacy endpoint - now a no-op as we use OTel."""
-    return {"ok": True, "message": "Telemetry is now handled via OpenTelemetry/Alloy"}
+async def ingest_telemetry():
+    return {"ok": True}
