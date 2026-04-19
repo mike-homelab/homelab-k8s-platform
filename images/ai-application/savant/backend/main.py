@@ -13,7 +13,7 @@ from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import RESOURCE_ATTRIBUTES, Resource
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
@@ -21,8 +21,10 @@ from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 OTEL_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy.monitoring.svc:4317")
 
+# Using strings for keys to avoid dependency version mismatches with Semantic Conventions
 resource = Resource(attributes={
-    RESOURCE_ATTRIBUTES.SERVICE_NAME: "savant"
+    "service.name": "savant",
+    "deployment.environment": "homelab"
 })
 
 provider = TracerProvider(resource=resource)
@@ -195,14 +197,11 @@ def build_messages(user_msg: str, context: str, source: str) -> list[dict]:
 async def stream_ollama(
     messages: list[dict],
     model: str,
-    stats_out: dict,
-    parent_span_context=None
+    stats_out: dict
 ) -> AsyncGenerator[str, None]:
     """Stream response from Ollama /api/chat and yield SSE chunks."""
-    # Start a nested span for the Ollama inference
     with tracer.start_as_current_span("ollama_chat") as span:
         span.set_attribute("gen_ai.request.model", model)
-        span.set_attribute("gen_ai.request.messages", json.dumps(messages))
         
         payload = {
             "model": model,
@@ -229,20 +228,13 @@ async def stream_ollama(
                             
                             span.set_attribute("gen_ai.usage.prompt_tokens", pt)
                             span.set_attribute("gen_ai.usage.completion_tokens", ct)
-                            span.set_attribute("gen_ai.usage.total_tokens", pt + ct)
                             
                             stats_out.update(
                                 prompt_tokens=pt,
                                 completion_tokens=ct,
                                 duration_ms=dm,
                             )
-                            sse_stats = {
-                                "done": True,
-                                "prompt_tokens":     pt,
-                                "completion_tokens": ct,
-                                "duration_ms":       dm,
-                            }
-                            yield f"data: {json.dumps(sse_stats)}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'prompt_tokens': pt, 'completion_tokens': ct, 'duration_ms': dm})}\n\n"
                     except json.JSONDecodeError:
                         pass
 
@@ -263,13 +255,10 @@ async def chat(req: ChatRequest):
     request_id = str(uuid.uuid4())
     session_id = "default-session"
     
-    # Root span for the entire chat request
     with tracer.start_as_current_span("chat_request") as span:
         span.set_attribute("app.request_id", request_id)
-        span.set_attribute("app.session_id", session_id)
         span.set_attribute("app.user_message", user_msg)
 
-        # 1. Start searches
         embedding = await get_embedding(user_msg, request_id=request_id, session_id=session_id)
         
         local_hits: list[str] = []
@@ -297,10 +286,8 @@ async def chat(req: ChatRequest):
         stats: dict = {}
 
         async def event_stream():
-            # First send metadata
             meta = {"source": source, "has_context": bool(context)}
             yield f"data: {json.dumps({'meta': meta})}\n\n"
-
             async for chunk in stream_ollama(messages, OLLAMA_MODEL, stats):
                 yield chunk
 
