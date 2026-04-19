@@ -126,7 +126,7 @@ function Feed({ search }) {
 
   if (!items.length) return (
     <div className="state-box" style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e5e2da' }}>
-      < ब्रेन size={32} style={{ opacity: 0.15 }} />
+      <Brain size={32} style={{ opacity: 0.15 }} />
       <span>No requests found. Generating telemetry will populate this feed.</span>
     </div>
   )
