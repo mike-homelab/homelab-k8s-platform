@@ -15,8 +15,112 @@ spec:
     chart: alloy
     targetRevision: 0.9.2
     helm:
-      valueFiles:
-        - https://raw.githubusercontent.com/mike-homelab/homelab-k8s-platform/main/clusters/homelab/infra/monitoring/alloy-values.yaml
+      values: |
+        alloy:
+          extraPorts:
+            - name: otlp-grpc
+              port: 4317
+              targetPort: 4317
+              protocol: TCP
+            - name: otlp-http
+              port: 4318
+              targetPort: 4318
+              protocol: TCP
+          configContent: |
+            logging {
+              level  = "info"
+              format = "logfmt"
+            }
+
+            discovery.kubernetes "pods" {
+              role = "pod"
+            }
+
+            discovery.relabel "pods" {
+              targets = discovery.kubernetes.pods.targets
+              rule {
+                source_labels = ["__meta_kubernetes_namespace"]
+                target_label  = "namespace"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_name"]
+                target_label  = "pod"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_container_name"]
+                target_label  = "container"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_node_name"]
+                target_label  = "node"
+              }
+              rule {
+                replacement  = "kubernetes-pods"
+                target_label = "job"
+              }
+              rule {
+                source_labels = ["__meta_kubernetes_pod_container_name"]
+                target_label  = "service"
+              }
+            }
+
+            // --- LOGS ---
+            loki.source.kubernetes "pod_logs" {
+              targets    = discovery.relabel.pods.output
+              forward_to = [loki.write.default.receiver]
+            }
+
+            loki.write "default" {
+              endpoint {
+                url = "http://loki-write.monitoring.svc:3100/loki/api/v1/push"
+              }
+            }
+
+            // --- METRICS ---
+            prometheus.scrape "default" {
+              targets    = discovery.relabel.pods.output
+              forward_to = [prometheus.remote_write.default.receiver]
+            }
+
+            prometheus.remote_write "default" {
+              endpoint {
+                url = "http://mimir-gateway.monitoring.svc/api/v1/push"
+              }
+            }
+
+            // --- TRACES ---
+            otelcol.receiver.otlp "default" {
+              grpc {
+                endpoint = "0.0.0.0:4317"
+              }
+              http {
+                endpoint = "0.0.0.0:4318"
+              }
+              output {
+                metrics = [prometheus.remote_write.default.receiver]
+                logs    = [loki.write.default.receiver]
+                traces  = [otelcol.exporter.otlp.tempo.input]
+              }
+            }
+
+            otelcol.exporter.otlp "tempo" {
+              client {
+                endpoint = "tempo-distributor.monitoring.svc:4317"
+                tls {
+                  insecure = true
+                }
+              }
+            }
+
+        controller:
+          type: daemonset
+
+        serviceAccount:
+          create: true
+          name: alloy
+
+        storage:
+          enabled: true
   syncPolicy:
     automated:
       prune: true
