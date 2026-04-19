@@ -13,7 +13,7 @@ from typing import Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 LOKI_URL     = os.getenv("LOKI_URL",     "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1")
-TEMPO_URL    = os.getenv("TEMPO_URL",    "http://tempo-query-frontend.monitoring.svc.cluster.local:3100")
+TEMPO_URL    = os.getenv("TEMPO_URL",    "http://tempo-query-frontend.monitoring.svc.cluster.local:3200")
 REDIS_URL    = os.getenv("REDIS_URL",    "redis://redis.ai-platform.svc.cluster.local:6379/0")
 
 CACHE_TTL = 30  # seconds
