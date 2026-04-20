@@ -16,6 +16,8 @@ spec:
   - https://helm.nginx.com/stable
   - https://kubernetes-sigs.github.io/metrics-server/
   - https://github.com/kubernetes-sigs/gateway-api
+  - https://github.com/kubernetes-sigs/gateway-api.git
+  - https://github.com/kubernetes-sigs/*
 
   destinations:
   - namespace: '*'
