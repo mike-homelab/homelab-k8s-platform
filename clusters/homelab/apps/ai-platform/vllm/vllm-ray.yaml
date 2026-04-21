@@ -26,12 +26,11 @@ spec:
             - |
               pip install ray[default]
               ray start --head --port=6379 --block &
-              sleep 20
+              sleep 30
               vllm serve google/gemma-4-26B-A4B-it \
                 --distributed-executor-backend ray \
                 --pipeline-parallel-size 2 \
                 --tensor-parallel-size 1 \
-                --quantization awq \
                 --kv-cache-dtype fp8 \
                 --max-model-len 131072 \
                 --gpu-memory-utilization 0.95 \
