@@ -45,7 +45,7 @@ ENV TORCH_CUDA_ARCH_LIST="9.0"
 ENV MAX_JOBS=16
 
 # Install vLLM from source - Further increased timeout and enabling verbose for debugging
-RUN pip install -e . --default-timeout=5000 --verbose
+RUN pip install -e . --default-timeout=50000 --verbose
 
 # ---- Runtime env fixes ----
 ENV VLLM_USE_FLASH_ATTENTION=0
