@@ -1,12 +1,13 @@
-FROM nvidia/cuda:12.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # System deps
 RUN apt-get update && apt-get install -y \
-    python3.12 \
-    python3.12-dev \
+    python3 \
+    python3-dev \
     python3-pip \
     git \
     build-essential \
@@ -15,18 +16,18 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Make python3.12 default
-RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.12 1
+# Symlink python to python3 (standard for Ubuntu 24.04)
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Upgrade pip
+# Upgrade pip and related tools
 RUN python -m pip install --upgrade pip setuptools wheel
 
 # ---- CRITICAL: Install PyTorch NIGHTLY with CUDA 12.8 ----
 RUN pip install --pre torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/nightly/cu128
 
-# Verify CUDA (optional but useful during build)
-RUN python -c "import torch; print(torch.__version__, torch.version.cuda)"
+# Verify CUDA (this will run during build on a GPU-enabled builder, or just print versions)
+RUN python -c "import torch; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}')"
 
 # ---- Install Ray ----
 RUN pip install "ray[default]==2.23.0"
@@ -37,9 +38,10 @@ RUN git clone https://github.com/vllm-project/vllm.git
 
 WORKDIR /workspace/vllm
 
-# Optional but recommended for new GPUs
+# Required for 50-series (Blackwell) support in vLLM kernels
 ENV TORCH_CUDA_ARCH_LIST="9.0"
 
+# Install vLLM from source
 RUN pip install -e .
 
 # ---- Runtime env fixes ----
@@ -48,4 +50,4 @@ ENV NCCL_DEBUG=WARN
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Default command
-CMD ["python", "-c", "import torch; print(torch.cuda.get_device_name(0))"]
+CMD ["python", "-c", "import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print('No GPU detected during startup')"]
