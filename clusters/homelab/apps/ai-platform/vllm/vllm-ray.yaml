@@ -31,6 +31,8 @@ spec:
                 --distributed-executor-backend ray \
                 --pipeline-parallel-size 2 \
                 --tensor-parallel-size 1 \
+                --quantization bitsandbytes \
+                --load-format bitsandbytes \
                 --kv-cache-dtype fp8 \
                 --max-model-len 131072 \
                 --gpu-memory-utilization 0.95 \
@@ -40,6 +42,14 @@ spec:
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:
             - name: VLLM_OTEL_TRACING
+              value: "1"
+            - name: NCCL_IB_DISABLE
+              value: "1"
+            - name: NCCL_P2P_DISABLE
+              value: "1"
+            - name: GLOO_SOCKET_IFNAME
+              value: "eth0"
+            - name: RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES
               value: "1"
           envFrom:
             - configMapRef:
@@ -61,10 +71,16 @@ spec:
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
+            - name: dshm
+              mountPath: /dev/shm
       volumes:
         - name: hf-cache
           persistentVolumeClaim:
             claimName: hf-cache-vllm-ray
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 12Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -94,6 +110,15 @@ spec:
             - |
               pip install ray[default]
               ray start --address='vllm-ray-head.ai-platform.svc.cluster.local:6379' --block
+          env:
+            - name: NCCL_IB_DISABLE
+              value: "1"
+            - name: NCCL_P2P_DISABLE
+              value: "1"
+            - name: GLOO_SOCKET_IFNAME
+              value: "eth0"
+            - name: RAY_EXPERIMENTAL_NOSET_CUDA_VISIBLE_DEVICES
+              value: "1"
           ports:
             - name: ray
               containerPort: 6379
@@ -109,10 +134,16 @@ spec:
           volumeMounts:
             - name: hf-cache
               mountPath: /root/.cache/huggingface
+            - name: dshm
+              mountPath: /dev/shm
       volumes:
         - name: hf-cache
           persistentVolumeClaim:
             claimName: hf-cache-vllm-ray
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 12Gi
 ---
 apiVersion: v1
 kind: Service
