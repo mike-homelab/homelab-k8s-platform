@@ -23,9 +23,9 @@ spec:
             - containerPort: 80
           env:
             - name: OLLAMA_URL
-              value: "http://vllm-reasoning.ai-platform.svc.cluster.local:11434"
+              value: "http://vllm-ray-head.ai-platform.svc.cluster.local:8000/v1"
             - name: OLLAMA_MODEL
-              value: "deepseek-r1:7b"
+              value: "google/gemma-4-26B-A4B-it"
             - name: QDRANT_URL
               value: "http://qdrant.ai-platform.svc.cluster.local:6333"
             - name: QDRANT_COLLECTION

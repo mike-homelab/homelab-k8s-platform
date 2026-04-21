@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-ray-head
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-ray-head
+  template:
+    metadata:
+      labels:
+        app: vllm-ray-head
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+      containers:
+        - name: vllm-head
+          image: vllm/vllm-openai:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash"]
+          args:
+            - "-c"
+            - |
+              ray start --head --port=6379 &
+              sleep 10
+              vllm serve google/gemma-4-26B-A4B-it \
+                --distributed-executor-backend ray \
+                --pipeline-parallel-size 2 \
+                --tensor-parallel-size 1 \
+                --quantization awq \
+                --kv-cache-dtype fp8 \
+                --max-model-len 131072 \
+                --gpu-memory-utilization 0.95 \
+                --enable-auto-tool-choice \
+                --trust-remote-code \
+                --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT)
+          env:
+            - name: VLLM_OTEL_TRACING
+              value: "1"
+          envFrom:
+            - configMapRef:
+              name: vllm-otel-env
+          ports:
+            - name: http
+              containerPort: 8000
+            - name: ray
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache-vllm-ray
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-ray-worker
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-ray-worker
+  template:
+    metadata:
+      labels:
+        app: vllm-ray-worker
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+      containers:
+        - name: vllm-worker
+          image: vllm/vllm-openai:latest
+          imagePullPolicy: Always
+          command: ["/bin/bash"]
+          args:
+            - "-c"
+            - |
+              ray start --address='vllm-ray-head.ai-platform.svc.cluster.local:6379' --block
+          ports:
+            - name: ray
+              containerPort: 6379
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache-vllm-ray
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-ray-head
+  namespace: ai-platform
+  labels:
+    app: vllm-ray-head
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-ray-head
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+    - name: ray
+      port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hf-cache-vllm-ray
+  namespace: ai-platform
+spec:
+  storageClassName: longhorn
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 150Gi
