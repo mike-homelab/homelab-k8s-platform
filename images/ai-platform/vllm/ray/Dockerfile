@@ -42,7 +42,7 @@ ENV TORCH_CUDA_ARCH_LIST="9.0"
 
 # Optimization: Increase parallel build jobs for vLLM compilation
 # Using all available cores for Ninja/Build system
-ENV MAX_JOBS=16
+ENV MAX_JOBS=2
 
 # Install vLLM from source - Further increased timeout and enabling verbose for debugging
 RUN pip install -e . --default-timeout=5000 --verbose
