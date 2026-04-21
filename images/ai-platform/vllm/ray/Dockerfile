@@ -22,14 +22,13 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 # ---- CRITICAL: Install PyTorch NIGHTLY with CUDA 12.8 ----
 RUN pip install --pre torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/nightly/cu128 \
-    --default-timeout=1000
+    --default-timeout=50000
 
 # Verify CUDA
 RUN python -c "import torch; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}')"
 
 # ---- Install Ray ----
-# Updated version: Ray 2.31.0+ is required for Python 3.12 support in Ubuntu 24.04
-RUN pip install "ray[default]>=2.40.0" --default-timeout=1000
+RUN pip install "ray[default]>=2.40.0" --default-timeout=50000
 
 # ---- Build vLLM from source ----
 WORKDIR /workspace
@@ -37,14 +36,16 @@ RUN git clone https://github.com/vllm-project/vllm.git
 
 WORKDIR /workspace/vllm
 
-# Required for 50-series (Blackwell) support in vLLM kernels
+# IMPORTANT: Set architecture for Blackwell (RTX 50-series)
+# vLLM C++ kernels do not natively support SM_120 yet, so we compile for Hopper (SM_90/9.0)
+# Blackwell is backward-compatible and will execute Hopper kernels safely.
 ENV TORCH_CUDA_ARCH_LIST="9.0"
 
-# Optimization: Increase parallel build jobs for vLLM compilation
-# Using all available cores for Ninja/Build system
-ENV MAX_JOBS=16
+# Safety: Reduce parallel build jobs to prevent OOM on most self-hosted runners
+# 16 jobs can require >64GB of RAM during vLLM C++ compilation.
+ENV MAX_JOBS=4
 
-# Install vLLM from source - Further increased timeout and enabling verbose for debugging
+# Install vLLM from source 
 RUN pip install -e . --default-timeout=50000 --verbose
 
 # ---- Runtime env fixes ----
