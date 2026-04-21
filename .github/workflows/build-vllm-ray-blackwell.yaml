@@ -1,0 +1,45 @@
+name: Build vLLM Ray Blackwell Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/ai-platform/vllm/ray/**
+      - .github/workflows/build-vllm-ray-blackwell.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push vLLM Ray Blackwell
+    runs-on: [self-hosted]
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login docker.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest \
+            images/ai-platform/vllm/ray
+
+      - name: Push Docker image
+        run: |
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: Pushing docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest && break || sleep 15;
+          done
+
+      - name: Clean up Docker image
+        if: always()
+        run: |
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest || true

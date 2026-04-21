@@ -18,13 +18,12 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
       containers:
         - name: vllm-head
-          image: vllm/vllm-openai:latest
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest
           imagePullPolicy: Always
           command: ["/bin/bash"]
           args:
             - "-c"
             - |
-              pip install ray[default]
               ray start --head --port=6379 --block &
               sleep 30
               vllm serve google/gemma-4-26B-A4B-it \
@@ -102,13 +101,12 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
       containers:
         - name: vllm-worker
-          image: vllm/vllm-openai:latest
+          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-ray-blackwell:latest
           imagePullPolicy: Always
           command: ["/bin/bash"]
           args:
             - "-c"
             - |
-              pip install ray[default]
               ray start --address='vllm-ray-head.ai-platform.svc.cluster.local:6379' --block
           env:
             - name: NCCL_IB_DISABLE
