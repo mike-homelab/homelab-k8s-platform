@@ -24,8 +24,9 @@ spec:
           args:
             - "-c"
             - |
-              python3 -m ray.scripts.scripts start --head --port=6379 &
-              sleep 10
+              pip install ray[default]
+              ray start --head --port=6379 --block &
+              sleep 20
               vllm serve google/gemma-4-26B-A4B-it \
                 --distributed-executor-backend ray \
                 --pipeline-parallel-size 2 \
@@ -35,7 +36,7 @@ spec:
                 --max-model-len 131072 \
                 --gpu-memory-utilization 0.95 \
                 --enable-auto-tool-choice \
-                --tool-call-parser gemma \
+                --tool-call-parser gemma4 \
                 --trust-remote-code \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT)
           env:
@@ -92,7 +93,8 @@ spec:
           args:
             - "-c"
             - |
-              python3 -m ray.scripts.scripts start --address='vllm-ray-head.ai-platform.svc.cluster.local:6379' --block
+              pip install ray[default]
+              ray start --address='vllm-ray-head.ai-platform.svc.cluster.local:6379' --block
           ports:
             - name: ray
               containerPort: 6379
