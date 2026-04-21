@@ -42,7 +42,7 @@ spec:
               value: "1"
           envFrom:
             - configMapRef:
-              name: vllm-otel-env
+                name: vllm-otel-env
           ports:
             - name: http
               containerPort: 8000
