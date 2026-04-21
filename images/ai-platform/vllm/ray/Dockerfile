@@ -19,9 +19,6 @@ RUN apt-get update && apt-get install -y \
 # Symlink python to python3 (standard for Ubuntu 24.04)
 RUN ln -s /usr/bin/python3 /usr/bin/python
 
-# Upgrade setuptools and wheel (but NOT pip itself to avoid Debian conflict)
-RUN python -m pip install --upgrade setuptools wheel
-
 # ---- CRITICAL: Install PyTorch NIGHTLY with CUDA 12.8 ----
 RUN pip install --pre torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/nightly/cu128
