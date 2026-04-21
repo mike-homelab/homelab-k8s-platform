@@ -27,7 +27,8 @@ RUN pip install --pre torch torchvision torchaudio \
 RUN python -c "import torch; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}')"
 
 # ---- Install Ray ----
-RUN pip install "ray[default]==2.23.0"
+# Updated version: Ray 2.31.0+ is required for Python 3.12 support in Ubuntu 24.04
+RUN pip install "ray[default]>=2.40.0"
 
 # ---- Build vLLM from source ----
 WORKDIR /workspace
