@@ -21,14 +21,15 @@ RUN ln -s /usr/bin/python3 /usr/bin/python
 
 # ---- CRITICAL: Install PyTorch NIGHTLY with CUDA 12.8 ----
 RUN pip install --pre torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/nightly/cu128
+    --index-url https://download.pytorch.org/whl/nightly/cu128 \
+    --default-timeout=1000
 
 # Verify CUDA
 RUN python -c "import torch; print(f'Torch: {torch.__version__}, CUDA: {torch.version.cuda}')"
 
 # ---- Install Ray ----
 # Updated version: Ray 2.31.0+ is required for Python 3.12 support in Ubuntu 24.04
-RUN pip install "ray[default]>=2.40.0"
+RUN pip install "ray[default]>=2.40.0" --default-timeout=1000
 
 # ---- Build vLLM from source ----
 WORKDIR /workspace
@@ -39,8 +40,8 @@ WORKDIR /workspace/vllm
 # Required for 50-series (Blackwell) support in vLLM kernels
 ENV TORCH_CUDA_ARCH_LIST="9.0"
 
-# Install vLLM from source
-RUN pip install -e .
+# Install vLLM from source - Increased timeout for heavy dependency downloads
+RUN pip install -e . --default-timeout=1000
 
 # ---- Runtime env fixes ----
 ENV VLLM_USE_FLASH_ATTENTION=0
