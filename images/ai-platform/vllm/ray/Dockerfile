@@ -40,8 +40,12 @@ WORKDIR /workspace/vllm
 # Required for 50-series (Blackwell) support in vLLM kernels
 ENV TORCH_CUDA_ARCH_LIST="9.0"
 
-# Install vLLM from source - Increased timeout for heavy dependency downloads
-RUN pip install -e . --default-timeout=1000
+# Optimization: Increase parallel build jobs for vLLM compilation
+# Using all available cores for Ninja/Build system
+ENV MAX_JOBS=16
+
+# Install vLLM from source - Further increased timeout and enabling verbose for debugging
+RUN pip install -e . --default-timeout=5000 --verbose
 
 # ---- Runtime env fixes ----
 ENV VLLM_USE_FLASH_ATTENTION=0
