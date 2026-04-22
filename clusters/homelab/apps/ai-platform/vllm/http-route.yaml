@@ -22,8 +22,8 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: vllm-ray-head
-          port: 8000
+        - name: vllm-coder
+          port: 11434
     - matches:
         - path:
             type: PathPrefix
@@ -35,8 +35,8 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: vllm-ray-head
-          port: 8000
+        - name: vllm-reasoning
+          port: 11434
     - matches:
         - path:
             type: PathPrefix
