@@ -46,7 +46,7 @@ ENV TORCH_CUDA_ARCH_LIST="9.0"
 ENV MAX_JOBS=4
 
 # Install vLLM from source 
-RUN pip install -e . --default-timeout=50000 --verbose
+RUN pip install -e . --no-build-isolation --verbose
 
 # ---- Runtime env fixes ----
 ENV VLLM_USE_FLASH_ATTENTION=0
