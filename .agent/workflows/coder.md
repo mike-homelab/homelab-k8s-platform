@@ -2,8 +2,8 @@
 description: Execute code logic planning using local LLMs and patch the workspace via host_mcp_server
 ---
 1. The Coder agent receives the goal and the reranked output from the Researcher phase.
-2. Plan the necessary code changes. Formulate queries to the reasoning models (e.g., `phi3.5` on `https://llm.michaelhomelab.work/reasoning` or `ibm-granite` on `https://llm.michaelhomelab.work/coder`) via external HTTP endpoints using `run_command`.
-3. Dynamically start the local MCP proxy loopback on the filesystem (if it's not already running). 
+2. Plan the necessary code changes. Formulate queries to the reasoning models (e.g., `gemma4:e4b` on `https://llm.michaelhomelab.work/reasoning` or `qwen3:4b` on `https://llm.michaelhomelab.work/coder`) via external HTTP endpoints using `run_command`. Only use cloud APIs like Vertex or OpenAI as fallback validation mechanisms if the local clusters are unavailable or require secondary verification.
+3. Dynamically start the local MCP proxy loopback on the filesystem (if it's not already running).
 // turbo
 `run_command`: `python /home/michael/homelab-k8s-platform/host_mcp_server.py &`
 4. Let the fastmcp instance spin up on port 8080 (SSE). Wait 2-3 seconds.

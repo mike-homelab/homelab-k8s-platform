@@ -11,7 +11,7 @@ description: Execute browser-based UI testing and performance diagnostics using 
 4. **Data Synthesis**:
    - Aggregate the HTML structure, Console logs, and Performance metrics into a single context block.
 5. **Local LLM Analysis**: 
-   - Send the context block to the local reasoning model (`phi3.5`) at `https://llm.michaelhomelab.work/reasoning`.
+   - Send the context block to the local reasoning model (`gemma4:e4b`) at `https://llm.michaelhomelab.work/reasoning`.
    - **Analysis Prompt**: "Analyze the provided browser logs and metrics. Identify any JavaScript exceptions, network failures, or UI elements that failed to load. Evaluate the 'Time to First Byte' (TTFB) and report if it exceeds 500ms. Provide a Pass/Fail status."
 6. **Reporting**: 
    - Present the pass/fail result.
@@ -20,4 +20,4 @@ description: Execute browser-based UI testing and performance diagnostics using 
 7. **Savings Calculation**: Report the tokens processed locally and the credit savings achieved.
 
 // turbo
-`run_command`: `curl -s -X POST https://llm.michaelhomelab.work/reasoning/v1/chat/completions -H "Content-Type: application/json" -d '{"model": "phi3.5", "messages": [{"role": "user", "content": "Analyze these logs: [PAGE_LOGS]"}]}'`
+`run_command`: `curl -s -X POST https://llm.michaelhomelab.work/reasoning/v1/chat/completions -H "Content-Type: application/json" -d '{"model": "gemma4:e4b", "messages": [{"role": "user", "content": "Analyze these logs: [PAGE_LOGS]"}]}'`
