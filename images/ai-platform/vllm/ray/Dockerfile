@@ -45,6 +45,16 @@ ENV TORCH_CUDA_ARCH_LIST="9.0"
 # 16 jobs can require >64GB of RAM during vLLM C++ compilation.
 ENV MAX_JOBS=4
 
+# Explicitly install build dependencies because --no-build-isolation disables auto-install
+RUN pip install \
+    setuptools>=77.0.3 \
+    setuptools-scm>=8.0 \
+    packaging \
+    cmake>=3.26.1 \
+    ninja \
+    wheel \
+    jinja2
+
 # Install vLLM from source 
 RUN pip install -e . --no-build-isolation --verbose
 
