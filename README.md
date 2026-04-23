@@ -1,1 +1,0 @@
-# homelab-k8s-platform
