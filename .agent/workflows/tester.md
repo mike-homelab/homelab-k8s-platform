@@ -2,7 +2,7 @@
 description: Execute browser-based UI testing and performance diagnostics using the browser_subagent and local reasoning models.
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: Never use cloud APIs (Vertex, OpenAI, Anthropic, etc.) without explicit user approval. Request approval directly via Antigravity before any external calls.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
 
 1. **Initialization**: Navigate to the target URL provided by the calling workflow (Researcher, Reviewer, or User) using the `browser_subagent`.
 2. **Interaction**: Perform the necessary user actions (clicking buttons, filling forms, refreshing, scrolling) to reach the target state.

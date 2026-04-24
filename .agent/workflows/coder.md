@@ -2,10 +2,10 @@
 description: Execute code logic planning using local LLMs and patch the workspace via host_mcp_server
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: Never use cloud APIs (Vertex, OpenAI, Anthropic, etc.) without explicit user approval. Request approval directly via Antigravity before any external calls.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
 
 1. The Coder agent receives the goal and the reranked output from the Researcher phase.
-2. Plan the necessary code changes. Formulate queries to the reasoning models (e.g., `gemma4:e4b` on `https://llm.michaelhomelab.work/reasoning` or `qwen3.5:9b` with 8K context on `https://llm.michaelhomelab.work/coder`) via external HTTP endpoints using `run_command`. Only use cloud APIs as fallback validation mechanisms if the local clusters are unavailable AND you have received explicit user approval.
+2. Plan the necessary code changes. Formulate queries to the reasoning models (e.g., `gemma4:e4b` on `https://llm.michaelhomelab.work/reasoning` or `qwen3.5:9b` with 128K context on `https://llm.michaelhomelab.work/coder`) via external HTTP endpoints using `run_command`. Do NOT use cloud APIs as fallback validation mechanisms. If the local clusters are unavailable, halt and report the error to the user.
 3. Dynamically start the local MCP proxy loopback on the filesystem (if it's not already running).
 // turbo
 `run_command`: `python /home/michael/homelab-k8s-platform/host_mcp_server.py &`

@@ -2,7 +2,7 @@
 description: Read the codebase architecture and update the knowledge wiki in the Obsidian vault using the host MCP server
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: Never use cloud APIs (Vertex, OpenAI, Anthropic, etc.) without explicit user approval. Request approval directly via Antigravity before any external calls.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
 
 1. Run after successful code patches, architecture changes, or research phases.
 2. Perform a targeted search across the codebase and existing Obsidian vault at `/home/michael/obsidian/homelab-k8s-platform/` (leveraging the /researcher pattern) to identify the most relevant files to update.

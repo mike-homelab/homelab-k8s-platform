@@ -2,7 +2,7 @@
 description: Monitor CI/CD pipelines, digest GitHub Action failures, and auto-heal the workspace
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: Never use cloud APIs (Vertex, OpenAI, Anthropic, etc.) without explicit user approval. Request approval directly via Antigravity before any external calls.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
 
 1. Triggered on command or after pushing commits to check GitHub workflow statuses.
 2. Use Antigravity to run `run_command` on the host: `gh run list --limit 5` to inspect the most recent build jobs.

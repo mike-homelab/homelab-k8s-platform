@@ -2,7 +2,7 @@
 description: Perform web searches, fetch documentation, and rerank context via the in-cluster embedding API, including local Obsidian knowledge.
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: Never use cloud APIs (Vertex, OpenAI, Anthropic, etc.) without explicit user approval. Request approval directly via Antigravity before any external calls.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
 
 1. Understand the user's research request. Identify missing context or unknown APIs required for the build.
 2. Search the local Obsidian vault at `/home/michael/obsidian/homelab-k8s-platform/` for internal documentation, architecture notes, and credentials.
