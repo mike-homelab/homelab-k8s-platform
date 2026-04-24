@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+discord.py
+kubernetes
+qdrant-client
+redis
+requests
+GitPython
+prometheus-api-client
+python-dotenv
+aiohttp
