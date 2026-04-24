@@ -50,7 +50,7 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "12288"
+              value: "20288"
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
             - name: OLLAMA_HOST
@@ -62,12 +62,12 @@ spec:
               containerPort: 11434
           resources:
             requests:
-              cpu: "4"
+              cpu: "8"
               memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "6"
-              memory: "16Gi"
+              cpu: "16"
+              memory: "32Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
