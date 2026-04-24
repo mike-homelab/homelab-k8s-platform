@@ -50,7 +50,7 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "16192"
+              value: "24192"
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
             - name: OLLAMA_HOST
