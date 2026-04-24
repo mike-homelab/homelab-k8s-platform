@@ -57,6 +57,8 @@ spec:
               value: "0.0.0.0:11434"
             - name: OLLAMA_LOG_FORMAT
               value: "json"
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
           ports:
             - name: http
               containerPort: 11434
