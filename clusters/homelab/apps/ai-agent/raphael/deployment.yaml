@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: raphael
+  namespace: ai-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: raphael
+  template:
+    metadata:
+      labels:
+        app: raphael
+    spec:
+      containers:
+      - name: raphael
+        image: ghcr.io/mike-homelab/raphael:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: REDIS_HOST
+          value: "raphael-redis"
+        - name: QDRANT_HOST
+          value: "raphael-qdrant"
+        - name: LLM_HOST
+          value: "https://llm.michaelhomelab.work/v1"
+        - name: LLM_KEY
+          value: "sk-michael-homelab-llm-proxy"
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"

@@ -5,3 +5,5 @@ resources:
   - secrets.yaml
   - qdrant.yaml
   - redis.yaml
+  - deployment.yaml
+  - service.yaml
