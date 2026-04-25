@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: ghcr.io/mike-homelab/raphael:latest
+        image: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest
         ports:
         - containerPort: 8000
         env:
