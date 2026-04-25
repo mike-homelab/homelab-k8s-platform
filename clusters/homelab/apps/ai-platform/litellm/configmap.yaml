@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: litellm-config
+  namespace: ai-platform
+data:
+  config.yaml: |
+    model_list:
+      - model_name: "vllm-coder"
+        litellm_params:
+          model: "ollama/deepseek-coder:6.7b"
+          api_base: "http://vllm-coder.ai-platform.svc:11434"
+          num_ctx: 32768
+      - model_name: "vllm-reasoning"
+        litellm_params:
+          model: "ollama/gpt-oss:20b"
+          api_base: "http://vllm-reasoning.ai-platform.svc:11434"
+          num_ctx: 131072
+    litellm_settings:
+      drop_params: true
+      set_verbose: false
