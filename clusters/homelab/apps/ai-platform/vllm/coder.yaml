@@ -16,7 +16,8 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+
       initContainers:
         - name: pull-model
           image: ollama/ollama:latest
@@ -25,7 +26,7 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull qwen3.5:9b
+              ollama pull deepseek-coder:6.7b
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -37,11 +38,7 @@ spec:
             requests:
               cpu: "1"
               memory: "4Gi"
-              nvidia.com/gpu: "1"
-            limits:
-              cpu: "2"
-              memory: "4Gi"
-              nvidia.com/gpu: "1"
+
       containers:
         - name: ollama
           image: ollama/ollama:latest
@@ -49,31 +46,42 @@ spec:
           env:
             - name: OLLAMA_MODELS
               value: /models
+
+            # ⚡ Coding sweet spot
             - name: OLLAMA_NUM_CTX
-              value: "128000"
+              value: "32768"
+
+            # Single user → stability > throughput
+            - name: OLLAMA_NUM_PARALLEL
+              value: "1"
+
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
             - name: OLLAMA_HOST
               value: "0.0.0.0:11434"
             - name: OLLAMA_LOG_FORMAT
               value: "json"
-            - name: OLLAMA_KEEP_ALIVE
-              value: "-1"
+
           ports:
             - name: http
               containerPort: 11434
+
           resources:
             requests:
               cpu: "8"
-              memory: "16Gi"
+              memory: "10Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "16"
-              memory: "32Gi"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
+
           volumeMounts:
             - name: hf-cache
               mountPath: /models
+
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
@@ -89,12 +97,6 @@ kind: Service
 metadata:
   name: vllm-coder
   namespace: ai-platform
-  labels:
-    app: vllm-coder
-  annotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/path: /api/metrics
-    prometheus.io/port: "11434"
 spec:
   type: ClusterIP
   selector:
