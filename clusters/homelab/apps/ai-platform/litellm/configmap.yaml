@@ -6,12 +6,12 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      - model_name: "coding"
+      - model_name: "gpt-4o"
         litellm_params:
           model: "ollama/deepseek-coder:6.7b"
           api_base: "http://vllm-coder.ai-platform.svc:11434"
           num_ctx: 32768
-      - model_name: "reasoning"
+      - model_name: "gpt-4o-reasoning"
         litellm_params:
           model: "ollama/gpt-oss:20b"
           api_base: "http://vllm-reasoning.ai-platform.svc:11434"
