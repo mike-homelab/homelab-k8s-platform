@@ -9,18 +9,16 @@ class RaphaelBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(*args, intents=intents, **kwargs)
-        # Use Gateway for internal routing
         self.loki_url = "http://loki-gateway.monitoring.svc/loki/api/v1/query_range"
         self.llm_url = "https://llm.michaelhomelab.work/v1/chat/completions"
 
     async def on_ready(self):
         print(f'Raphael has awakened as {self.user} (ID: {self.user.id})')
-        print('Autonomous Diagnostic Systems: ONLINE (Loki Gateway)')
+        print('Autonomous Diagnostic Systems: ONLINE')
 
     async def get_pod_logs(self, pod_name: str, namespace: str = "ai-agent"):
         query = f'{{pod="{pod_name}", namespace="{namespace}"}}'
         params = {"query": query, "limit": 50, "direction": "backward"}
-        
         connector = aiohttp.TCPConnector(ssl=False)
         try:
             async with aiohttp.ClientSession(connector=connector) as session:
@@ -32,8 +30,6 @@ class RaphaelBot(commands.Bot):
                             for value in result.get("values", []):
                                 logs.append(value[1])
                         return "\n".join(logs[-50:])
-                    else:
-                        print(f"Loki returned status {resp.status}")
         except Exception as e:
             print(f"Error fetching logs from Loki: {e}")
         return "No logs found or Loki unreachable."
@@ -46,14 +42,15 @@ class RaphaelBot(commands.Bot):
             "temperature": 0.1
         }
         headers = {"Authorization": f"Bearer {os.getenv('LLM_KEY')}"}
-        
         connector = aiohttp.TCPConnector(ssl=False)
         try:
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.post(self.llm_url, json=payload, headers=headers) as resp:
                     if resp.status == 200:
                         data = await resp.json()
-                        return data.get("choices", [{}])[0].get("message", {}).get("content", "Diagnosis unavailable.")
+                        content = data.get("choices", [{}])[0].get("message", {}).get("content", "Diagnosis unavailable.")
+                        # Truncate for Discord Embed Limits (4096 max)
+                        return content if len(content) <= 4000 else content[:3997] + "..."
         except Exception as e:
             print(f"Error calling local LLM: {e}")
         return "Local LLM unreachable for diagnosis."
@@ -75,18 +72,18 @@ class RaphaelBot(commands.Bot):
                 namespace = labels.get("namespace", "ai-agent")
                 
                 # 1. Post Initial Alert
-                color = discord.Color.red() if status == "firing" else discord.Color.green()
+                desc = alert.get("annotations", {}).get("description", "No description")
                 embed = discord.Embed(
                     title=f"🚨 Alert: {labels.get('alertname', 'Unknown')}",
-                    description=alert.get("annotations", {}).get("description", "No description"),
-                    color=color
+                    description=desc if len(desc) <= 4000 else desc[:3997] + "...",
+                    color=discord.Color.red() if status == "firing" else discord.Color.green()
                 )
                 await webhook.send(embed=embed)
 
                 # 2. Autonomous Diagnosis
                 if status == "firing" and pod_name:
                     logs = await self.get_pod_logs(pod_name, namespace)
-                    diagnosis = await self.get_ai_diagnosis(alert.get("annotations", {}).get("description", ""), logs)
+                    diagnosis = await self.get_ai_diagnosis(desc, logs)
                     
                     diag_embed = discord.Embed(
                         title=f"🧠 AI Diagnostic Report: {pod_name}",
@@ -98,7 +95,7 @@ class RaphaelBot(commands.Bot):
 
     @commands.command()
     async def status(self, ctx):
-        await ctx.send("🛡️ **Raphael System Status**\n- **LGTM Ingestion**: Active\n- **Loki Gateway**: Connected\n- **Local Inference**: Connected (SSL Bypass)")
+        await ctx.send("🛡️ **Raphael System Status**\n- **LGTM Ingestion**: Active\n- **Autonomous Diagnostics**: Enabled\n- **Local Inference**: Connected")
 
     @commands.command()
     async def savings(self, ctx, tokens: int):
