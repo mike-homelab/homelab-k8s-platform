@@ -19,3 +19,4 @@ data:
     litellm_settings:
       drop_params: true
       set_verbose: false
+      require_api_key: false
