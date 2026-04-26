@@ -1,28 +1,45 @@
-name: Raphael CI/CD
+name: Build Raphael Image
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths:
-      - 'images/ai-agent/raphael/**'
+      - images/ai-agent/raphael/**
+      - .github/workflows/raphael-ci.yml
+  workflow_dispatch:
 
 jobs:
-  build-and-push:
-    runs-on: self-hosted
+  build:
+    name: Build & Push Raphael
+    runs-on: [self-hosted]
+    timeout-minutes: 30
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login docker.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest \
+            images/ai-agent/raphael
 
-      - name: Build and Push
-        uses: docker/build-push-action@v3
-        with:
-          context: images/ai-agent/raphael/
-          push: true
-          tags: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest
-          # Assuming node-level auth for the internal registry
+      - name: Push Docker image
+        run: |
+          for i in 1 2 3 4 5; do
+            echo "Attempt $i: Pushing raphael:latest...";
+            docker push docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest && break || sleep 15;
+          done
+
+      - name: Clean up Docker image
+        if: always()
+        run: |
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest || true
