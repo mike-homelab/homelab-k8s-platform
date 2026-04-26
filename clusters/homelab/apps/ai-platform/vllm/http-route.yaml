@@ -11,7 +11,10 @@ spec:
   hostnames:
     - llm.michaelhomelab.work
   rules:
-    - matches:
+    - timeouts:
+        request: 300s
+        backendRequest: 300s
+      matches:
         - path:
             type: PathPrefix
             value: /coder
@@ -24,7 +27,10 @@ spec:
       backendRefs:
         - name: vllm-coder
           port: 11434
-    - matches:
+    - timeouts:
+        request: 300s
+        backendRequest: 300s
+      matches:
         - path:
             type: PathPrefix
             value: /reasoning
