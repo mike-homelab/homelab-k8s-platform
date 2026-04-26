@@ -1,6 +1,6 @@
 import os
 import asyncio
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from .discord_bot import RaphaelBot
 
 app = FastAPI(title="Raphael Observability Agent")
@@ -21,15 +21,18 @@ async def health():
     return {
         "status": "healthy",
         "discord_connected": bot.is_ready(),
-        "qdrant_connected": True, # TODO: Add check
-        "redis_connected": True   # TODO: Add check
+        "modules": ["alerts", "financials"]
     }
 
 @app.post("/alert")
-async def receive_alert(alert: dict):
+async def receive_alert(request: Request):
     """
     Endpoint to receive webhooks from Grafana
     """
-    # TODO: Implement alert handling logic
-    await bot.handle_alert(alert)
+    alert_data = await request.json()
+    print(f"Received alert: {alert_data.get('status', 'unknown')}")
+    
+    # Delegate alert handling to the bot
+    await bot.handle_alert(alert_data)
+    
     return {"status": "received"}

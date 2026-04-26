@@ -27,6 +27,8 @@ spec:
           value: "https://llm.michaelhomelab.work/v1"
         - name: LLM_KEY
           value: "sk-michael-homelab-llm-proxy"
+        - name: DISCORD_CHANNEL_ID
+          value: "1314965373666549535"
         resources:
           requests:
             cpu: "500m"
