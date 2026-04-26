@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-ai-inference
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    grafana_folder: "AI Inference"
+    grafana_dashboard_version: "1"
+
+data:
+  ai-inference.json: |
+    {
+      "uid": "ai-inference",
+      "title": "AI Inference Observability",
+      "tags": ["ai","inference"],
+      "time": {"from": "now-6h", "to": "now"},
+      "templating": {
+        "list": [
+          {"name":"model","type":"query","datasource":"Mimir","query":"label_values(vllm_tokens_total, model)","includeAll":true,"allValue":".*"},
+          {"name":"namespace","type":"query","datasource":"Mimir","query":"label_values(vllm_tokens_total, namespace)","includeAll":true,"allValue":".*"},
+          {"name":"traceId","type":"query","datasource":"Tempo","query":"label_values(tempo_span_name)"}
+        ]
+      },
+      "panels": [
+        {"type":"graph","title":"Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(vllm_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}} – {{namespace}}"}]},
+        {"type":"graph","title":"P95 Request Latency (ms)","datasource":"Mimir","targets":[{"expr":"histogram_quantile(0.95, sum(rate(vllm_request_latency_seconds_bucket[5m])) by (le,model,namespace)) * 1000","legendFormat":"{{model}} – {{namespace}}"}]},
+        {"type":"stat","title":"Error Rate","datasource":"Mimir","targets":[{"expr":"(sum(rate(vllm_request_errors_total[5m])) / sum(rate(vllm_requests_total[5m]))) * 100","legendFormat":"Error %"}],"thresholds":"0,2,100"},
+        {"type":"logs","title":"Inference Errors (Loki)","datasource":"Loki","targets":[{"expr":"{job=\"vllm\"} |~ \"error|panic\""}]},
+        {"type":"trace","title":"Latest Trace (Tempo)","datasource":"Tempo","options":{"traceId":"${traceId}"}}
+      ]
+    }

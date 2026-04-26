@@ -1,4 +1,5 @@
 resources:
   - namespace.yaml
   - httproute.yaml
-  - ai-inference-dashboard.yaml
+  - ai-inference-dashboard-configmap.yaml
+
