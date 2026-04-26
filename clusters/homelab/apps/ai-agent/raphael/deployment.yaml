@@ -44,6 +44,10 @@ spec:
               key: MENTION_ROLE_ID
         - name: DISCORD_CHANNEL_ID
           value: "1314965373666549535"
+        - name: DISCORD_GUILD_ID
+          value: "1497901155634909276"
+        - name: DISCORD_APP_ID
+          value: "1497902452417237083"
         resources:
           requests:
             cpu: "500m"
