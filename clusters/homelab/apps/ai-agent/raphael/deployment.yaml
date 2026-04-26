@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:0.2.2
+        image: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:0.3.0
         ports:
         - containerPort: 8000
         env:
@@ -24,7 +24,7 @@ spec:
         - name: QDRANT_HOST
           value: "raphael-qdrant"
         - name: LLM_HOST
-          value: "https://llm.michaelhomelab.work/v1"
+          value: "http://litellm.ai-platform.svc:4000/v1"
         - name: LLM_KEY
           value: "sk-michael-homelab-llm-proxy"
         - name: DISCORD_TOKEN
