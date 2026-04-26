@@ -1,5 +1,10 @@
 resources:
   - namespace.yaml
-  - httproute.yaml
+  - ../ai-inference-dashboard-providers.yaml
+  - grafana-deployment-patch.yaml
+
+patchesStrategicMerge:
+  - grafana-deployment-patch.yaml
+
   - ai-inference-dashboard-configmap.yaml
 

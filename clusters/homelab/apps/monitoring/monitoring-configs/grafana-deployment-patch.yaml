@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  template:
+    spec:
+      volumes:
+        - name: dashboard-providers
+          configMap:
+            name: grafana-dashboard-providers
+        - name: ai-inference-dashboard
+          configMap:
+            name: grafana-dashboard-ai-inference
+      containers:
+        - name: grafana
+          volumeMounts:
+            - name: dashboard-providers
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: ai-inference-dashboard
+              mountPath: /var/lib/grafana/dashboards/ai-inference
