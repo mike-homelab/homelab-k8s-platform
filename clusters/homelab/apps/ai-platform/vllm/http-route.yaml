@@ -11,14 +11,16 @@ spec:
   hostnames:
     - llm.michaelhomelab.work
   rules:
-    - timeouts:
-        request: 300s
-        backendRequest: 300s
-      matches:
+    - matches:
         - path:
             type: PathPrefix
             value: /coder
       filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.nginx.org
+            kind: SnippetsFilter
+            name: llm-timeout
         - type: URLRewrite
           urlRewrite:
             path:
@@ -27,14 +29,16 @@ spec:
       backendRefs:
         - name: vllm-coder
           port: 11434
-    - timeouts:
-        request: 300s
-        backendRequest: 300s
-      matches:
+    - matches:
         - path:
             type: PathPrefix
             value: /reasoning
       filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.nginx.org
+            kind: SnippetsFilter
+            name: llm-timeout
         - type: URLRewrite
           urlRewrite:
             path:

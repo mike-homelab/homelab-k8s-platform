@@ -10,13 +10,16 @@ spec:
   hostnames:
     - llm.michaelhomelab.work
   rules:
-    - timeouts:
-        request: 300s
-        backendRequest: 300s
-      matches:
+    - matches:
         - path:
             type: PathPrefix
             value: /v1
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.nginx.org
+            kind: SnippetsFilter
+            name: llm-timeout
       backendRefs:
         - name: litellm
           port: 4000
