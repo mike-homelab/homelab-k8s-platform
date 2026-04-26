@@ -1,4 +1,5 @@
 import os
+import aiohttp
 import discord
 from discord.ext import commands
 
@@ -10,42 +11,49 @@ class RaphaelBot(commands.Bot):
 
     async def on_ready(self):
         print(f'Raphael has awakened as {self.user} (ID: {self.user.id})')
-        print('Observability modules active.')
+        print('Observability bot commands active.')
 
     async def handle_alert(self, alert_data: dict):
         """
-        Process incoming Grafana alert payloads and notify Discord
+        Process incoming Grafana alert payloads and notify Discord via Webhook.
+        Using Webhook ensures alerts work even if the bot login fails.
         """
-        channel_id = int(os.getenv("DISCORD_CHANNEL_ID", "0"))
-        channel = self.get_channel(channel_id)
-        if not channel:
-            print(f"Error: Channel {channel_id} not found.")
+        webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+        if not webhook_url:
+            print("Error: DISCORD_WEBHOOK_URL not set.")
             return
 
-        alerts = alert_data.get("alerts", [])
-        for alert in alerts:
-            status = alert.get("status", "firing")
-            color = discord.Color.red() if status == "firing" else discord.Color.green()
+        async with aiohttp.ClientSession() as session:
+            webhook = discord.Webhook.from_url(webhook_url, session=session)
             
-            embed = discord.Embed(
-                title=f"🚨 Alert: {alert.get('labels', {}).get('alertname', 'Unknown')}",
-                description=alert.get("annotations", {}).get("description", "No description"),
-                color=color
-            )
-            
-            # Add Labels
-            labels = alert.get("labels", {})
-            label_text = "\n".join([f"**{k}**: {v}" for k, v in labels.items() if k != "alertname"])
-            if label_text:
-                embed.add_field(name="Labels", value=label_text, inline=False)
-            
-            # Add Annotations
-            annotations = alert.get("annotations", {})
-            anno_text = "\n".join([f"**{k}**: {v}" for k, v in annotations.items() if k != "description"])
-            if anno_text:
-                embed.add_field(name="Annotations", value=anno_text, inline=False)
+            alerts = alert_data.get("alerts", [])
+            for alert in alerts:
+                status = alert.get("status", "firing")
+                color = discord.Color.red() if status == "firing" else discord.Color.green()
+                
+                embed = discord.Embed(
+                    title=f"🚨 Alert: {alert.get('labels', {}).get('alertname', 'Unknown')}",
+                    description=alert.get("annotations", {}).get("description", "No description"),
+                    color=color
+                )
+                
+                # Add Labels
+                labels = alert.get("labels", {})
+                label_text = "\n".join([f"**{k}**: {v}" for k, v in labels.items() if k != "alertname"])
+                if label_text:
+                    embed.add_field(name="Labels", value=label_text, inline=False)
+                
+                # Add Annotations
+                annotations = alert.get("annotations", {})
+                anno_text = "\n".join([f"**{k}**: {v}" for k, v in annotations.items() if k != "description"])
+                if anno_text:
+                    embed.add_field(name="Annotations", value=anno_text, inline=False)
 
-            await channel.send(embed=embed)
+                # Mention role if configured
+                role_id = os.getenv("MENTION_ROLE_ID")
+                content = f"<@&{role_id}>" if role_id and status == "firing" else None
+
+                await webhook.send(embed=embed, content=content)
 
     @commands.command()
     async def status(self, ctx):
