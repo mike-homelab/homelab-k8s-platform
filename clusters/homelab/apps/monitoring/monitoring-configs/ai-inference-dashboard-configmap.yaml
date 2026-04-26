@@ -5,7 +5,7 @@ metadata:
   namespace: monitoring
   labels:
     grafana_dashboard: "1"
-    grafana_folder: "AI Inference"
+    grafana_folder: "AI_Inference"
     grafana_dashboard_version: "1"
 
 data:
