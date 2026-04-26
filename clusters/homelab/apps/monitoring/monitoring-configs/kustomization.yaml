@@ -1,7 +1,7 @@
 resources:
   - namespace.yaml
   - ../ai-inference-dashboard-providers.yaml
-  - grafana-deployment-patch.yaml
+
 
 patchesStrategicMerge:
   - grafana-deployment-patch.yaml
