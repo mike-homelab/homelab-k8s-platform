@@ -1,0 +1,28 @@
+name: Raphael CI/CD
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'images/ai-agent/raphael/**'
+
+jobs:
+  build-and-push:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push
+        uses: docker/build-push-action@v3
+        with:
+          context: images/ai-agent/raphael/
+          push: true
+          tags: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest
+          # Assuming node-level auth for the internal registry

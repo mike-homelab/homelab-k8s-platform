@@ -27,6 +27,21 @@ spec:
           value: "https://llm.michaelhomelab.work/v1"
         - name: LLM_KEY
           value: "sk-michael-homelab-llm-proxy"
+        - name: DISCORD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: raphael-secrets
+              key: DISCORD_TOKEN
+        - name: DISCORD_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: raphael-secrets
+              key: DISCORD_WEBHOOK_URL
+        - name: MENTION_ROLE_ID
+          valueFrom:
+            secretKeyRef:
+              name: raphael-secrets
+              key: MENTION_ROLE_ID
         - name: DISCORD_CHANNEL_ID
           value: "1314965373666549535"
         resources:
