@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:latest
+        image: docker.michaelhomelab.work/homelab-docker-repo/ai-agent/raphael:0.1.0
         ports:
         - containerPort: 8000
         env:
