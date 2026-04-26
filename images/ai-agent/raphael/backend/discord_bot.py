@@ -1,6 +1,7 @@
 import os
 import aiohttp
 import discord
+import json
 from discord.ext import commands
 
 class RaphaelBot(commands.Bot):
@@ -8,19 +9,63 @@ class RaphaelBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(*args, intents=intents, **kwargs)
+        self.loki_url = "http://loki.monitoring.svc:3100/loki/api/v1/query_range"
+        self.llm_url = "https://llm.michaelhomelab.work/v1/chat/completions"
 
     async def on_ready(self):
         print(f'Raphael has awakened as {self.user} (ID: {self.user.id})')
-        print('Observability bot commands active.')
+        print('Autonomous Diagnostic Systems: ONLINE')
+
+    async def get_pod_logs(self, pod_name: str, namespace: str = "ai-agent"):
+        """
+        Fetch last 50 lines of logs from Loki for a specific pod
+        """
+        query = f'{{pod="{pod_name}", namespace="{namespace}"}}'
+        params = {
+            "query": query,
+            "limit": 50,
+            "direction": "backward"
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(self.loki_url, params=params) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        logs = []
+                        for result in data.get("data", {}).get("result", []):
+                            for value in result.get("values", []):
+                                logs.append(value[1])
+                        return "\n".join(logs[-50:])
+        except Exception as e:
+            print(f"Error fetching logs from Loki: {e}")
+        return "No logs found or Loki unreachable."
+
+    async def get_ai_diagnosis(self, alert_desc: str, logs: str):
+        """
+        Send logs and alert context to the local Reasoning LLM
+        """
+        prompt = f"You are an SRE assistant. Analyze the following alert and logs to identify the root cause and provide a recommendation.\n\nALERT: {alert_desc}\n\nLOGS:\n{logs}\n\nDiagnosis:"
+        
+        payload = {
+            "model": "reasoning",
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.1
+        }
+        headers = {"Authorization": f"Bearer {os.getenv('LLM_KEY')}"}
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(self.llm_url, json=payload, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data.get("choices", [{}])[0].get("message", {}).get("content", "Diagnosis unavailable.")
+        except Exception as e:
+            print(f"Error calling local LLM: {e}")
+        return "Local LLM unreachable for diagnosis."
 
     async def handle_alert(self, alert_data: dict):
-        """
-        Process incoming Grafana alert payloads and notify Discord via Webhook.
-        Using Webhook ensures alerts work even if the bot login fails.
-        """
         webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
         if not webhook_url:
-            print("Error: DISCORD_WEBHOOK_URL not set.")
             return
 
         async with aiohttp.ClientSession() as session:
@@ -28,48 +73,40 @@ class RaphaelBot(commands.Bot):
             
             alerts = alert_data.get("alerts", [])
             for alert in alerts:
+                labels = alert.get("labels", {})
                 status = alert.get("status", "firing")
-                color = discord.Color.red() if status == "firing" else discord.Color.green()
+                pod_name = labels.get("pod")
+                namespace = labels.get("namespace", "ai-agent")
                 
+                # 1. Post Initial Alert
+                color = discord.Color.red() if status == "firing" else discord.Color.green()
                 embed = discord.Embed(
-                    title=f"🚨 Alert: {alert.get('labels', {}).get('alertname', 'Unknown')}",
+                    title=f"🚨 Alert: {labels.get('alertname', 'Unknown')}",
                     description=alert.get("annotations", {}).get("description", "No description"),
                     color=color
                 )
                 
-                # Add Labels
-                labels = alert.get("labels", {})
-                label_text = "\n".join([f"**{k}**: {v}" for k, v in labels.items() if k != "alertname"])
-                if label_text:
-                    embed.add_field(name="Labels", value=label_text, inline=False)
-                
-                # Add Annotations
-                annotations = alert.get("annotations", {})
-                anno_text = "\n".join([f"**{k}**: {v}" for k, v in annotations.items() if k != "description"])
-                if anno_text:
-                    embed.add_field(name="Annotations", value=anno_text, inline=False)
+                await webhook.send(embed=embed)
 
-                # Mention role if configured
-                role_id = os.getenv("MENTION_ROLE_ID")
-                content = f"<@&{role_id}>" if role_id and status == "firing" else None
-
-                await webhook.send(embed=embed, content=content)
+                # 2. Autonomous Diagnosis (if firing and pod is known)
+                if status == "firing" and pod_name:
+                    print(f"Autonomous Diagnosis started for {pod_name}...")
+                    logs = await self.get_pod_logs(pod_name, namespace)
+                    diagnosis = await self.get_ai_diagnosis(alert.get("annotations", {}).get("description", ""), logs)
+                    
+                    diag_embed = discord.Embed(
+                        title=f"🧠 AI Diagnostic Report: {pod_name}",
+                        description=diagnosis,
+                        color=discord.Color.blurple()
+                    )
+                    diag_embed.set_footer(text="Powered by local reasoning LLM (RTX 5070 Ti)")
+                    await webhook.send(embed=diag_embed)
 
     @commands.command()
     async def status(self, ctx):
-        await ctx.send("🛡️ **Raphael System Status**\n- **LGTM Ingestion**: Active\n- **Discord Bridge**: Connected\n- **Local Inference**: Operational")
+        await ctx.send("🛡️ **Raphael System Status**\n- **LGTM Ingestion**: Active\n- **Autonomous Diagnostics**: Enabled\n- **Local Inference**: Connected")
 
     @commands.command()
     async def savings(self, ctx, tokens: int):
-        """
-        Calculate savings compared to Public Cloud APIs ($12.50 / 1M tokens avg)
-        """
         savings_usd = (tokens / 1_000_000) * 12.50
-        embed = discord.Embed(
-            title="💰 Financial Efficiency Report",
-            description=f"By processing **{tokens:,}** tokens locally, you saved approximately:",
-            color=discord.Color.gold()
-        )
-        embed.add_field(name="Estimated Savings", value=f"**${savings_usd:,.2f} USD**")
-        embed.set_footer(text="Based on avg. cost of GPT-4o / Claude 3.5 Sonnet")
-        await ctx.send(embed=embed)
+        await ctx.send(f"💰 **Financial Efficiency**: Savings of **${savings_usd:,.2f} USD** identified.")
