@@ -9,5 +9,5 @@ description: Read the codebase architecture and update the knowledge wiki in the
 3. Analyze the research output and the git diff/change logs representing the newly implemented features.
 4. Using the MCP tools, connect to the local fastmcp proxy on port 8080.
 5. Read the target Obsidian knowledge base files identified in Step 2 via `read_local_file`.
-6. Formulate a technical documentation update using the `coding` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions`, ensuring all architectural endpoints and model specifications are accurate.
+6. Formulate a technical documentation update using the local `reasoning` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions`, ensuring all architectural endpoints and model specifications are accurate.
 7. Write the documentation update back to the corresponding file in the Obsidian vault using `write_local_file`.

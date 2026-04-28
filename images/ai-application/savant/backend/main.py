@@ -19,16 +19,18 @@ from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
 # ── OTEL Setup ────────────────────────────────────────────────────────────────
 
-OTEL_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy.monitoring.svc:4317")
+OTEL_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+OTEL_SERVICE_NAME = os.getenv("OTEL_SERVICE_NAME", "savant")
+OTEL_INSECURE = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
 
 # Using strings for keys to avoid dependency version mismatches with Semantic Conventions
 resource = Resource(attributes={
-    "service.name": "savant",
+    "service.name": OTEL_SERVICE_NAME,
     "deployment.environment": "homelab"
 })
 
 provider = TracerProvider(resource=resource)
-processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=OTEL_ENDPOINT, insecure=True))
+processor = BatchSpanProcessor(OTLPSpanExporter(endpoint=OTEL_ENDPOINT, insecure=OTEL_INSECURE))
 provider.add_span_processor(processor)
 trace.set_tracer_provider(provider)
 tracer = trace.get_tracer(__name__)
@@ -46,10 +48,11 @@ app.add_middleware(
 FastAPIInstrumentor.instrument_app(app)
 HTTPXClientInstrumentor().instrument()
 
-OLLAMA_URL   = os.getenv("OLLAMA_URL",   "http://vllm-reasoning.ai-platform.svc.cluster.local:11434")
+LITELLM_URL   = os.getenv("LITELLM_URL",   "https://llm.michaelhomelab.work/v1")
+LITELLM_MODEL = os.getenv("LITELLM_MODEL", "reasoning")
+LITELLM_KEY   = os.getenv("LITELLM_API_KEY", "sk-michael-homelab-llm-proxy")
 QDRANT_URL   = os.getenv("QDRANT_URL",   "http://qdrant.ai-platform.svc.cluster.local:6333")
 EMBED_URL    = os.getenv("EMBED_URL",    "http://infinity-embedding.ai-platform.svc.cluster.local:8000")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "deepseek-r1:7b")
 SEARCH_API   = os.getenv("SEARCH_API",   "https://api.duckduckgo.com/")
 SEARXNG_URL  = os.getenv("SEARXNG_URL",  "http://searxng.ai-platform.svc.cluster.local:8080")
 RERANK_URL   = os.getenv("RERANK_URL",   "http://infinity-embedding.ai-platform.svc.cluster.local:8001")
@@ -194,47 +197,61 @@ def build_messages(user_msg: str, context: str, source: str) -> list[dict]:
     return messages
 
 
-async def stream_ollama(
+async def stream_litellm(
     messages: list[dict],
     model: str,
     stats_out: dict
 ) -> AsyncGenerator[str, None]:
-    """Stream response from Ollama /api/chat and yield SSE chunks."""
-    with tracer.start_as_current_span("ollama_chat") as span:
+    """Stream response from LiteLLM /v1/chat/completions and yield SSE chunks."""
+    with tracer.start_as_current_span("litellm_chat") as span:
         span.set_attribute("gen_ai.request.model", model)
         
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
-            "options": {"num_ctx": 8192, "stop": ["<|end|>", "User:", "Assistant:"]}
+            "max_tokens": 4096,
+            "temperature": 0.2
         }
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("POST", f"{OLLAMA_URL}/api/chat", json=payload) as resp:
+        headers = {
+            "Authorization": f"Bearer {LITELLM_KEY}",
+            "Content-Type": "application/json"
+        }
+        async with httpx.AsyncClient(timeout=180) as client:
+            async with client.stream("POST", f"{LITELLM_URL}/chat/completions", json=payload, headers=headers) as resp:
                 resp.raise_for_status()
                 async for line in resp.aiter_lines():
                     if not line:
                         continue
+                    if line.startswith("data: "):
+                        line = line[6:]
+                    if line == "[DONE]":
+                        break
                     try:
                         chunk = json.loads(line)
-                        message = chunk.get("message", {})
-                        token = message.get("content", "")
+                        if not chunk.get("choices"):
+                            continue
+                        
+                        delta = chunk["choices"][0].get("delta", {})
+                        token = delta.get("content", "")
+                        
                         if token:
                             yield f"data: {json.dumps({'token': token})}\n\n"
-                        if chunk.get("done"):
-                            pt = chunk.get("prompt_eval_count", 0)
-                            ct = chunk.get("eval_count", 0)
-                            dm = round(chunk.get("total_duration", 0) / 1e6, 1)
+                        
+                        # Handle usage stats if provided in the stream
+                        if "usage" in chunk:
+                            usage = chunk["usage"]
+                            pt = usage.get("prompt_tokens", 0)
+                            ct = usage.get("completion_tokens", 0)
                             
                             span.set_attribute("gen_ai.usage.prompt_tokens", pt)
                             span.set_attribute("gen_ai.usage.completion_tokens", ct)
                             
                             stats_out.update(
                                 prompt_tokens=pt,
-                                completion_tokens=ct,
-                                duration_ms=dm,
+                                completion_tokens=ct
                             )
-                            yield f"data: {json.dumps({'done': True, 'prompt_tokens': pt, 'completion_tokens': ct, 'duration_ms': dm})}\n\n"
+                            yield f"data: {json.dumps({'done': True, 'prompt_tokens': pt, 'completion_tokens': ct})}\n\n"
                     except json.JSONDecodeError:
                         pass
 
@@ -288,7 +305,7 @@ async def chat(req: ChatRequest):
         async def event_stream():
             meta = {"source": source, "has_context": bool(context)}
             yield f"data: {json.dumps({'meta': meta})}\n\n"
-            async for chunk in stream_ollama(messages, OLLAMA_MODEL, stats):
+            async for chunk in stream_litellm(messages, LITELLM_MODEL, stats):
                 yield chunk
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
