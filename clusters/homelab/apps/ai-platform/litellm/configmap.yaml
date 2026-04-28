@@ -19,7 +19,3 @@ data:
     litellm_settings:
       drop_params: true
       set_verbose: true
-
-completionOptions:
-  stream: false
-  temperature: 0.2
