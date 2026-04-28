@@ -2,7 +2,7 @@
 description: Execute browser-based UI testing and performance diagnostics using the browser_subagent and local reasoning models.
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
 1. **Initialization**: Navigate to the target URL provided by the calling workflow (Researcher, Reviewer, or User) using the `browser_subagent`.
 2. **Interaction**: Perform the necessary user actions (clicking buttons, filling forms, refreshing, scrolling) to reach the target state.
@@ -19,7 +19,7 @@ description: Execute browser-based UI testing and performance diagnostics using 
    - Present the pass/fail result with a summary of the analysis.
    - Detail the specific processing time identified and any critical errors found.
    - Attach the captured screenshot for visual verification.
-7. **Savings Calculation**: Report the tokens processed locally and the credit savings achieved compared to cloud-based testing.
+7. **Usage Reporting**: Report total token consumption for Cloud API and Cluster LLM, including cost savings achieved compared to cloud-based testing.
 
 // turbo
 `run_command`: `curl -s -X POST https://llm.michaelhomelab.work/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer sk-michael-homelab-llm-proxy" -d '{"model": "reasoning", "messages": [{"role": "user", "content": "Analyze these logs: [PAGE_LOGS]"}]}'`

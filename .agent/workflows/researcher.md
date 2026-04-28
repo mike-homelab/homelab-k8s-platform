@@ -2,7 +2,7 @@
 description: Perform web searches, fetch documentation, and rerank context via the in-cluster embedding API, including local Obsidian knowledge.
 ---
 > [!IMPORTANT]
-> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) under ANY circumstances. You MUST exclusively use the local LLM endpoints.
+> **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
 1. Understand the user's research request. Identify missing context or unknown APIs required for the build.
 2. Search the local Obsidian vault at `/home/michael/obsidian/homelab-k8s-platform/` for internal documentation, architecture notes, and credentials.
@@ -14,3 +14,4 @@ description: Perform web searches, fetch documentation, and rerank context via t
 8. Compile the highest-rated context into a polished Research Report and implementation plan (`artifacts/research_plan.md`) using the local `reasoning` model via the LiteLLM proxy. If code modifications are identified as necessary, consult the `coder` model for implementation details and architectural patterns specific to the homelab environment documented in `/home/michael/obsidian/homelab-k8s-platform/`.
 9. Present the summary to the user or trigger the `/coder` workflow to begin execution.
 10. Trigger the `/writer` workflow to document the research findings and any identified architectural patterns into the Obsidian LLM wiki at `/home/michael/obsidian/homelab-k8s-platform/`.
+11. **Usage Reporting**: Report total token consumption for Cloud API and Cluster LLM, including cost savings.
