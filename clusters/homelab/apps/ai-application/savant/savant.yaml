@@ -40,6 +40,8 @@ spec:
               value: "http://infinity-embedding.ai-platform.svc.cluster.local:8001"
             - name: WATCHTOWER_URL
               value: "http://watchtower.ai-platform.svc.cluster.local"
+            - name: OTEL_SERVICE_NAME
+              value: "savant"
           envFrom:
             - configMapRef:
                 name: vllm-otel-env

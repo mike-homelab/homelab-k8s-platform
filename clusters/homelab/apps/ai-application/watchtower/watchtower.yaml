@@ -28,6 +28,11 @@ spec:
               value: "http://tempo-query-frontend.monitoring.svc.cluster.local:3100"
             - name: REDIS_URL
               value: "redis://redis.ai-platform.svc.cluster.local:6379/0"
+            - name: OTEL_SERVICE_NAME
+              value: "watchtower"
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
           resources:
             requests:
               cpu: 100m
