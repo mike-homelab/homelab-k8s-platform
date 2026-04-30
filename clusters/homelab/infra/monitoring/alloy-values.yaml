@@ -22,11 +22,12 @@ alloy:
       targets = discovery.kubernetes.pods.targets
 
       // Node filtering: Each Alloy instance only scrapes pods on its local node
-      // rule {
-      //   source_labels = ["__meta_kubernetes_pod_node_name"]
-      //   regex         = env("HOSTNAME")
-      //   action        = "keep"
-      // }
+      // This prevents 3x duplication since Alloy runs as a DaemonSet
+      rule {
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        regex         = env("HOSTNAME")
+        action        = "keep"
+      }
 
       rule {
         source_labels = ["__meta_kubernetes_namespace"]
@@ -82,9 +83,13 @@ alloy:
     loki.write "default" {
       endpoint {
         url = "http://loki-write.monitoring.svc:3100/loki/api/v1/push"
+        headers = {
+          "X-Scope-OrgID" = "anonymous",
+        }
       }
     }
 
+    // --- METRICS ---
     discovery.kubernetes "dcgm" {
       role = "endpoints"
       namespaces {
@@ -122,6 +127,9 @@ alloy:
     prometheus.remote_write "default" {
       endpoint {
         url = "http://mimir-gateway.monitoring.svc/api/v1/push"
+        headers = {
+          "X-Scope-OrgID" = "anonymous",
+        }
       }
     }
 
