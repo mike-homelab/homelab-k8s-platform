@@ -1,178 +1,952 @@
+#!/usr/bin/env python3
+"""
+Novel Proofreader Agent - "The Wrong Way to Use Healing Magic"
+==============================================================
+Two-phase pipeline:
+  Phase 1 - Bible Builder : Extract Character & Grammar Bible from translated vols
+  Phase 2 - Chapter Cleaner: Clean raw fan-translated chapters using the Bible
+
+LLM routing:
+  - reasoning  (qwen3 / ~128K ctx) : planning, bible synthesis, quality review
+  - coder      (qwen2.5-coder 14B / ~32K ctx) : chapter text correction pass
+
+Output: Markdown (.md) + optional PDF per chapter, cost savings report at end.
+Author: Antigravity for Michael's Homelab
+"""
+
 import os
+import sys
 import re
 import json
-import urllib.request
-import subprocess
-import ssl
 import time
+import datetime
+import textwrap
+import argparse
+import hashlib
+import traceback
+from pathlib import Path
+from typing import Optional
 
-# Endpoints
-REASONING_API = "https://llm.michaelhomelab.work/coder/v1/chat/completions"
-RERANK_API = "https://llm.michaelhomelab.work/rerank/v1/rerank"
-MODEL = "qwen3:4b" # Using faster coder model for reliability
+import requests
+import fitz  # PyMuPDF
+import markdown as md_lib
+from weasyprint import HTML as WeasyprintHTML
 
-# Costs
-COST_PER_1M_INPUT = 5.0
-COST_PER_1M_OUTPUT = 15.0
+# ─────────────────────── GLOBAL TOKEN TRACKER ───────────────────────── #
 
-# Paths
-RAW_DIR = "/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files/"
-CLEAN_DIR = "/home/michael/Documents/wrong_way_to_use_healing_magic/cleaned_files/"
-TERM_FILE = "/home/michael/obsidian/Library/Novels/The_Wrong_Way_to_Use_Healing_Magic/Terminology.md"
+class TokenTracker:
+    """Accumulates token usage across all LLM calls for cost reporting."""
+    def __init__(self):
+        self.local_calls: list[dict] = []
+        self.cloud_calls: list[dict] = []
 
-total_input_tokens = 0
-total_output_tokens = 0
+    def record(self, model: str, prompt_tokens: int, completion_tokens: int, is_local: bool = True):
+        call = {
+            "model": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+        }
+        if is_local:
+            self.local_calls.append(call)
+        else:
+            self.cloud_calls.append(call)
 
-def call_api(url, payload, timeout=120, retries=3):
-    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'}, method='POST')
-    for attempt in range(retries):
-        try:
-            context = ssl._create_unverified_context()
-            with urllib.request.urlopen(req, context=context, timeout=timeout) as response:
-                return json.loads(response.read().decode('utf-8'))
-        except Exception as e:
-            print(f"API Attempt {attempt+1} Error at {url}: {e}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                return None
-    return None
+    def totals(self) -> dict:
+        by_model: dict[str, dict] = {}
+        for c in self.local_calls + self.cloud_calls:
+            m = c["model"]
+            if m not in by_model:
+                by_model[m] = {"prompt": 0, "completion": 0, "calls": 0}
+            by_model[m]["prompt"]     += c["prompt_tokens"]
+            by_model[m]["completion"] += c["completion_tokens"]
+            by_model[m]["calls"]      += 1
+        return by_model
 
-def get_relevant_terms(text_chunk):
-    if not os.path.exists(TERM_FILE): return ""
-    with open(TERM_FILE, "r") as f:
-        terms = [l.strip() for l in f.readlines() if l.strip()]
-    
-    payload = {
-        "model": "BAAI/bge-reranker-large",
-        "query": text_chunk[:1000],
-        "documents": terms[:100]
+    def total_tokens(self) -> tuple[int, int]:
+        p = sum(c["prompt_tokens"]     for c in self.local_calls + self.cloud_calls)
+        o = sum(c["completion_tokens"] for c in self.local_calls + self.cloud_calls)
+        return p, o
+
+    def local_totals(self) -> tuple[int, int]:
+        p = sum(c["prompt_tokens"]     for c in self.local_calls)
+        o = sum(c["completion_tokens"] for c in self.local_calls)
+        return p, o
+
+    def cloud_totals(self) -> tuple[int, int]:
+        p = sum(c["prompt_tokens"]     for c in self.cloud_calls)
+        o = sum(c["completion_tokens"] for c in self.cloud_calls)
+        return p, o
+
+TRACKER = TokenTracker()
+
+# Cloud equivalent pricing (GPT-4o as reference, per 1M tokens, USD)
+CLOUD_PRICE_INPUT_PER_M  = 5.00   # GPT-4o input  $5 / 1M tokens
+CLOUD_PRICE_OUTPUT_PER_M = 15.00  # GPT-4o output $15 / 1M tokens
+LOCAL_COST_PER_CALL      = 0.0    # Local inference: $0 marginal cost
+
+# ─────────────────────────────── CONFIG ─────────────────────────────── #
+
+LITELLM_BASE   = "https://llm.michaelhomelab.work/v1"
+LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
+MODEL_REASON   = "reasoning"   # ~128K ctx  – used for bible building & QA
+MODEL_CODER    = "coder"       # ~32K ctx   – used for per-chapter cleaning
+
+# Context budgets (in characters, ~4 chars/token estimate)
+REASON_CTX_CHARS  = 96_000    # leave headroom below 128K limit
+CODER_CTX_CHARS   = 24_000    # leave headroom below 32K limit
+
+TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
+RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")
+CLEANED_DIR    = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/cleaned_files_v2")
+BIBLE_PATH          = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/character_grammar_bible.json")
+BIBLE_PROGRESS_PATH = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/bible_progress.json")
+
+# ──────────────────────────── UTILITIES ──────────────────────────────── #
+
+def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
+             max_tokens: int = 4096, retries: int = 3) -> str:
+    """Send a chat completion request to the LiteLLM proxy and track token usage."""
+    url = f"{LITELLM_BASE}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {LITELLM_KEY}",
+        "Content-Type": "application/json",
     }
-    
-    result = call_api(RERANK_API, payload)
-    if result and "results" in result:
-        # Get terms with decent relevance scores
-        top_terms = [r["document"]["text"] for r in result["results"][:15] if r["relevance_score"] > 0.05]
-        if top_terms:
-            return "CHARACTER FOCUS LIST:\n" + "\n".join([f"- {t}" for t in top_terms])
-    return ""
-
-def clean_segment(segment, terms):
-    global total_input_tokens, total_output_tokens
-    
-    system_prompt = f"""You are translating and polishing a novel. Your goal is to rewrite the raw text into professional English while maintaining 100% narrative integrity. 
-Do not omit any descriptions, character thoughts, or dialogue. Do not summarize. Every sentence in the raw text must have a corresponding, polished equivalent in your output.
-
-{terms}
-
-STRICT INSTRUCTIONS:
-1. OUTPUT ONLY THE NOVEL PROSE.
-2. NO SUMMARIES, NO INTRODUCTIONS, NO TITLES.
-3. PRESERVE EVERY DETAIL.
-4. YOUR OUTPUT MUST BEGIN IMMEDIATELY WITH THE STORY TEXT."""
-    
     payload = {
-        "model": MODEL,
+        "model": model,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
         "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Raw text to rewrite:\n\n{segment}"}
+            {"role": "system",  "content": system},
+            {"role": "user",    "content": user},
         ],
-        "temperature": 0.1
     }
-    
-    # Reasoning models can take long, so we use a 300s timeout
-    result = call_api(REASONING_API, payload, timeout=300)
-    if result and "choices" in result:
-        usage = result.get("usage", {})
-        total_input_tokens += usage.get("prompt_tokens", 0)
-        total_output_tokens += usage.get("completion_tokens", 0)
-        
-        content = result["choices"][0]["message"]["content"]
-        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-        content = re.sub(r'^(Here is the|The following is the|Cleaned prose|## Chapter).*?:\n*', '', content, flags=re.IGNORECASE)
-        return content
-    return ""
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(url, headers=headers, json=payload,
+                                 timeout=300, verify=False)
+            resp.raise_for_status()
+            data = resp.json()
+            # ── Track token usage ──
+            usage = data.get("usage", {})
+            prompt_tok     = usage.get("prompt_tokens", 0)
+            completion_tok = usage.get("completion_tokens", 0)
+            if prompt_tok == 0:
+                # Fallback estimate: ~0.25 tokens per char
+                prompt_tok     = len(system + user) // 4
+                completion_tok = max_tokens // 4
+            TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
+            return data["choices"][0]["message"]["content"].strip()
+        except Exception as exc:
+            print(f"  [LLM] Attempt {attempt}/{retries} failed: {exc}")
+            if attempt < retries:
+                time.sleep(5 * attempt)
+    raise RuntimeError(f"LLM call failed after {retries} retries")
 
-def get_pdf_text(path):
+
+def extract_pdf_text(pdf_path: Path) -> str:
+    """Extract clean text from a PDF using PyMuPDF."""
+    doc = fitz.open(str(pdf_path))
+    pages = []
+    for page in doc:
+        text = page.get_text("text")
+        pages.append(text)
+    doc.close()
+    return "\n".join(pages)
+
+
+def chunk_text(text: str, max_chars: int, overlap: int = 500) -> list[str]:
+    """Split text into overlapping chunks that fit within max_chars."""
+    chunks = []
+    start  = 0
+    while start < len(text):
+        end = start + max_chars
+        chunks.append(text[start:end])
+        start = end - overlap  # small overlap for context continuity
+        if start >= len(text):
+            break
+    return chunks
+
+
+def safe_filename(name: str) -> str:
+    """Sanitize a string to be a safe directory/file name."""
+    return re.sub(r'[^\w\s-]', '_', name).strip()
+
+
+def merge_dicts_deep(base: dict, patch: dict) -> dict:
+    """Recursively merge patch into base (lists are extended, not replaced)."""
+    for k, v in patch.items():
+        if k in base:
+            if isinstance(base[k], dict) and isinstance(v, dict):
+                merge_dicts_deep(base[k], v)
+            elif isinstance(base[k], list) and isinstance(v, list):
+                # deduplicate by string representation
+                existing = {str(i) for i in base[k]}
+                base[k].extend(i for i in v if str(i) not in existing)
+            else:
+                base[k] = v
+        else:
+            base[k] = v
+    return base
+
+
+# ─────────────────────────── PHASE 1 : BIBLE ─────────────────────────── #
+
+BIBLE_EXTRACT_SYSTEM = textwrap.dedent("""\
+    You are a professional light novel editor and Japanese-to-English localization expert.
+    You are analyzing chapters of "The Wrong Way to Use Healing Magic" to build a canonical
+    Character & Grammar Bible for future proofreading.
+
+    Your output MUST be valid JSON (no markdown fences, no extra prose).
+    Follow this exact schema:
+
+    {
+      "characters": {
+        "<CharacterName>": {
+          "gender": "male|female|unknown",
+          "pronouns": "he/him|she/her|they/them",
+          "self_reference": "watashi|boku|ore|atashi|etc (or null)",
+          "speech_style": "formal|casual|rude|childlike|etc",
+          "titles_held": ["Princess", "Knight Commander", ...],
+          "aliases": ["nickname1", "alias2"]
+        }
+      },
+      "relationships": [
+        {"from": "CharA", "to": "CharB", "address_term": "how CharA addresses CharB"}
+      ],
+      "terminology": {
+        "skills": {"<jp_or_wrong_term>": "<correct_en_term>"},
+        "locations": {"<jp_or_wrong_term>": "<correct_en_term>"},
+        "items": {"<jp_or_wrong_term>": "<correct_en_term>"},
+        "titles": {"<jp_or_wrong_term>": "<correct_en_term>"},
+        "other": {"<jp_or_wrong_term>": "<correct_en_term>"}
+      },
+      "gender_fixes": [
+        "Sentence-level note about a recurring gender error to watch for"
+      ],
+      "honorifics_policy": "Description of how honorifics should be handled"
+    }
+
+    Extract ONLY information present in the text. Use null for unknown fields.
+    If a character appears with inconsistent gender, note both and flag under gender_fixes.
+""")
+
+
+def extract_bible_from_chunk(chunk: str, vol_label: str) -> dict:
+    """Ask the reasoning model to extract bible data from one text chunk."""
+    user_msg = f"[Source: {vol_label}]\n\n{chunk}"
+    raw = llm_call(MODEL_REASON, BIBLE_EXTRACT_SYSTEM, user_msg,
+                   temperature=0.1, max_tokens=4096)
+    # Strip any accidental markdown fences
+    raw = re.sub(r"```json\s*", "", raw)
+    raw = re.sub(r"```\s*", "", raw)
     try:
-        res = subprocess.run(["pdftotext", path, "-"], capture_output=True, text=True, check=True)
-        return res.stdout
-    except: return ""
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # Attempt to salvage partial JSON
+        print(f"  [WARN] JSON parse failed for chunk from {vol_label}, attempting repair …")
+        # Try to find JSON object boundaries
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except Exception:
+                pass
+        print(f"  [WARN] Could not parse JSON from chunk, skipping.")
+        return {}
+
+
+BIBLE_SYNTHESIS_SYSTEM = textwrap.dedent("""\
+    You are a senior light novel editor. You have received multiple partial Character & Grammar
+    Bible drafts extracted from different volumes of "The Wrong Way to Use Healing Magic".
+    
+    Your job is to MERGE and RECONCILE all drafts into one single, authoritative, deduplicated
+    Character & Grammar Bible. Resolve any contradictions (e.g., inconsistent gender) by
+    choosing the most frequently stated value and noting the discrepancy in gender_fixes.
+
+    Output MUST be a single valid JSON object matching this schema (no markdown, no prose):
+    {
+      "characters": { ... },
+      "relationships": [ ... ],
+      "terminology": { "skills": {}, "locations": {}, "items": {}, "titles": {}, "other": {} },
+      "gender_fixes": [ ... ],
+      "honorifics_policy": "..."
+    }
+""")
+
+
+def synthesize_bible(partial_bibles: list[dict]) -> dict:
+    """Merge all partial bibles into one authoritative bible using the reasoning model."""
+    # Merge in-memory first to reduce payload size
+    merged = {}
+    for pb in partial_bibles:
+        merged = merge_dicts_deep(merged, pb)
+
+    merged_str = json.dumps(merged, ensure_ascii=False, indent=2)
+
+    # If merged JSON fits in one reasoning call, synthesize directly
+    if len(merged_str) < REASON_CTX_CHARS - 4000:
+        system = BIBLE_SYNTHESIS_SYSTEM
+        user = f"Here are all partial bible drafts merged:\n\n{merged_str}"
+        raw = llm_call(MODEL_REASON, system, user, temperature=0.1, max_tokens=8192)
+        raw = re.sub(r"```json\s*", "", raw)
+        raw = re.sub(r"```\s*", "", raw)
+        try:
+            return json.loads(raw)
+        except Exception:
+            print("[WARN] Final synthesis parse failed, returning in-memory merge.")
+            return merged
+    else:
+        print("[INFO] Merged bible too large for synthesis call, returning in-memory merge.")
+        return merged
+
+
+def load_bible_progress() -> dict:
+    """Load Phase 1 progress from disk."""
+    if BIBLE_PROGRESS_PATH.exists():
+        try:
+            with open(BIBLE_PROGRESS_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[WARN] Failed to load progress file: {e}")
+    return {"processed_volumes": [], "partial_bibles": []}
+
+
+def save_bible_progress(progress: dict):
+    """Save Phase 1 progress to disk."""
+    BIBLE_PROGRESS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(BIBLE_PROGRESS_PATH, "w", encoding="utf-8") as f:
+        json.dump(progress, f, ensure_ascii=False, indent=2)
+
+
+def phase1_build_bible(force: bool = False) -> dict:
+    """
+    Phase 1: Read all translated PDFs and build the Character & Grammar Bible.
+    Saves result to BIBLE_PATH as JSON.
+    Includes checkpointing to resume from interrupted runs.
+    """
+    print("\n" + "="*60)
+    print("PHASE 1 — Building Character & Grammar Bible")
+    print("="*60)
+
+    if BIBLE_PATH.exists() and not force:
+        print(f"[SKIP] Bible already exists at {BIBLE_PATH}. Use --rebuild-bible to regenerate.")
+        with open(BIBLE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    pdfs = sorted(TRANSLATED_DIR.glob("*.pdf"))
+    if not pdfs:
+        raise FileNotFoundError(f"No PDFs found in {TRANSLATED_DIR}")
+
+    # Load progress
+    progress = {"processed_volumes": [], "partial_bibles": []} if force else load_bible_progress()
+    processed_volumes = set(progress.get("processed_volumes", []))
+    partial_bibles = progress.get("partial_bibles", [])
+
+    print(f"[INFO] Found {len(pdfs)} translated volume(s).")
+    if processed_volumes:
+        print(f"[INFO] Resuming: {len(processed_volumes)} volume(s) already processed.")
+
+    for pdf_path in pdfs:
+        vol_label = pdf_path.stem
+        if vol_label in processed_volumes:
+            print(f"  [SKIP] Volume already processed: {vol_label}")
+            continue
+
+        print(f"\n  Processing: {vol_label}")
+        text = extract_pdf_text(pdf_path)
+        print(f"    Extracted {len(text):,} characters of text.")
+
+        # Chunk to fit reasoning model context
+        chunks = chunk_text(text, REASON_CTX_CHARS - 4000)
+        print(f"    Split into {len(chunks)} chunk(s) for LLM extraction.")
+
+        vol_bibles = []
+        for i, chunk in enumerate(chunks, 1):
+            print(f"    → Chunk {i}/{len(chunks)} ({len(chunk):,} chars) …", end=" ", flush=True)
+            partial = extract_bible_from_chunk(chunk, f"{vol_label} chunk {i}/{len(chunks)}")
+            if partial:
+                vol_bibles.append(partial)
+            print("done")
+
+        # Merge all chunks from this volume
+        vol_merged = {}
+        for vb in vol_bibles:
+            vol_merged = merge_dicts_deep(vol_merged, vb)
+        
+        partial_bibles.append(vol_merged)
+        
+        # Update progress
+        progress["processed_volumes"].append(vol_label)
+        progress["partial_bibles"] = partial_bibles
+        save_bible_progress(progress)
+        print(f"    [CHECKPOINT] Progress saved for {vol_label}")
+
+    print("\n[INFO] Synthesizing final bible …")
+    bible = synthesize_bible(partial_bibles)
+
+    # Ensure all required keys exist
+    for key in ["characters", "relationships", "terminology", "gender_fixes", "honorifics_policy"]:
+        if key not in bible:
+            bible[key] = {} if key in ("characters", "terminology") else []
+
+    BIBLE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(BIBLE_PATH, "w", encoding="utf-8") as f:
+        json.dump(bible, f, ensure_ascii=False, indent=2)
+
+    # Clean up progress file on success
+    if BIBLE_PROGRESS_PATH.exists():
+        BIBLE_PROGRESS_PATH.unlink()
+        print(f"[INFO] Progress file removed after successful synthesis.")
+
+    char_count = len(bible.get("characters", {}))
+    term_count = sum(len(v) for v in bible.get("terminology", {}).values() if isinstance(v, dict))
+    print(f"[OK] Bible saved → {BIBLE_PATH}")
+    print(f"     Characters: {char_count}  |  Terminology entries: {term_count}")
+    return bible
+
+
+# ─────────────────────────── PHASE 2 : CLEAN ─────────────────────────── #
+
+CODER_CLEAN_SYSTEM = textwrap.dedent("""\
+    You are a professional editor specializing in Japanese light novel localization into English.
+    Your task is to CORRECT and POLISH a fan-translated chapter of
+    "The Wrong Way to Use Healing Magic" using the provided Character & Grammar Bible.
+
+    STRICT RULES:
+    1. Fix ALL gender pronoun errors (he/she/his/her/him) using the Bible's character gender map.
+    2. Fix ALL Mr./Mrs./Ms. honorific mismatches using the Bible's gender data.
+    3. Replace any terminology that differs from the Bible's glossary with the canonical term.
+    4. Fix grammatical errors and awkward literal-translation phrasing.
+    5. Improve dialogue flow so it sounds like a native English light novel — not a word-for-word MTL.
+    6. Preserve the original chapter structure: keep all paragraph breaks, scene breaks (***), and chapter headings.
+    7. Do NOT add, remove, or summarize plot content. Every scene and event must be present.
+    8. Do NOT add commentary or meta-notes — output the corrected chapter text ONLY.
+    9. Dialogue tags should use natural English speech verbs (said, replied, asked, exclaimed, etc.).
+
+    Output format: Return ONLY the corrected chapter text. No headers, no explanation.
+""")
+
+REASON_QA_SYSTEM = textwrap.dedent("""\
+    You are a quality-assurance editor for the light novel "The Wrong Way to Use Healing Magic".
+    You will be given: (1) the raw fan-translated text, (2) the cleaned version, and (3) the Bible.
+    
+    Your job: Perform a final QA pass and output an improved final version.
+    Focus on:
+    - Any remaining pronoun/gender errors the previous pass missed
+    - Consistency with terminology in the Bible
+    - Natural English flow in dialogue and narration
+    - Completeness: ensure NO plot content was dropped
+
+    Output format: Return ONLY the final corrected chapter text. No explanation.
+""")
+
+
+def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
+    """Serialize the bible into a compact context string for LLM prompts."""
+    lines = ["=== CHARACTER & GRAMMAR BIBLE ===\n"]
+
+    # Characters
+    chars = bible.get("characters", {})
+    if chars:
+        lines.append("--- CHARACTERS ---")
+        for name, info in chars.items():
+            gender   = info.get("gender", "unknown")
+            pronouns = info.get("pronouns", "unknown")
+            style    = info.get("speech_style", "")
+            aliases  = ", ".join(info.get("aliases", []))
+            titles   = ", ".join(info.get("titles_held", []))
+            line = f"{name}: {gender} ({pronouns})"
+            if titles:   line += f", titles: {titles}"
+            if aliases:  line += f", aliases: {aliases}"
+            if style:    line += f", speech: {style}"
+            lines.append(line)
+
+    # Relationships
+    rels = bible.get("relationships", [])
+    if rels:
+        lines.append("\n--- RELATIONSHIPS (how A addresses B) ---")
+        for r in rels[:40]:  # cap to avoid overflow
+            lines.append(f"  {r.get('from','?')} → {r.get('to','?')}: \"{r.get('address_term','?')}\"")
+
+    # Terminology
+    terms = bible.get("terminology", {})
+    if terms:
+        lines.append("\n--- TERMINOLOGY ---")
+        for category, mapping in terms.items():
+            if isinstance(mapping, dict) and mapping:
+                lines.append(f"  [{category.upper()}]")
+                for wrong, correct in list(mapping.items())[:20]:
+                    lines.append(f"    {wrong} → {correct}")
+
+    # Gender fixes
+    fixes = bible.get("gender_fixes", [])
+    if fixes:
+        lines.append("\n--- KNOWN GENDER ERRORS TO WATCH ---")
+        for fix in fixes[:10]:
+            lines.append(f"  • {fix}")
+
+    # Honorifics
+    hon = bible.get("honorifics_policy", "")
+    if hon:
+        lines.append(f"\n--- HONORIFICS POLICY ---\n  {hon}")
+
+    result = "\n".join(lines)
+    return result[:max_chars]  # hard-cap
+
+
+def clean_chapter_coder(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
+    """
+    Use the CODER model to do the main cleaning pass.
+    Handles long chapters by chunking and stitching.
+    """
+    # Max chars for chapter text = coder budget minus bible context and prompt overhead
+    overhead   = len(bible_ctx) + 500
+    max_text   = CODER_CTX_CHARS - overhead
+
+    if max_text < 2000:
+        # Bible context too large – trim it further
+        bible_ctx = bible_ctx[:CODER_CTX_CHARS // 3]
+        overhead  = len(bible_ctx) + 500
+        max_text  = CODER_CTX_CHARS - overhead
+
+    chunks = chunk_text(raw_text, max_text, overlap=200)
+    cleaned_chunks = []
+
+    for i, chunk in enumerate(chunks, 1):
+        label = f"{chapter_label} [part {i}/{len(chunks)}]"
+        user_msg = (
+            f"{bible_ctx}\n\n"
+            f"=== RAW CHAPTER TEXT ({label}) ===\n\n"
+            f"{chunk}"
+        )
+        print(f"      Coder pass part {i}/{len(chunks)} ({len(chunk):,} chars) …", end=" ", flush=True)
+        result = llm_call(MODEL_CODER, CODER_CLEAN_SYSTEM, user_msg,
+                          temperature=0.25, max_tokens=4096)
+        cleaned_chunks.append(result)
+        print("done")
+
+    return "\n\n".join(cleaned_chunks)
+
+
+def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
+                      chapter_label: str) -> str:
+    """
+    Use the REASONING model for a QA pass on short chapters.
+    For long chapters, skip QA to stay within budget.
+    """
+    total_len = len(bible_ctx) + len(raw_text) + len(cleaned_text) + 1000
+    if total_len > REASON_CTX_CHARS:
+        # Too large for QA pass — return cleaned_text as-is
+        print(f"      [QA] Chapter too long for QA pass ({total_len:,} chars), skipping.")
+        return cleaned_text
+
+    user_msg = (
+        f"{bible_ctx}\n\n"
+        f"=== RAW TEXT ===\n{raw_text}\n\n"
+        f"=== CLEANED VERSION (needs QA) ===\n{cleaned_text}"
+    )
+    print(f"      Reasoning QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
+    result = llm_call(MODEL_REASON, REASON_QA_SYSTEM, user_msg,
+                      temperature=0.15, max_tokens=8192)
+    print("done")
+    return result
+
+
+def get_volume_from_filename(filename: str) -> str:
+    """Extract volume number from raw filename like '10_vol._1_chapter_...'"""
+    match = re.match(r'^(\d+)_vol\.', filename)
+    if match:
+        return f"vol_{match.group(1).zfill(2)}"
+    return "vol_unknown"
+
+
+def get_chapter_sort_key(filename: str) -> tuple:
+    """Return a sort key (vol_num, chapter_num) for ordering."""
+    vol_match = re.match(r'^(\d+)_vol\._(\d+(?:\.\d+)?)', filename)
+    if vol_match:
+        vol = int(vol_match.group(1))
+        # Handle chapter numbers like "13.1", "31.2"
+        chap_str = vol_match.group(2)
+        try:
+            chap = float(chap_str)
+        except ValueError:
+            chap = 0.0
+        return (vol, chap)
+    return (9999, 0)
+
+
+def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
+                          force: bool = False, skip_qa: bool = False) -> None:
+    """
+    Phase 2: Clean all raw chapter PDFs using the bible.
+    Groups output by volume under CLEANED_DIR/vol_XX/
+    """
+    print("\n" + "="*60)
+    print("PHASE 2 — Cleaning Raw Chapters")
+    print("="*60)
+
+    bible_ctx = build_bible_context(bible, max_chars=3500)
+    print(f"[INFO] Bible context size: {len(bible_ctx):,} chars")
+
+    all_pdfs = sorted(RAW_DIR.glob("*.pdf"), key=lambda p: get_chapter_sort_key(p.name))
+    if not all_pdfs:
+        raise FileNotFoundError(f"No PDFs found in {RAW_DIR}")
+
+    # Filter by volume if requested
+    if volumes:
+        all_pdfs = [p for p in all_pdfs if int(re.match(r'^(\d+)', p.name).group(1)) in volumes]
+        print(f"[INFO] Filtered to volumes {volumes}: {len(all_pdfs)} chapter(s).")
+    else:
+        print(f"[INFO] Found {len(all_pdfs)} total raw chapter(s).")
+
+    CLEANED_DIR.mkdir(parents=True, exist_ok=True)
+
+    processed = skipped = errors = 0
+
+    for pdf_path in all_pdfs:
+        vol_key = get_volume_from_filename(pdf_path.name)
+        vol_dir = CLEANED_DIR / vol_key
+        vol_dir.mkdir(parents=True, exist_ok=True)
+
+        # Output filenames
+        md_path  = vol_dir / (pdf_path.stem + ".md")
+        pdf_out  = vol_dir / (pdf_path.stem + ".pdf")
+
+        if md_path.exists() and not force:
+            skipped += 1
+            continue
+
+        print(f"\n  [{vol_key}] {pdf_path.name}")
+
+        try:
+            # Extract text
+            raw_text = extract_pdf_text(pdf_path)
+            if len(raw_text.strip()) < 100:
+                print(f"    [WARN] Very short text ({len(raw_text)} chars), skipping.")
+                skipped += 1
+                continue
+
+            print(f"    Raw text: {len(raw_text):,} chars")
+
+            # Coder pass (main cleaning)
+            cleaned = clean_chapter_coder(raw_text, bible_ctx, pdf_path.stem)
+
+            # Reasoning QA pass (optional, only for shorter chapters)
+            if not skip_qa:
+                cleaned = qa_pass_reasoning(raw_text, cleaned, bible_ctx, pdf_path.stem)
+
+            # ── Write Markdown output ──────────────────────────────────
+            chapter_title = pdf_path.stem.replace("_", " ").title()
+            md_content = render_chapter_markdown(chapter_title, cleaned, vol_key)
+            with open(md_path, "w", encoding="utf-8") as f:
+                f.write(md_content)
+            print(f"    → Markdown: {md_path}")
+
+            # ── Render PDF ────────────────────────────────────────────
+            try:
+                render_pdf(md_content, pdf_out)
+                print(f"    → PDF:      {pdf_out}")
+            except Exception as pdf_err:
+                print(f"    [WARN] PDF render failed: {pdf_err}")
+
+            processed += 1
+
+        except KeyboardInterrupt:
+            print("\n[INTERRUPTED] Saving progress …")
+            break
+        except Exception as exc:
+            print(f"    [ERROR] {exc}")
+            traceback.print_exc()
+            errors += 1
+
+    print(f"\n[DONE] Processed: {processed}  |  Skipped (already done): {skipped}  |  Errors: {errors}")
+
+
+# ─────────────────── MARKDOWN & PDF RENDERING ───────────────────────── #
+
+CHAPTER_CSS = """
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+
+body {
+    font-family: 'EB Garamond', 'Georgia', serif;
+    font-size: 12pt;
+    line-height: 1.85;
+    color: #1a1a1a;
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 48px 36px;
+    background: #fafaf8;
+}
+h1 {
+    font-size: 20pt;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 0.3em;
+    color: #2c2c2c;
+    letter-spacing: 0.03em;
+    border-bottom: 2px solid #c8a97a;
+    padding-bottom: 0.4em;
+}
+h2 {
+    font-size: 13pt;
+    font-weight: 600;
+    margin-top: 2em;
+    color: #3a3a3a;
+}
+p {
+    margin: 0.6em 0;
+    text-indent: 1.5em;
+}
+p:first-of-type { text-indent: 0; }
+blockquote {
+    border-left: 3px solid #c8a97a;
+    margin: 1em 0 1em 1em;
+    padding-left: 1em;
+    color: #444;
+    font-style: italic;
+}
+hr {
+    border: none;
+    text-align: center;
+    margin: 2em 0;
+    color: #999;
+}
+hr::after { content: '✦  ✦  ✦'; }
+.meta {
+    font-size: 9pt;
+    color: #888;
+    text-align: center;
+    margin-bottom: 2em;
+    font-style: italic;
+}
+@page {
+    size: A4;
+    margin: 2.4cm 2.2cm;
+    @bottom-center {
+        content: counter(page);
+        font-family: 'EB Garamond', serif;
+        font-size: 9pt;
+        color: #aaa;
+    }
+}
+"""
+
+
+def render_chapter_markdown(title: str, body: str, vol_label: str) -> str:
+    """Wrap cleaned text in a well-structured Markdown document."""
+    # Normalise scene breaks: lines with only * or – or — become proper hr
+    body = re.sub(r'^\s*[\*\-\—\–]{2,}\s*$', '\n---\n', body, flags=re.MULTILINE)
+    # Ensure blank lines around HR
+    body = re.sub(r'\n---\n', '\n\n---\n\n', body)
+    # Collapse 3+ blank lines to 2
+    body = re.sub(r'\n{3,}', '\n\n', body)
+
+    now = datetime.datetime.now().strftime("%Y-%m-%d")
+    return (
+        f"# {title}\n\n"
+        f'<p class="meta">{vol_label.replace("_", " ").upper()} · Cleaned {now} · '
+        f"The Wrong Way to Use Healing Magic</p>\n\n"
+        f"{body.strip()}\n"
+    )
+
+
+def render_pdf(md_content: str, out_path: Path) -> None:
+    """Convert a Markdown string to a styled PDF using weasyprint."""
+    # Markdown → HTML
+    html_body = md_lib.markdown(
+        md_content,
+        extensions=["extra", "nl2br"],
+    )
+    full_html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <style>{CHAPTER_CSS}</style>
+</head>
+<body>
+{html_body}
+</body>
+</html>
+"""
+    WeasyprintHTML(string=full_html).write_pdf(str(out_path))
+
+
+# ─────────────────────────── COST REPORT ─────────────────────────────── #
+
+def print_cost_report(start_time: float) -> None:
+    """Print a token consumption and cloud cost-savings report."""
+    elapsed = time.time() - start_time
+    totals  = TRACKER.totals()
+    total_p, total_o = TRACKER.total_tokens()
+    local_p, local_o = TRACKER.local_totals()
+    cloud_p, cloud_o = TRACKER.cloud_totals()
+    total_tok = total_p + total_o
+
+    # Estimated cloud cost if all local calls were cloud
+    equivalent_cloud_cost = (
+        (local_p / 1_000_000) * CLOUD_PRICE_INPUT_PER_M +
+        (local_o / 1_000_000) * CLOUD_PRICE_OUTPUT_PER_M
+    )
+    
+    # Actual cloud cost (script currently uses 0)
+    actual_cloud_cost = (
+        (cloud_p / 1_000_000) * CLOUD_PRICE_INPUT_PER_M +
+        (cloud_o / 1_000_000) * CLOUD_PRICE_OUTPUT_PER_M
+    )
+    
+    savings = equivalent_cloud_cost - 0.0 # Assuming local is $0
+
+    sep = "─" * 62
+    print(f"\n{'═'*62}")
+    print("  TOKEN CONSUMPTION & CLOUD SAVINGS REPORT")
+    print(f"{'═'*62}")
+    print(f"  Run duration : {elapsed/60:.1f} min  ({elapsed:.0f}s)")
+    print(f"  Total calls  : {len(TRACKER.local_calls) + len(TRACKER.cloud_calls)}")
+    print(sep)
+    print(f"  {'Type':<10} {'Prompt':>15} {'Output':>15} {'Total':>15}")
+    print(sep)
+    print(f"  {'Local':<10} {local_p:>15,} {local_o:>15,} {local_p+local_o:>15,}")
+    print(f"  {'Cloud':<10} {cloud_p:>15,} {cloud_o:>15,} {cloud_p+cloud_o:>15,}")
+    print(sep)
+    print(f"  {'TOTAL':<10} {total_p:>15,} {total_o:>15,} {total_p+total_o:>15,}")
+    print(f"\n  {'Model Breakdown':<20} {'Calls':>6} {'Tokens':>15}")
+    print(sep)
+    for model, data in totals.items():
+        print(f"  {model:<20} {data['calls']:>6} {data['prompt']+data['completion']:>15,}")
+    
+    print(f"\n  {'Metric':<38} {'Value':>20}")
+    print(sep)
+    print(f"  {'Local inference cost (homelab GPU)':<38} {'$0.00':>20}")
+    print(f"  {'Actual Cloud cost':<38} {'${:>18.4f}'.format(actual_cloud_cost):>20}")
+    print(f"  {'Equivalent GPT-4o cost (if cloud)':<38} {'${:>18.4f}'.format(equivalent_cloud_cost):>20}")
+    print(sep)
+    print(f"  {'💰 TOTAL SAVINGS vs GPT-4o':<38} {'${:>18.4f}'.format(savings):>20}")
+    print(f"{'═'*62}\n")
+
+    # Also save as Markdown report
+    report_path = CLEANED_DIR / "usage_report.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write("# Novel Cleaner Agent — Usage Report\n\n")
+        f.write(f"**Run date:** {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}  \n")
+        f.write(f"**Duration:** {elapsed/60:.1f} minutes  \n")
+        f.write(f"**Total LLM calls:** {len(TRACKER.local_calls) + len(TRACKER.cloud_calls)}  \n\n")
+        
+        f.write("## Token Usage\n\n")
+        f.write("| Type | Prompt Tokens | Output Tokens | Total |\n")
+        f.write("|------|--------------:|--------------:|------:|\n")
+        f.write(f"| Local | {local_p:,} | {local_o:,} | {local_p+local_o:,} |\n")
+        f.write(f"| Cloud | {cloud_p:,} | {cloud_o:,} | {cloud_p+cloud_o:,} |\n")
+        f.write(f"| **TOTAL** | **{total_p:,}** | **{total_o:,}** | **{total_p+total_o:,}** |\n\n")
+        
+        f.write("## Cost Savings vs Cloud (GPT-4o)\n\n")
+        f.write(f"| Metric | Cost (USD) |\n")
+        f.write(f"|--------|----------:|\n")
+        f.write(f"| Local homelab inference | $0.0000 |\n")
+        f.write(f"| Actual Cloud cost | ${actual_cloud_cost:.4f} |\n")
+        f.write(f"| Equivalent Cloud cost (if used) | ${equivalent_cloud_cost:.4f} |\n")
+        f.write(f"| **💰 Total savings** | **${savings:.4f}** |\n")
+        f.write(f"\n> Pricing reference: GPT-4o at $5/1M input tokens, $15/1M output tokens (April 2026)\n")
+    print(f"  Report saved → {report_path}")
+
+
+# ─────────────────────────────── MAIN ────────────────────────────────── #
 
 def main():
-    os.makedirs(CLEAN_DIR, exist_ok=True)
-    raw_files = sorted([f for f in os.listdir(RAW_DIR) if f.endswith(".pdf")])
-    
-    chapters = []
-    for f in raw_files:
-        m = re.search(r'(\d+)_vol.*?(\d+)_chapter', f, re.IGNORECASE)
-        if m: chapters.append((int(m.group(1)), int(m.group(2)), f))
-        else:
-            m2 = re.search(r'Vol_(\d+)_Ch_(\d+)', f, re.IGNORECASE)
-            if m2: chapters.append((int(m2.group(1)), int(m2.group(2)), f))
-    chapters.sort()
+    parser = argparse.ArgumentParser(
+        description="Novel Proofreader Agent — The Wrong Way to Use Healing Magic",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            Examples:
+              # Build bible only:
+              python novel_cleaner_agent.py --phase 1
 
-    current_vol = -1
-    out_file = None
+              # Clean all chapters (uses existing bible):
+              python novel_cleaner_agent.py --phase 2
 
-    for vol, ch, filename in chapters:
-        print(f"[{time.strftime('%H:%M:%S')}] Processing Volume {vol} Chapter {ch}...")
-        if vol != current_vol:
-            if out_file: out_file.close()
-            current_vol = vol
-            vol_path = os.path.join(CLEAN_DIR, f"Volume_{vol}.md")
-            
-            existing_chapters = set()
-            if os.path.exists(vol_path):
-                with open(vol_path, "r") as f:
-                    existing_chapters = set(re.findall(r'^## Chapter (\d+)', f.read(), re.MULTILINE))
-            
-            out_file = open(vol_path, "a")
-            if not existing_chapters:
-                out_file.write(f"\n# Volume {vol}\n\n")
-        
-        if str(ch) in existing_chapters:
-            print(f"  -> Skipping Chapter {ch} (already processed)")
-            continue
-            
-        full_text = get_pdf_text(os.path.join(RAW_DIR, filename))
-        if not full_text.strip(): continue
-        
-        paragraphs = full_text.split('\n')
-        segments = []
-        current_segment = ""
-        # 4000 characters (approx 800 words) for high-fidelity transcreation
-        for p in paragraphs:
-            if len(current_segment) + len(p) < 4000:
-                current_segment += p + "\n"
+              # Clean only volumes 10 and 11:
+              python novel_cleaner_agent.py --phase 2 --volumes 10 11
+
+              # Full pipeline (build bible + clean all):
+              python novel_cleaner_agent.py --phase all
+
+              # Rebuild bible and re-clean volume 12:
+              python novel_cleaner_agent.py --phase all --rebuild-bible --force --volumes 12
+
+              # Skip QA pass (faster, less GPU time):
+              python novel_cleaner_agent.py --phase 2 --skip-qa
+        """)
+    )
+    parser.add_argument(
+        "--phase",
+        choices=["1", "2", "all"],
+        default="all",
+        help="Which phase to run: 1=bible, 2=clean, all=both (default: all)"
+    )
+    parser.add_argument(
+        "--volumes",
+        nargs="+",
+        type=int,
+        metavar="N",
+        help="Only process these volume numbers (e.g. 10 11 12). Default: all volumes."
+    )
+    parser.add_argument(
+        "--rebuild-bible",
+        action="store_true",
+        help="Force rebuild of the character bible even if it already exists."
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite already-cleaned chapter files."
+    )
+    parser.add_argument(
+        "--skip-qa",
+        action="store_true",
+        help="Skip the reasoning-model QA pass (faster, uses less GPU time)."
+    )
+
+    args = parser.parse_args()
+
+    print("╔══════════════════════════════════════════════════════════╗")
+    print("║  Novel Proofreader Agent — The Wrong Way to Use Healing  ║")
+    print("║  Magic                                                    ║")
+    print("╚══════════════════════════════════════════════════════════╝")
+    print(f"  LLM Reasoning : {MODEL_REASON} @ {LITELLM_BASE}")
+    print(f"  LLM Coder     : {MODEL_CODER}  @ {LITELLM_BASE}")
+    print(f"  Bible path    : {BIBLE_PATH}")
+    print(f"  Output dir    : {CLEANED_DIR} (.md + .pdf per chapter)")
+
+    # Suppress SSL warnings for self-signed homelab certs
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    start_time = time.time()
+    bible = None
+
+    if args.phase in ("1", "all"):
+        bible = phase1_build_bible(force=args.rebuild_bible)
+
+    if args.phase in ("2", "all"):
+        if bible is None:
+            if BIBLE_PATH.exists():
+                print(f"\n[INFO] Loading existing bible from {BIBLE_PATH}")
+                with open(BIBLE_PATH, "r", encoding="utf-8") as f:
+                    bible = json.load(f)
             else:
-                segments.append(current_segment)
-                current_segment = p + "\n"
-        if current_segment: segments.append(current_segment)
-        
-        out_file.write(f"## Chapter {ch}\n\n")
-        for i, seg in enumerate(segments):
-            print(f"  -> Segment {i+1}/{len(segments)}")
-            relevant_terms = get_relevant_terms(seg)
-            cleaned = clean_segment(seg, relevant_terms)
-            if cleaned:
-                out_file.write(cleaned + "\n\n")
-            out_file.flush()
-        
-        out_file.write("\n---\n\n")
-        print(f"  -> Completed Chapter {ch}")
+                print("[ERROR] No bible found. Run with --phase 1 or --phase all first.")
+                sys.exit(1)
+        phase2_clean_chapters(
+            bible,
+            volumes=args.volumes,
+            force=args.force,
+            skip_qa=args.skip_qa,
+        )
 
-    if out_file: out_file.close()
-    
-    input_cost = (total_input_tokens / 1_000_000) * COST_PER_1M_INPUT
-    output_cost = (total_output_tokens / 1_000_000) * COST_PER_1M_OUTPUT
-    report = f"""# Cloud LLM Savings Report
-- Total Input Tokens: {total_input_tokens:,}
-- Total Output Tokens: {total_output_tokens:,}
-- **Total Savings (vs GPT-4o): ${input_cost + output_cost:.2f}**
-"""
-    with open(os.path.join(CLEAN_DIR, "Savings_Report.md"), "w") as f:
-        f.write(report)
+    print_cost_report(start_time)
+    print("✓ Agent finished.")
+
 
 if __name__ == "__main__":
     main()
