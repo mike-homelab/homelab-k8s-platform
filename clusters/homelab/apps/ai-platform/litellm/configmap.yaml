@@ -8,7 +8,7 @@ data:
     model_list:
       - model_name: "coder"
         litellm_params:
-          model: "ollama/deepseek-coder:6.7b"
+          model: "ollama/qwen2.5-coder:14b"
           api_base: "http://vllm-coder.ai-platform.svc:11434"
           num_ctx: 32768
       - model_name: "reasoning"
