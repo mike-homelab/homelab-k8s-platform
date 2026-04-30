@@ -24,8 +24,10 @@ import textwrap
 import argparse
 import hashlib
 import traceback
+import threading
+import concurrent.futures
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 import requests
 import fitz  # PyMuPDF
@@ -39,6 +41,7 @@ class TokenTracker:
     def __init__(self):
         self.local_calls: list[dict] = []
         self.cloud_calls: list[dict] = []
+        self._lock = threading.Lock()
 
     def record(self, model: str, prompt_tokens: int, completion_tokens: int, is_local: bool = True):
         call = {
@@ -46,10 +49,11 @@ class TokenTracker:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
         }
-        if is_local:
-            self.local_calls.append(call)
-        else:
-            self.cloud_calls.append(call)
+        with self._lock:
+            if is_local:
+                self.local_calls.append(call)
+            else:
+                self.cloud_calls.append(call)
 
     def totals(self) -> dict:
         by_model: dict[str, dict] = {}
@@ -98,8 +102,18 @@ CODER_CTX_CHARS   = 24_000    # leave headroom below 32K limit
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
 RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")
 CLEANED_DIR    = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/cleaned_files_v2")
-BIBLE_PATH          = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/character_grammar_bible.json")
-BIBLE_PROGRESS_PATH = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/bible_progress.json")
+BIBLE_DIR           = Path("/home/michael/obsidian/Library/Novels/The_Wrong_Way_to_Use_Healing_Magic")
+BIBLE_PATH          = BIBLE_DIR / "character_grammar_bible.json"
+BIBLE_PROGRESS_PATH = BIBLE_DIR / "bible_progress.json"
+
+# Concurrency settings
+MAX_WORKERS = 4
+LOG_LOCK = threading.Lock()
+
+def safe_log(msg: str):
+    """Thread-safe logging to console."""
+    with LOG_LOCK:
+        print(msg, flush=True)
 
 # ──────────────────────────── UTILITIES ──────────────────────────────── #
 
@@ -137,9 +151,10 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
             return data["choices"][0]["message"]["content"].strip()
         except Exception as exc:
-            print(f"  [LLM] Attempt {attempt}/{retries} failed: {exc}")
+            if attempt == retries:
+                safe_log(f"  [LLM] Final attempt {attempt}/{retries} failed: {exc}")
             if attempt < retries:
-                time.sleep(5 * attempt)
+                time.sleep(2 * attempt)
     raise RuntimeError(f"LLM call failed after {retries} retries")
 
 
@@ -236,22 +251,27 @@ def extract_bible_from_chunk(chunk: str, vol_label: str) -> dict:
     user_msg = f"[Source: {vol_label}]\n\n{chunk}"
     raw = llm_call(MODEL_REASON, BIBLE_EXTRACT_SYSTEM, user_msg,
                    temperature=0.1, max_tokens=4096)
-    # Strip any accidental markdown fences
-    raw = re.sub(r"```json\s*", "", raw)
-    raw = re.sub(r"```\s*", "", raw)
+    
+    # Robust JSON extraction
+    json_str = raw
+    if "```" in raw:
+        # Try to extract content between triple backticks
+        match = re.search(r"```(?:json)?\s*(.*?)\s*```", raw, re.DOTALL)
+        if match:
+            json_str = match.group(1)
+    
     try:
-        return json.loads(raw)
+        return json.loads(json_str)
     except json.JSONDecodeError:
-        # Attempt to salvage partial JSON
-        print(f"  [WARN] JSON parse failed for chunk from {vol_label}, attempting repair …")
-        # Try to find JSON object boundaries
+        # Second attempt: find the first { and last }
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
             try:
                 return json.loads(match.group())
             except Exception:
                 pass
-        print(f"  [WARN] Could not parse JSON from chunk, skipping.")
+        
+        safe_log(f"  [WARN] JSON parse failed for chunk from {vol_label}. Raw response snippet: {raw[:100]}...")
         return {}
 
 
@@ -328,23 +348,31 @@ def phase1_build_bible(force: bool = False) -> dict:
     print("PHASE 1 — Building Character & Grammar Bible")
     print("="*60)
 
-    if BIBLE_PATH.exists() and not force:
-        print(f"[SKIP] Bible already exists at {BIBLE_PATH}. Use --rebuild-bible to regenerate.")
-        with open(BIBLE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+    BIBLE_DIR.mkdir(parents=True, exist_ok=True)
 
     pdfs = sorted(TRANSLATED_DIR.glob("*.pdf"))
     if not pdfs:
-        raise FileNotFoundError(f"No PDFs found in {TRANSLATED_DIR}")
+        if BIBLE_PATH.exists():
+            safe_log(f"[INFO] No PDFs found, but Bible exists at {BIBLE_PATH}. Loading existing.")
+            with open(BIBLE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        raise FileNotFoundError(f"No PDFs found in {TRANSLATED_DIR} and no existing Bible found.")
 
     # Load progress
     progress = {"processed_volumes": [], "partial_bibles": []} if force else load_bible_progress()
     processed_volumes = set(progress.get("processed_volumes", []))
     partial_bibles = progress.get("partial_bibles", [])
 
-    print(f"[INFO] Found {len(pdfs)} translated volume(s).")
-    if processed_volumes:
-        print(f"[INFO] Resuming: {len(processed_volumes)} volume(s) already processed.")
+    # Check if we actually have anything new to process
+    all_vol_labels = {p.stem for p in pdfs}
+    new_volumes = all_vol_labels - processed_volumes
+
+    if not new_volumes and BIBLE_PATH.exists() and not force:
+        safe_log(f"[SKIP] All {len(pdfs)} volumes already processed. Bible is up to date.")
+        with open(BIBLE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    safe_log(f"[INFO] Found {len(pdfs)} total volume(s). {len(new_volumes)} are new.")
 
     for pdf_path in pdfs:
         vol_label = pdf_path.stem
@@ -358,15 +386,23 @@ def phase1_build_bible(force: bool = False) -> dict:
 
         # Chunk to fit reasoning model context
         chunks = chunk_text(text, REASON_CTX_CHARS - 4000)
-        print(f"    Split into {len(chunks)} chunk(s) for LLM extraction.")
+        safe_log(f"    Split into {len(chunks)} chunk(s). Processing in parallel...")
 
         vol_bibles = []
-        for i, chunk in enumerate(chunks, 1):
-            print(f"    → Chunk {i}/{len(chunks)} ({len(chunk):,} chars) …", end=" ", flush=True)
-            partial = extract_bible_from_chunk(chunk, f"{vol_label} chunk {i}/{len(chunks)}")
-            if partial:
-                vol_bibles.append(partial)
-            print("done")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            future_to_chunk = {
+                executor.submit(extract_bible_from_chunk, chunk, f"{vol_label} chunk {i}/{len(chunks)}"): i 
+                for i, chunk in enumerate(chunks, 1)
+            }
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                i = future_to_chunk[future]
+                try:
+                    partial = future.result()
+                    if partial:
+                        vol_bibles.append(partial)
+                    safe_log(f"    → Chunk {i}/{len(chunks)} completed.")
+                except Exception as exc:
+                    safe_log(f"    → Chunk {i}/{len(chunks)} generated an exception: {exc}")
 
         # Merge all chunks from this volume
         vol_merged = {}
@@ -379,7 +415,7 @@ def phase1_build_bible(force: bool = False) -> dict:
         progress["processed_volumes"].append(vol_label)
         progress["partial_bibles"] = partial_bibles
         save_bible_progress(progress)
-        print(f"    [CHECKPOINT] Progress saved for {vol_label}")
+        safe_log(f"    [CHECKPOINT] Progress saved for {vol_label}")
 
     print("\n[INFO] Synthesizing final bible …")
     bible = synthesize_bible(partial_bibles)
@@ -393,10 +429,8 @@ def phase1_build_bible(force: bool = False) -> dict:
     with open(BIBLE_PATH, "w", encoding="utf-8") as f:
         json.dump(bible, f, ensure_ascii=False, indent=2)
 
-    # Clean up progress file on success
-    if BIBLE_PROGRESS_PATH.exists():
-        BIBLE_PROGRESS_PATH.unlink()
-        print(f"[INFO] Progress file removed after successful synthesis.")
+    # We keep the progress file as a permanent checkpoint for partial bibles
+    safe_log(f"[INFO] Bible checkpoint updated at {BIBLE_PROGRESS_PATH}")
 
     char_count = len(bible.get("characters", {}))
     term_count = sum(len(v) for v in bible.get("terminology", {}).values() if isinstance(v, dict))
@@ -510,20 +544,25 @@ def clean_chapter_coder(raw_text: str, bible_ctx: str, chapter_label: str) -> st
         max_text  = CODER_CTX_CHARS - overhead
 
     chunks = chunk_text(raw_text, max_text, overlap=200)
-    cleaned_chunks = []
+    cleaned_chunks = [None] * len(chunks)
 
-    for i, chunk in enumerate(chunks, 1):
-        label = f"{chapter_label} [part {i}/{len(chunks)}]"
+    def process_chunk(i, chunk):
+        label = f"{chapter_label} [part {i+1}/{len(chunks)}]"
         user_msg = (
             f"{bible_ctx}\n\n"
             f"=== RAW CHAPTER TEXT ({label}) ===\n\n"
             f"{chunk}"
         )
-        print(f"      Coder pass part {i}/{len(chunks)} ({len(chunk):,} chars) …", end=" ", flush=True)
+        safe_log(f"      Coder pass part {i+1}/{len(chunks)} …")
         result = llm_call(MODEL_CODER, CODER_CLEAN_SYSTEM, user_msg,
                           temperature=0.25, max_tokens=4096)
-        cleaned_chunks.append(result)
-        print("done")
+        return i, result
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_chunk, i, chunk) for i, chunk in enumerate(chunks)]
+        for future in concurrent.futures.as_completed(futures):
+            idx, res = future.result()
+            cleaned_chunks[idx] = res
 
     return "\n\n".join(cleaned_chunks)
 
@@ -600,66 +639,58 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
         print(f"[INFO] Found {len(all_pdfs)} total raw chapter(s).")
 
     CLEANED_DIR.mkdir(parents=True, exist_ok=True)
-
     processed = skipped = errors = 0
 
-    for pdf_path in all_pdfs:
+    def process_chapter(pdf_path):
+        nonlocal processed, skipped, errors
         vol_key = get_volume_from_filename(pdf_path.name)
         vol_dir = CLEANED_DIR / vol_key
         vol_dir.mkdir(parents=True, exist_ok=True)
 
-        # Output filenames
         md_path  = vol_dir / (pdf_path.stem + ".md")
         pdf_out  = vol_dir / (pdf_path.stem + ".pdf")
 
         if md_path.exists() and not force:
-            skipped += 1
-            continue
+            with LOG_LOCK: skipped += 1
+            return
 
-        print(f"\n  [{vol_key}] {pdf_path.name}")
+        safe_log(f"\n  Processing [{vol_key}] {pdf_path.name}")
 
         try:
-            # Extract text
             raw_text = extract_pdf_text(pdf_path)
             if len(raw_text.strip()) < 100:
-                print(f"    [WARN] Very short text ({len(raw_text)} chars), skipping.")
-                skipped += 1
-                continue
+                safe_log(f"    [WARN] Very short text, skipping: {pdf_path.name}")
+                with LOG_LOCK: skipped += 1
+                return
 
-            print(f"    Raw text: {len(raw_text):,} chars")
-
-            # Coder pass (main cleaning)
+            # Coder pass
             cleaned = clean_chapter_coder(raw_text, bible_ctx, pdf_path.stem)
 
-            # Reasoning QA pass (optional, only for shorter chapters)
+            # Reasoning QA pass
             if not skip_qa:
                 cleaned = qa_pass_reasoning(raw_text, cleaned, bible_ctx, pdf_path.stem)
 
-            # ── Write Markdown output ──────────────────────────────────
             chapter_title = pdf_path.stem.replace("_", " ").title()
             md_content = render_chapter_markdown(chapter_title, cleaned, vol_key)
             with open(md_path, "w", encoding="utf-8") as f:
                 f.write(md_content)
-            print(f"    → Markdown: {md_path}")
-
-            # ── Render PDF ────────────────────────────────────────────
+            
             try:
                 render_pdf(md_content, pdf_out)
-                print(f"    → PDF:      {pdf_out}")
             except Exception as pdf_err:
-                print(f"    [WARN] PDF render failed: {pdf_err}")
+                safe_log(f"    [WARN] PDF render failed for {pdf_path.name}: {pdf_err}")
 
-            processed += 1
+            with LOG_LOCK: processed += 1
+            safe_log(f"  ✓ Finished {pdf_path.name}")
 
-        except KeyboardInterrupt:
-            print("\n[INTERRUPTED] Saving progress …")
-            break
         except Exception as exc:
-            print(f"    [ERROR] {exc}")
-            traceback.print_exc()
-            errors += 1
+            safe_log(f"    [ERROR] Failed to process {pdf_path.name}: {exc}")
+            with LOG_LOCK: errors += 1
 
-    print(f"\n[DONE] Processed: {processed}  |  Skipped (already done): {skipped}  |  Errors: {errors}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        executor.map(process_chapter, all_pdfs)
+
+    print(f"\n[DONE] Processed: {processed}  |  Skipped: {skipped}  |  Errors: {errors}")
 
 
 # ─────────────────── MARKDOWN & PDF RENDERING ───────────────────────── #

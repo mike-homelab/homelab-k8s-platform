@@ -20,6 +20,14 @@ alloy:
 
     discovery.relabel "pods" {
       targets = discovery.kubernetes.pods.targets
+
+      // Node filtering: Each Alloy instance only scrapes pods on its local node
+      // rule {
+      //   source_labels = ["__meta_kubernetes_pod_node_name"]
+      //   regex         = env("HOSTNAME")
+      //   action        = "keep"
+      // }
+
       rule {
         source_labels = ["__meta_kubernetes_namespace"]
         target_label  = "namespace"
@@ -36,10 +44,29 @@ alloy:
         source_labels = ["__meta_kubernetes_pod_node_name"]
         target_label  = "node"
       }
+
+      // Dynamic job labeling
       rule {
-        replacement  = "kubernetes-pods"
-        target_label = "job"
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "job"
       }
+
+      // Specific handling for dcgm-exporter to match Dashboard 9822 expectations
+      rule {
+        source_labels = ["job"]
+        regex         = "nvidia-dcgm-exporter"
+        replacement   = "gpu-metrics"
+        target_label  = "job"
+      }
+
+      // Default job name if no app label found
+      rule {
+        source_labels = ["job"]
+        regex         = ""
+        replacement   = "kubernetes-pods"
+        target_label  = "job"
+      }
+
       rule {
         source_labels = ["__meta_kubernetes_pod_container_name"]
         target_label  = "service"
@@ -58,7 +85,35 @@ alloy:
       }
     }
 
-    // --- METRICS ---
+    discovery.kubernetes "dcgm" {
+      role = "endpoints"
+      namespaces {
+        names = ["gpu-operator"]
+      }
+    }
+
+    discovery.relabel "dcgm" {
+      targets = discovery.kubernetes.dcgm.targets
+      rule {
+        source_labels = ["__meta_kubernetes_service_name"]
+        regex         = "nvidia-dcgm-exporter"
+        action        = "keep"
+      }
+      rule {
+        replacement  = "gpu-metrics"
+        target_label = "job"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_endpoint_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    prometheus.scrape "dcgm" {
+      targets    = discovery.relabel.dcgm.output
+      forward_to = [prometheus.remote_write.default.receiver]
+    }
+
     prometheus.scrape "default" {
       targets    = discovery.relabel.pods.output
       forward_to = [prometheus.remote_write.default.receiver]
