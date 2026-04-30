@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform.git
     targetRevision: main
     path: clusters/homelab/apps_argocd
     directory:

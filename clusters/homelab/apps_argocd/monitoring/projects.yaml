@@ -9,7 +9,7 @@ spec:
   description: Observability & Search Stack
 
   sourceRepos:
-  - https://github.com/mike-homelab/homelab-k8s-platform
+  - https://github.com/mike-homelab/homelab-k8s-platform.git
   - https://prometheus-community.github.io/helm-charts
   - https://github.com/prometheus-operator/prometheus-operator
   - https://grafana.github.io/helm-charts

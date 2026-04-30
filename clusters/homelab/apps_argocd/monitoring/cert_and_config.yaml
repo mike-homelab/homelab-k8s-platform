@@ -8,12 +8,15 @@ metadata:
 spec:
   project: monitoring
   source:
-    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform.git
     targetRevision: main
     path: clusters/homelab/apps/monitoring/monitoring-configs
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
