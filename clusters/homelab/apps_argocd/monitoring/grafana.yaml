@@ -63,5 +63,17 @@ spec:
                 type: tempo
                 access: proxy
                 url: http://tempo-query-frontend.monitoring.svc:3200
+        extraVolumes:
+          - name: dashboard-providers
+            configMap:
+              name: grafana-dashboard-providers
+          - name: ai-inference-dashboard
+            configMap:
+              name: grafana-dashboard-ai-inference
+        extraVolumeMounts:
+          - name: dashboard-providers
+            mountPath: /etc/grafana/provisioning/dashboards
+          - name: ai-inference-dashboard
+            mountPath: /var/lib/grafana/dashboards/ai-inference
         adminPassword: admin@Homelab
 
