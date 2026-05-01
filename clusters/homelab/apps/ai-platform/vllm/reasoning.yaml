@@ -63,6 +63,8 @@ spec:
               value: "0.0.0.0:11434"
             - name: OLLAMA_LOG_FORMAT
               value: "json"
+            - name: OLLAMA_KV_CACHE_TYPE
+              value: "q4_0"
 
           ports:
             - name: http

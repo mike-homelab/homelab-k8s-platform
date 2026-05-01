@@ -92,12 +92,12 @@ LOCAL_COST_PER_CALL      = 0.0    # Local inference: $0 marginal cost
 
 LITELLM_BASE   = "https://llm.michaelhomelab.work/v1"
 LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
-MODEL_REASON   = "reasoning"   # ~128K ctx  – used for bible building & QA
-MODEL_CODER    = "coder"       # ~32K ctx   – used for per-chapter cleaning
+MODEL_PLANNER  = "agent-planner"   # DeepSeek-R1 (14B) – Planning & QA
+MODEL_EXECUTOR = "agent-executor"  # Mistral-Small (24B) – Execution & Cleaning
 
 # Context budgets (in characters, ~4 chars/token estimate)
-REASON_CTX_CHARS  = 50_000    # Reduced from 400K to avoid 30min+ generation times and gateway timeouts
-CODER_CTX_CHARS   = 24_000    # leave headroom below 32K limit
+PLANNER_CTX_CHARS  = 100_000   # 32K context safety limit
+EXECUTOR_CTX_CHARS = 50_000    # 16K context safety limit
 
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
 RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")
@@ -137,91 +137,82 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
     }
     payload["stream"] = True
     
-    for attempt in range(1, retries + 1):
-        try:
-            if attempt > 1:
-                safe_log(f"  [LLM] Retry attempt {attempt}/{retries} for {model}...")
-            
-            # Use streaming to keep connection alive and avoid gateway timeouts
-            resp = requests.post(url, headers=headers, json=payload,
-                                 timeout=3600, verify=False, stream=True)
-            resp.raise_for_status()
-            
-            full_content = []
-            prompt_tok = 0
-            completion_tok = 0
-            
-            for line in resp.iter_lines():
-                if not line:
+    try:
+        # Use streaming to keep connection alive and avoid gateway timeouts
+        resp = requests.post(url, headers=headers, json=payload,
+                             timeout=3600, verify=False, stream=True)
+        resp.raise_for_status()
+        
+        full_content = []
+        prompt_tok = 0
+        completion_tok = 0
+        
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8")
+            if line_str.startswith("data: "):
+                data_str = line_str[6:]
+                if data_str.strip() == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data_str)
+                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                    
+                    # Capture multiple potential content fields (reasoning models use different ones)
+                    content   = delta.get("content", "")
+                    reasoning = delta.get("reasoning_content", "") or delta.get("thought", "")
+                    
+                    if content:
+                        full_content.append(content)
+                    if reasoning:
+                        # We collect reasoning but it will be stripped later if needed
+                        full_content.append(reasoning)
+                    
+                    # Extract usage if present
+                    usage = chunk.get("usage")
+                    if usage:
+                        prompt_tok = usage.get("prompt_tokens", 0)
+                        completion_tok = usage.get("completion_tokens", 0)
+                except Exception:
                     continue
-                line_str = line.decode("utf-8")
-                if line_str.startswith("data: "):
-                    data_str = line_str[6:]
-                    if data_str.strip() == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data_str)
-                        delta = chunk.get("choices", [{}])[0].get("delta", {})
-                        
-                        # Capture multiple potential content fields (reasoning models use different ones)
-                        content   = delta.get("content", "")
-                        reasoning = delta.get("reasoning_content", "") or delta.get("thought", "")
-                        
-                        if content:
-                            full_content.append(content)
-                        if reasoning:
-                            # We collect reasoning but it will be stripped later if needed
-                            # For now, let's include it in the stream to keep it alive
-                            full_content.append(reasoning)
-                        
-                        # Extract usage if present
-                        usage = chunk.get("usage")
-                        if usage:
-                            prompt_tok = usage.get("prompt_tokens", 0)
-                            completion_tok = usage.get("completion_tokens", 0)
-                    except Exception:
-                        continue
-            
-            final_content = "".join(full_content).strip()
-            
-            if not final_content:
-                safe_log(f"  [WARN] LLM returned absolutely no content for {model} on this attempt.")
-            
-            # ── Track token usage ──
-            if prompt_tok == 0:
-                prompt_tok     = len(system + user) // 4
-                completion_tok = len(final_content) // 4
-            
-            TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
-            
-            # ── Handle Reasoning/Thinking blocks ──
-            # 1. Strip known thinking tags
-            final_content = re.sub(r'<thought>.*?</thought>', '', final_content, flags=re.DOTALL)
-            final_content = re.sub(r'<think>.*?</think>', '', final_content, flags=re.DOTALL)
-            final_content = re.sub(r'thinking\n.*?\n', '', final_content, flags=re.DOTALL)
-            
-            # 2. Extract from <cleaned_text> tags if present (mandatory for chatty models)
-            tag_match = re.search(r'<cleaned_text>(.*?)</cleaned_text>', final_content, flags=re.DOTALL)
-            if tag_match:
-                final_content = tag_match.group(1).strip()
-            
-            return final_content.strip()
-        except Exception as exc:
-            if attempt == retries:
-                safe_log(f"  [LLM] Final attempt {attempt}/{retries} failed: {exc}")
-            if attempt < retries:
-                time.sleep(2 * attempt)
-    raise RuntimeError(f"LLM call failed after {retries} retries")
+        
+        final_content = "".join(full_content).strip()
+        
+        if not final_content:
+            raise RuntimeError(f"LLM returned absolutely no content for {model}.")
+        
+        # ── Track token usage ──
+        if prompt_tok == 0:
+            prompt_tok     = len(system + user) // 4
+            completion_tok = len(final_content) // 4
+        
+        TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
+        
+        # ── Handle Reasoning/Thinking blocks ──
+        # 1. Strip known thinking tags (critical for agent-planner)
+        final_content = re.sub(r'<thought>.*?</thought>', '', final_content, flags=re.DOTALL)
+        final_content = re.sub(r'<think>.*?</think>', '', final_content, flags=re.DOTALL)
+        final_content = re.sub(r'thinking\n.*?\n', '', final_content, flags=re.DOTALL)
+        
+        # 2. Extract from <cleaned_text> tags if present
+        tag_match = re.search(r'<cleaned_text>(.*?)</cleaned_text>', final_content, flags=re.DOTALL)
+        if tag_match:
+            final_content = tag_match.group(1).strip()
+        
+        return final_content.strip()
+    except Exception as exc:
+        safe_log(f"  [LLM] Call failed for {model}: {exc}")
+        raise RuntimeError(f"LLM call failed for {model}: {exc}")
 
 def wakeup_models():
-    """Ensure both the reasoning and coder models are awake and responsive."""
-    safe_log("\n[WAKEUP] Warming up LLM endpoints...")
-    models = [MODEL_REASON, MODEL_CODER]
+    """Ensure both the planner and executor models are awake and responsive."""
+    safe_log("\n[WAKEUP] Warming up Agentic Duo endpoints...")
+    models = [MODEL_PLANNER, MODEL_EXECUTOR]
     
     def poke(m):
         try:
             safe_log(f"  -> Poking {m}...")
-            # Increased max_tokens for ping because reasoning models might "think" first
             llm_call(m, "ping", "Hello, are you awake? Reply with 'yes'.", max_tokens=512)
             safe_log(f"  [✓] {m} is online.")
         except Exception as e:
@@ -330,7 +321,7 @@ BIBLE_EXTRACT_SYSTEM = textwrap.dedent("""\
 def extract_bible_from_chunk(chunk: str, vol_label: str) -> dict:
     """Ask the reasoning model to extract bible data from one text chunk."""
     user_msg = f"[Source: {vol_label}]\n\n{chunk}"
-    raw = llm_call(MODEL_REASON, BIBLE_EXTRACT_SYSTEM, user_msg,
+    raw = llm_call(MODEL_PLANNER, BIBLE_EXTRACT_SYSTEM, user_msg,
                    temperature=0.1, max_tokens=4096)
     
     # Robust JSON extraction
@@ -385,10 +376,10 @@ def synthesize_bible(partial_bibles: list[dict]) -> dict:
     merged_str = json.dumps(merged, ensure_ascii=False, indent=2)
 
     # If merged JSON fits in one reasoning call, synthesize directly
-    if len(merged_str) < REASON_CTX_CHARS - 4000:
+    if len(merged_str) < PLANNER_CTX_CHARS - 4000:
         system = BIBLE_SYNTHESIS_SYSTEM
         user = f"Here are all partial bible drafts merged:\n\n{merged_str}"
-        raw = llm_call(MODEL_REASON, system, user, temperature=0.1, max_tokens=8192)
+        raw = llm_call(MODEL_PLANNER, system, user, temperature=0.1, max_tokens=8192)
         raw = re.sub(r"```json\s*", "", raw)
         raw = re.sub(r"```\s*", "", raw)
         try:
@@ -465,8 +456,8 @@ def phase1_build_bible(force: bool = False) -> dict:
         text = extract_pdf_text(pdf_path)
         print(f"    Extracted {len(text):,} characters of text.")
 
-        # Chunk to fit reasoning model context
-        chunks = chunk_text(text, REASON_CTX_CHARS - 4000)
+        # Chunk to fit planner model context
+        chunks = chunk_text(text, PLANNER_CTX_CHARS - 4000)
         safe_log(f"    Split into {len(chunks)} chunk(s). Processing in parallel...")
 
         vol_bibles = []
@@ -624,18 +615,17 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
 
 def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
     """
-    Clean raw text using the REASONING model for maximum consistency.
-    Uses large chunks (96k chars) to minimize fragmenting chapters.
+    Clean raw text using the EXECUTOR model (Mistral Small) for high-fidelity cleaning.
     """
-    # Max chars for chapter text = reasoning budget minus bible context and prompt overhead
+    # Max chars for chapter text = executor budget minus bible context and prompt overhead
     overhead   = len(bible_ctx) + 500
-    max_text   = REASON_CTX_CHARS - overhead
+    max_text   = EXECUTOR_CTX_CHARS - overhead
 
     if max_text < 10000:
         # Bible context too large – trim it further
-        bible_ctx = bible_ctx[:REASON_CTX_CHARS // 4]
+        bible_ctx = bible_ctx[:EXECUTOR_CTX_CHARS // 4]
         overhead  = len(bible_ctx) + 500
-        max_text  = REASON_CTX_CHARS - overhead
+        max_text  = EXECUTOR_CTX_CHARS - overhead
 
     chunks = chunk_text(raw_text, max_text, overlap=2000)
     cleaned_chunks = [None] * len(chunks)
@@ -649,16 +639,15 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
             f"=== RAW CHAPTER TEXT ({label}) ===\n\n"
             f"{chunk}"
         )
-        safe_log(f"      Reasoning cleaning pass part {i+1}/{len(chunks)} …")
+        safe_log(f"      Executor cleaning pass part {i+1}/{len(chunks)} …")
         
-        # MAXIMIZED MAX_TOKENS to 80k to allow for massive "thought" blocks + full chapter output
-        result = llm_call(MODEL_REASON, CODER_CLEAN_SYSTEM, user_msg,
-                          temperature=0.25, max_tokens=81920)
+        result = llm_call(MODEL_EXECUTOR, CODER_CLEAN_SYSTEM, user_msg,
+                          temperature=0.25, max_tokens=16384)
         
         if not result:
             safe_log(f"      [WARN] Empty result for {label}. Retrying with higher temperature...")
-            result = llm_call(MODEL_REASON, CODER_CLEAN_SYSTEM, user_msg,
-                              temperature=0.7, max_tokens=81920)
+            result = llm_call(MODEL_EXECUTOR, CODER_CLEAN_SYSTEM, user_msg,
+                              temperature=0.7, max_tokens=16384)
             
         return i, result
 
@@ -679,11 +668,10 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
 def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
                       chapter_label: str) -> str:
     """
-    Use the REASONING model for a QA pass on short chapters.
-    For long chapters, skip QA to stay within budget.
+    Use the PLANNER model (DeepSeek-R1) for a QA pass.
     """
     total_len = len(bible_ctx) + len(raw_text) + len(cleaned_text) + 1000
-    if total_len > REASON_CTX_CHARS:
+    if total_len > PLANNER_CTX_CHARS:
         # Too large for QA pass — return cleaned_text as-is
         print(f"      [QA] Chapter too long for QA pass ({total_len:,} chars), skipping.")
         return cleaned_text
@@ -693,10 +681,10 @@ def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
         f"=== RAW TEXT ===\n{raw_text}\n\n"
         f"=== CLEANED VERSION (needs QA) ===\n{cleaned_text}"
     )
-    print(f"      Reasoning QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
-    # QA pass also uses a maximized token budget
-    result = llm_call(MODEL_REASON, REASON_QA_SYSTEM, user_msg,
-                      temperature=0.15, max_tokens=81920)
+    print(f"      Planner QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
+    # QA pass uses the planning model to verify the work
+    result = llm_call(MODEL_PLANNER, REASON_QA_SYSTEM, user_msg,
+                      temperature=0.15, max_tokens=32768)
     print("done")
     return result
 
@@ -1054,9 +1042,9 @@ def main():
     print("║  Novel Proofreader Agent — The Wrong Way to Use Healing  ║")
     print("║  Magic                                                    ║")
     print("╚══════════════════════════════════════════════════════════╝")
-    print(f"  LLM Reasoning : {MODEL_REASON} @ {LITELLM_BASE}")
-    print(f"  LLM Coder (id): {MODEL_CODER}  @ {LITELLM_BASE}")
-    print(f"  (Phase 2 is now routed through the Reasoning model for maximum quality)")
+    print(f"  Agent Planner : {MODEL_PLANNER} @ {LITELLM_BASE}")
+    print(f"  Agent Executor: {MODEL_EXECUTOR} @ {LITELLM_BASE}")
+    print(f"  (Phase 2 uses Executor for cleaning & Planner for QA)")
     print(f"  Bible path    : {BIBLE_PATH}")
     print(f"  Output dir    : {CLEANED_DIR} (.md + .pdf per chapter)")
 
