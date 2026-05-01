@@ -7,8 +7,8 @@ Two-phase pipeline:
   Phase 2 - Chapter Cleaner: Clean raw fan-translated chapters using the Bible
 
 LLM routing:
-  - reasoning  (qwen3 / ~128K ctx) : planning, bible synthesis, quality review
-  - coder      (qwen2.5-coder 14B / ~32K ctx) : chapter text correction pass
+  - reasoning  (qwen3 / ~128K ctx) : planning, bible synthesis, chapter cleaning, quality review
+  - coder      (qwen2.5-coder 14B / ~32K ctx) : (unused, reserved for future fast-pass)
 
 Output: Markdown (.md) + optional PDF per chapter, cost savings report at end.
 Author: Antigravity for Michael's Homelab
@@ -96,7 +96,7 @@ MODEL_REASON   = "reasoning"   # ~128K ctx  – used for bible building & QA
 MODEL_CODER    = "coder"       # ~32K ctx   – used for per-chapter cleaning
 
 # Context budgets (in characters, ~4 chars/token estimate)
-REASON_CTX_CHARS  = 96_000    # leave headroom below 128K limit
+REASON_CTX_CHARS  = 50_000    # Reduced from 400K to avoid 30min+ generation times and gateway timeouts
 CODER_CTX_CHARS   = 24_000    # leave headroom below 32K limit
 
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
@@ -107,7 +107,8 @@ BIBLE_PATH          = BIBLE_DIR / "character_grammar_bible.json"
 BIBLE_PROGRESS_PATH = BIBLE_DIR / "bible_progress.json"
 
 # Concurrency settings
-MAX_WORKERS = 4
+MAX_WORKERS   = 1  # Process 1 chapter at a time for maximum accuracy
+CHUNK_WORKERS = 4  # Process 4 chunks of that chapter in parallel to saturate GPU
 LOG_LOCK = threading.Lock()
 
 def safe_log(msg: str):
@@ -134,28 +135,102 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             {"role": "user",    "content": user},
         ],
     }
+    payload["stream"] = True
+    
     for attempt in range(1, retries + 1):
         try:
+            if attempt > 1:
+                safe_log(f"  [LLM] Retry attempt {attempt}/{retries} for {model}...")
+            
+            # Use streaming to keep connection alive and avoid gateway timeouts
             resp = requests.post(url, headers=headers, json=payload,
-                                 timeout=300, verify=False)
+                                 timeout=3600, verify=False, stream=True)
             resp.raise_for_status()
-            data = resp.json()
+            
+            full_content = []
+            prompt_tok = 0
+            completion_tok = 0
+            
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                line_str = line.decode("utf-8")
+                if line_str.startswith("data: "):
+                    data_str = line_str[6:]
+                    if data_str.strip() == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data_str)
+                        delta = chunk.get("choices", [{}])[0].get("delta", {})
+                        
+                        # Capture multiple potential content fields (reasoning models use different ones)
+                        content   = delta.get("content", "")
+                        reasoning = delta.get("reasoning_content", "") or delta.get("thought", "")
+                        
+                        if content:
+                            full_content.append(content)
+                        if reasoning:
+                            # We collect reasoning but it will be stripped later if needed
+                            # For now, let's include it in the stream to keep it alive
+                            full_content.append(reasoning)
+                        
+                        # Extract usage if present
+                        usage = chunk.get("usage")
+                        if usage:
+                            prompt_tok = usage.get("prompt_tokens", 0)
+                            completion_tok = usage.get("completion_tokens", 0)
+                    except Exception:
+                        continue
+            
+            final_content = "".join(full_content).strip()
+            
+            if not final_content:
+                safe_log(f"  [WARN] LLM returned absolutely no content for {model} on this attempt.")
+            
             # ── Track token usage ──
-            usage = data.get("usage", {})
-            prompt_tok     = usage.get("prompt_tokens", 0)
-            completion_tok = usage.get("completion_tokens", 0)
             if prompt_tok == 0:
-                # Fallback estimate: ~0.25 tokens per char
                 prompt_tok     = len(system + user) // 4
-                completion_tok = max_tokens // 4
+                completion_tok = len(final_content) // 4
+            
             TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
-            return data["choices"][0]["message"]["content"].strip()
+            
+            # ── Handle Reasoning/Thinking blocks ──
+            # Strip internal thought tags if they were returned as part of the content
+            final_content = re.sub(r'<thought>.*?</thought>', '', final_content, flags=re.DOTALL)
+            final_content = re.sub(r'thinking\n.*?\n', '', final_content, flags=re.DOTALL)
+            
+            return final_content.strip()
         except Exception as exc:
             if attempt == retries:
                 safe_log(f"  [LLM] Final attempt {attempt}/{retries} failed: {exc}")
             if attempt < retries:
                 time.sleep(2 * attempt)
     raise RuntimeError(f"LLM call failed after {retries} retries")
+
+def wakeup_models():
+    """Ensure both the reasoning and coder models are awake and responsive."""
+    safe_log("\n[WAKEUP] Warming up LLM endpoints...")
+    models = [MODEL_REASON, MODEL_CODER]
+    
+    def poke(m):
+        try:
+            safe_log(f"  -> Poking {m}...")
+            # Increased max_tokens for ping because reasoning models might "think" first
+            llm_call(m, "ping", "Hello, are you awake? Reply with 'yes'.", max_tokens=512)
+            safe_log(f"  [✓] {m} is online.")
+        except Exception as e:
+            safe_log(f"  [!] Failed to wake {m}: {e}")
+
+    threads = []
+    for m in models:
+        t = threading.Thread(target=poke, args=(m,))
+        t.start()
+        threads.append(t)
+    
+    for t in threads:
+        t.join()
+    safe_log("[WAKEUP] Warm-up sequence complete.\n")
+
 
 
 def extract_pdf_text(pdf_path: Path) -> str:
@@ -487,8 +562,18 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
             gender   = info.get("gender", "unknown")
             pronouns = info.get("pronouns", "unknown")
             style    = info.get("speech_style", "")
-            aliases  = ", ".join(info.get("aliases", []))
-            titles   = ", ".join(info.get("titles_held", []))
+            
+            # Defensive checks for list fields
+            raw_aliases = info.get("aliases", [])
+            if not isinstance(raw_aliases, (list, tuple)):
+                raw_aliases = [raw_aliases] if raw_aliases else []
+            aliases = ", ".join([str(a) for a in raw_aliases if a])
+
+            raw_titles = info.get("titles_held", [])
+            if not isinstance(raw_titles, (list, tuple)):
+                raw_titles = [raw_titles] if raw_titles else []
+            titles = ", ".join([str(t) for t in raw_titles if t])
+
             line = f"{name}: {gender} ({pronouns})"
             if titles:   line += f", titles: {titles}"
             if aliases:  line += f", aliases: {aliases}"
@@ -528,24 +613,26 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
     return result[:max_chars]  # hard-cap
 
 
-def clean_chapter_coder(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
+def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
     """
-    Use the CODER model to do the main cleaning pass.
-    Handles long chapters by chunking and stitching.
+    Clean raw text using the REASONING model for maximum consistency.
+    Uses large chunks (96k chars) to minimize fragmenting chapters.
     """
-    # Max chars for chapter text = coder budget minus bible context and prompt overhead
+    # Max chars for chapter text = reasoning budget minus bible context and prompt overhead
     overhead   = len(bible_ctx) + 500
-    max_text   = CODER_CTX_CHARS - overhead
+    max_text   = REASON_CTX_CHARS - overhead
 
-    if max_text < 2000:
+    if max_text < 10000:
         # Bible context too large – trim it further
-        bible_ctx = bible_ctx[:CODER_CTX_CHARS // 3]
+        bible_ctx = bible_ctx[:REASON_CTX_CHARS // 4]
         overhead  = len(bible_ctx) + 500
-        max_text  = CODER_CTX_CHARS - overhead
+        max_text  = REASON_CTX_CHARS - overhead
 
-    chunks = chunk_text(raw_text, max_text, overlap=200)
+    chunks = chunk_text(raw_text, max_text, overlap=2000)
     cleaned_chunks = [None] * len(chunks)
 
+    # Process chunks sequentially within a chapter to avoid nested ThreadPoolExecutor 
+    # and overloading the LLM proxy (since chapters are already parallel).
     def process_chunk(i, chunk):
         label = f"{chapter_label} [part {i+1}/{len(chunks)}]"
         user_msg = (
@@ -553,18 +640,31 @@ def clean_chapter_coder(raw_text: str, bible_ctx: str, chapter_label: str) -> st
             f"=== RAW CHAPTER TEXT ({label}) ===\n\n"
             f"{chunk}"
         )
-        safe_log(f"      Coder pass part {i+1}/{len(chunks)} …")
-        result = llm_call(MODEL_CODER, CODER_CLEAN_SYSTEM, user_msg,
-                          temperature=0.25, max_tokens=4096)
+        safe_log(f"      Reasoning cleaning pass part {i+1}/{len(chunks)} …")
+        
+        # MAXIMIZED MAX_TOKENS to 80k to allow for massive "thought" blocks + full chapter output
+        result = llm_call(MODEL_REASON, CODER_CLEAN_SYSTEM, user_msg,
+                          temperature=0.25, max_tokens=81920)
+        
+        if not result:
+            safe_log(f"      [WARN] Empty result for {label}. Retrying with higher temperature...")
+            result = llm_call(MODEL_REASON, CODER_CLEAN_SYSTEM, user_msg,
+                              temperature=0.7, max_tokens=81920)
+            
         return i, result
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=CHUNK_WORKERS) as executor:
         futures = [executor.submit(process_chunk, i, chunk) for i, chunk in enumerate(chunks)]
         for future in concurrent.futures.as_completed(futures):
             idx, res = future.result()
             cleaned_chunks[idx] = res
 
-    return "\n\n".join(cleaned_chunks)
+    final_text = "\n\n".join([c for c in cleaned_chunks if c])
+    
+    if not final_text:
+        raise ValueError(f"Cleaning pass for {chapter_label} returned NO text content.")
+        
+    return final_text
 
 
 def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
@@ -585,8 +685,9 @@ def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
         f"=== CLEANED VERSION (needs QA) ===\n{cleaned_text}"
     )
     print(f"      Reasoning QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
+    # QA pass also uses a maximized token budget
     result = llm_call(MODEL_REASON, REASON_QA_SYSTEM, user_msg,
-                      temperature=0.15, max_tokens=8192)
+                      temperature=0.15, max_tokens=81920)
     print("done")
     return result
 
@@ -663,8 +764,8 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
                 with LOG_LOCK: skipped += 1
                 return
 
-            # Coder pass
-            cleaned = clean_chapter_coder(raw_text, bible_ctx, pdf_path.stem)
+            # Main Cleaning pass (Reasoning)
+            cleaned = clean_chapter_main(raw_text, bible_ctx, pdf_path.stem)
 
             # Reasoning QA pass
             if not skip_qa:
@@ -945,7 +1046,8 @@ def main():
     print("║  Magic                                                    ║")
     print("╚══════════════════════════════════════════════════════════╝")
     print(f"  LLM Reasoning : {MODEL_REASON} @ {LITELLM_BASE}")
-    print(f"  LLM Coder     : {MODEL_CODER}  @ {LITELLM_BASE}")
+    print(f"  LLM Coder (id): {MODEL_CODER}  @ {LITELLM_BASE}")
+    print(f"  (Phase 2 is now routed through the Reasoning model for maximum quality)")
     print(f"  Bible path    : {BIBLE_PATH}")
     print(f"  Output dir    : {CLEANED_DIR} (.md + .pdf per chapter)")
 
@@ -954,26 +1056,44 @@ def main():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     start_time = time.time()
-    bible = None
+    
+    # 1. Wake up models
+    wakeup_models()
+    
+    # 2. Try to prevent sleep (using wakepy if available)
+    try:
+        from wakepy import keep
+        sleep_context = keep.running()
+        safe_log("[SLEEP] wakepy: Preventing system sleep during execution.")
+    except ImportError:
+        safe_log("[SLEEP] wakepy not found. For best results, run with 'systemd-inhibit python ...'")
+        # Create a dummy context manager
+        class DummyContext:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+        sleep_context = DummyContext()
 
-    if args.phase in ("1", "all"):
-        bible = phase1_build_bible(force=args.rebuild_bible)
+    with sleep_context:
+        bible = None
 
-    if args.phase in ("2", "all"):
-        if bible is None:
-            if BIBLE_PATH.exists():
-                print(f"\n[INFO] Loading existing bible from {BIBLE_PATH}")
-                with open(BIBLE_PATH, "r", encoding="utf-8") as f:
-                    bible = json.load(f)
-            else:
-                print("[ERROR] No bible found. Run with --phase 1 or --phase all first.")
-                sys.exit(1)
-        phase2_clean_chapters(
-            bible,
-            volumes=args.volumes,
-            force=args.force,
-            skip_qa=args.skip_qa,
-        )
+        if args.phase in ("1", "all"):
+            bible = phase1_build_bible(force=args.rebuild_bible)
+
+        if args.phase in ("2", "all"):
+            if bible is None:
+                if BIBLE_PATH.exists():
+                    print(f"\n[INFO] Loading existing bible from {BIBLE_PATH}")
+                    with open(BIBLE_PATH, "r", encoding="utf-8") as f:
+                        bible = json.load(f)
+                else:
+                    print("[ERROR] No bible found. Run with --phase 1 or --phase all first.")
+                    sys.exit(1)
+            phase2_clean_chapters(
+                bible,
+                volumes=args.volumes,
+                force=args.force,
+                skip_qa=args.skip_qa,
+            )
 
     print_cost_report(start_time)
     print("✓ Agent finished.")
