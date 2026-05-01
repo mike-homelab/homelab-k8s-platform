@@ -195,9 +195,15 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             TRACKER.record(model, prompt_tok, completion_tok, is_local=True)
             
             # ── Handle Reasoning/Thinking blocks ──
-            # Strip internal thought tags if they were returned as part of the content
+            # 1. Strip known thinking tags
             final_content = re.sub(r'<thought>.*?</thought>', '', final_content, flags=re.DOTALL)
+            final_content = re.sub(r'<think>.*?</think>', '', final_content, flags=re.DOTALL)
             final_content = re.sub(r'thinking\n.*?\n', '', final_content, flags=re.DOTALL)
+            
+            # 2. Extract from <cleaned_text> tags if present (mandatory for chatty models)
+            tag_match = re.search(r'<cleaned_text>(.*?)</cleaned_text>', final_content, flags=re.DOTALL)
+            if tag_match:
+                final_content = tag_match.group(1).strip()
             
             return final_content.strip()
         except Exception as exc:
@@ -532,7 +538,9 @@ CODER_CLEAN_SYSTEM = textwrap.dedent("""\
     8. Do NOT add commentary or meta-notes — output the corrected chapter text ONLY.
     9. Dialogue tags should use natural English speech verbs (said, replied, asked, exclaimed, etc.).
 
-    Output format: Return ONLY the corrected chapter text. No headers, no explanation.
+    Output format: You MUST wrap the final corrected chapter text inside <cleaned_text> tags. 
+    Example: <cleaned_text>Chapter content here...</cleaned_text>
+    Do NOT include any thoughts, explanations, or meta-notes outside these tags.
 """)
 
 REASON_QA_SYSTEM = textwrap.dedent("""\
@@ -546,7 +554,8 @@ REASON_QA_SYSTEM = textwrap.dedent("""\
     - Natural English flow in dialogue and narration
     - Completeness: ensure NO plot content was dropped
 
-    Output format: Return ONLY the final corrected chapter text. No explanation.
+    Output format: You MUST wrap the final corrected chapter text inside <cleaned_text> tags.
+    Do NOT include any explanation or meta-notes outside these tags.
 """)
 
 

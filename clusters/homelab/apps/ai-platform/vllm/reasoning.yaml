@@ -26,7 +26,7 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull gpt-oss:20b
+              ollama pull deepseek-r1:14b
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -47,9 +47,9 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
 
-            # 🧠 Long-context reasoning
+            # 🧠 Balanced agentic reasoning
             - name: OLLAMA_NUM_CTX
-              value: "131072"
+              value: "32768"
 
             # ⚠️ Critical for stability
             - name: OLLAMA_NUM_PARALLEL

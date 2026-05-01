@@ -26,7 +26,7 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull qwen2.5-coder:14b
+              ollama pull mistral-small:24b
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -47,9 +47,9 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
 
-            # ⚡ Coding sweet spot
+            # ⚡ Optimized for tool-calling agents
             - name: OLLAMA_NUM_CTX
-              value: "32768"
+              value: "16384"
 
             # Single user → stability > throughput
             - name: OLLAMA_NUM_PARALLEL
