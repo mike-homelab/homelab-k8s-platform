@@ -15,7 +15,7 @@ spec:
         app: analyst
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/path: "/metrics"
+        prometheus.io/path: "/metrics/"
         prometheus.io/port: "11434"
     spec:
       nodeSelector:
@@ -97,7 +97,7 @@ metadata:
   namespace: ai-platform
   annotations:
     prometheus.io/scrape: "true"
-    prometheus.io/path: "/metrics"
+    prometheus.io/path: "/metrics/"
     prometheus.io/port: "11434"
 spec:
   type: ClusterIP

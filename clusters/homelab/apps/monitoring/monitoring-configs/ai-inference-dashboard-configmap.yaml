@@ -29,25 +29,25 @@ data:
           "type": "timeseries",
           "title": "Builder: Input Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
-          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{model=\"builder\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\"builder.*\"}[1m]))", "legendFormat": "Input"}]
+          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Input"}]
         },
         {
           "type": "timeseries",
           "title": "Builder: Output Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
-          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{model=\"builder\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\"builder.*\"}[1m]))", "legendFormat": "Output"}]
+          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Output"}]
         },
         {
           "type": "timeseries",
           "title": "Builder: VRAM Usage (MiB)",
           "gridPos": {"h": 8, "w": 8, "x": 0, "y": 9},
-          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{pod=~\"builder-.*\"}", "legendFormat": "VRAM Used"}]
+          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{namespace=\"ai-platform\", pod=~\"builder-.*\"}", "legendFormat": "VRAM Used"}]
         },
         {
           "type": "timeseries",
           "title": "Builder: GPU Utilization (%)",
           "gridPos": {"h": 8, "w": 8, "x": 8, "y": 9},
-          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{pod=~\"builder-.*\"}", "legendFormat": "GPU Util"}]
+          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{namespace=\"ai-platform\", pod=~\"builder-.*\"}", "legendFormat": "GPU Util"}]
         },
         {
           "type": "timeseries",
@@ -71,25 +71,25 @@ data:
           "type": "timeseries",
           "title": "Analyst: Input Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
-          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{model=\"analyst\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\"analyst.*\"}[1m]))", "legendFormat": "Input"}]
+          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Input"}]
         },
         {
           "type": "timeseries",
           "title": "Analyst: Output Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
-          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{model=\"analyst\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\"analyst.*\"}[1m]))", "legendFormat": "Output"}]
+          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Output"}]
         },
         {
           "type": "timeseries",
           "title": "Analyst: VRAM Usage (MiB)",
           "gridPos": {"h": 8, "w": 8, "x": 0, "y": 26},
-          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{pod=~\"analyst-.*\"}", "legendFormat": "VRAM Used"}]
+          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{namespace=\"ai-platform\", pod=~\"analyst-.*\"}", "legendFormat": "VRAM Used"}]
         },
         {
           "type": "timeseries",
           "title": "Analyst: GPU Utilization (%)",
           "gridPos": {"h": 8, "w": 8, "x": 8, "y": 26},
-          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{pod=~\"analyst-.*\"}", "legendFormat": "GPU Util"}]
+          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{namespace=\"ai-platform\", pod=~\"analyst-.*\"}", "legendFormat": "GPU Util"}]
         },
         {
           "type": "timeseries",
