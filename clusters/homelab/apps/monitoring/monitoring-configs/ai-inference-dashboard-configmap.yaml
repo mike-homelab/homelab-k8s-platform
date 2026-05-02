@@ -17,14 +17,13 @@ data:
       "time": {"from": "now-6h", "to": "now"},
       "templating": {
         "list": [
-          {"name":"model","type":"query","datasource":"Mimir","query":"label_values(vllm_prompt_tokens_total, model)","includeAll":true,"allValue":".*"},
-          {"name":"namespace","type":"query","datasource":"Mimir","query":"label_values(vllm_prompt_tokens_total, namespace)","includeAll":true,"allValue":".*"},
+          {"name":"model","type":"query","datasource":"Mimir","query":"label_values(litellm_prompt_tokens_total, model)","includeAll":true,"allValue":".*"},
           {"name":"pod","type":"query","datasource":"Mimir","query":"label_values(kube_pod_info, pod)","includeAll":true,"allValue":".*"}
         ]
       },
       "panels": [
-        {"type":"graph","title":"Input Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(vllm_prompt_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}} - {{namespace}}"}]},
-        {"type":"graph","title":"Output Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(vllm_generation_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}} - {{namespace}}"}]},
+        {"type":"graph","title":"Input Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(litellm_prompt_tokens_total[1m])) by (model) or sum(rate(ollama_prompt_tokens_total[1m])) by (model) or sum(rate(vllm_prompt_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}}"}]},
+        {"type":"graph","title":"Output Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(litellm_completion_tokens_total[1m])) by (model) or sum(rate(ollama_eval_tokens_total[1m])) by (model) or sum(rate(vllm_generation_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}}"}]},
         {"type":"graph","title":"GPU Utilization (%)","datasource":"Mimir","targets":[{"expr":"DCGM_FI_DEV_GPU_UTIL{pod=~\"$pod\"}","legendFormat":"{{pod}} - {{GPU_I_ID}}"}]},
         {"type":"graph","title":"VRAM Usage (MiB)","datasource":"Mimir","targets":[{"expr":"DCGM_FI_DEV_FB_USED{pod=~\"$pod\"}","legendFormat":"{{pod}} - {{GPU_I_ID}}"}]},
         {"type":"graph","title":"Pod CPU Usage (Cores)","datasource":"Mimir","targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{pod=~\"$pod\"}[1m])) by (pod)","legendFormat":"{{pod}}"}]},

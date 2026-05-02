@@ -8,12 +8,30 @@ data:
     model_list:
       - model_name: "builder"
         litellm_params:
-          model: "openai/Devstral-24B-v1-exl2-3_75"
-          api_base: "http://builder.ai-platform.svc:8000/v1"
+          model: "ollama/hf.co/bartowski/Devstral-Small-2-24B-GGUF:Q4_K_M"
+          api_base: "http://builder.ai-platform.svc:11434"
       - model_name: "analyst"
         litellm_params:
-          model: "openai/Mistral-Small-24B-exl2"
-          api_base: "http://analyst.ai-platform.svc:8000/v1"
+          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
+          api_base: "http://analyst.ai-platform.svc:11434"
+      
+      # Legacy aliases for backward compatibility
+      - model_name: "agent-planner"
+        litellm_params:
+          model: "ollama/hf.co/bartowski/Devstral-Small-2-24B-GGUF:Q4_K_M"
+          api_base: "http://builder.ai-platform.svc:11434"
+      - model_name: "reasoning"
+        litellm_params:
+          model: "ollama/hf.co/bartowski/Devstral-Small-2-24B-GGUF:Q4_K_M"
+          api_base: "http://builder.ai-platform.svc:11434"
+      - model_name: "agent-executor"
+        litellm_params:
+          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
+          api_base: "http://analyst.ai-platform.svc:11434"
+      - model_name: "coder"
+        litellm_params:
+          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
+          api_base: "http://analyst.ai-platform.svc:11434"
 
     litellm_settings:
       drop_params: true

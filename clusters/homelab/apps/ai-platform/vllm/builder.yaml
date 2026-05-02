@@ -16,7 +16,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics"
-        prometheus.io/port: "8000"
+        prometheus.io/port: "11434"
     spec:
       nodeSelector:
         kubernetes.io/os: linux
@@ -24,17 +24,18 @@ spec:
 
       initContainers:
         - name: pull-model
-          image: aphroditeengine/aphrodite:latest
+          image: ollama/ollama:latest
           command: ["sh", "-c"]
           args:
             - |
-              if [ ! -d "/models/Devstral-24B-v1-exl2-3_75" ]; then
-                echo "Downloading model..."
-                pip install -U huggingface_hub
-                huggingface-cli download bartowski/Devstral-24B-v1-exl2 --revision 3_75 --local-dir /models/Devstral-24B-v1-exl2-3_75 --local-dir-use-symlinks False
-              else
-                echo "Model already exists."
-              fi
+              ollama serve &
+              sleep 5
+              # Pull the GGUF model directly from HuggingFace
+              ollama pull hf.co/bartowski/Devstral-Small-2-24B-GGUF:Q4_K_M || ollama pull devstral:24b
+              pkill ollama
+          env:
+            - name: OLLAMA_MODELS
+              value: /models
           volumeMounts:
             - name: hf-cache
               mountPath: /models
@@ -44,28 +45,28 @@ spec:
               memory: "4Gi"
 
       containers:
-        - name: aphrodite
-          image: aphroditeengine/aphrodite:latest
-          args:
-            - "--model"
-            - "/models/Devstral-24B-v1-exl2-3_75"
-            - "--quantization"
-            - "exl2"
-            - "--kv-cache-dtype"
-            - "fp4"
-            - "--max-model-len"
-            - "65536"
-            - "--port"
-            - "8000"
+        - name: ollama
+          image: ollama/ollama:latest
+          args: ["serve"]
           env:
-            - name: VLLM_OTEL_TRACING
+            - name: OLLAMA_MODELS
+              value: /models
+            - name: OLLAMA_NUM_CTX
+              value: "65536"
+            - name: OLLAMA_NUM_PARALLEL
               value: "1"
-          envFrom:
-            - configMapRef:
-                name: vllm-otel-env
+            - name: OLLAMA_FLASH_ATTENTION
+              value: "1"
+            - name: OLLAMA_KEEP_ALIVE
+              value: "-1"
+            - name: OLLAMA_HOST
+              value: "0.0.0.0:11434"
+            - name: OLLAMA_LOG_FORMAT
+              value: "json"
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: 11434
+
           resources:
             requests:
               cpu: "4"
@@ -75,6 +76,7 @@ spec:
               cpu: "8"
               memory: "24Gi"
               nvidia.com/gpu: "1"
+
           volumeMounts:
             - name: hf-cache
               mountPath: /models
@@ -100,5 +102,5 @@ spec:
     app: builder
   ports:
     - name: http
-      port: 8000
+      port: 11434
       targetPort: http
