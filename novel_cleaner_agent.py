@@ -102,7 +102,7 @@ EXECUTOR_CTX_CHARS = 50_000    # 16K context safety limit
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
 RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")
 CLEANED_DIR    = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/cleaned_files_v2")
-BIBLE_DIR           = Path("/home/michael/obsidian/Library/Novels/The_Wrong_Way_to_Use_Healing_Magic")
+BIBLE_DIR           = Path("/home/michael/obsidian/Library/Novels/The_Wrong_Way_to_Use_Healing_Magic/v2")
 BIBLE_PATH          = BIBLE_DIR / "character_grammar_bible.json"
 BIBLE_PROGRESS_PATH = BIBLE_DIR / "bible_progress.json"
 

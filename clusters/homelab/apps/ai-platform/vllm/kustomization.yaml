@@ -1,6 +1,6 @@
 resources:
   - otel-configmap.yaml
-  - coder.yaml
-  - reasoning.yaml
-  - embedding.yaml
+  - analyst.yaml
+  - builder.yaml
+  - perception.yaml
   - http-route.yaml

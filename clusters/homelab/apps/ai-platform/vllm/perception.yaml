@@ -13,6 +13,10 @@ spec:
     metadata:
       labels:
         app: infinity-embedding
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
     spec:
       nodeSelector:
         kubernetes.io/os: linux
@@ -33,7 +37,7 @@ spec:
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
               python3 -m vllm.entrypoints.openai.api_server \
-                --model BAAI/bge-reranker-large \
+                --model BAAI/bge-reranker-v2-m3 \
                 --port 8001 \
                 --gpu-memory-utilization 0.45 \
                 --max-model-len 512 \
@@ -53,12 +57,12 @@ spec:
               containerPort: 8001
           resources:
             requests:
-              cpu: "4"
-              memory: "8Gi"
+              cpu: "2"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "6"
-              memory: "10Gi"
+              cpu: "4"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache

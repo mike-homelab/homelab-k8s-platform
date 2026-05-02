@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vllm-analyst
+  namespace: ai-platform
+spec:
+  serviceName: vllm-analyst
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-analyst
+  template:
+    metadata:
+      labels:
+        app: vllm-analyst
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+
+      initContainers:
+        - name: pull-model
+          image: aphroditeengine/aphrodite:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              if [ ! -d "/models/Mistral-Small-24B-exl2" ]; then
+                echo "Downloading model..."
+                pip install -U huggingface_hub
+                huggingface-cli download bartowski/Mistral-Small-24B-Instruct-2501-exl2 --revision 4_0 --local-dir /models/Mistral-Small-24B-exl2 --local-dir-use-symlinks False
+              else
+                echo "Model already exists."
+              fi
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /models
+          resources:
+            requests:
+              cpu: "1"
+              memory: "4Gi"
+
+      containers:
+        - name: aphrodite
+          image: aphroditeengine/aphrodite:latest
+          args:
+            - "--model"
+            - "/models/Mistral-Small-24B-exl2"
+            - "--quantization"
+            - "exl2"
+            - "--kv-cache-dtype"
+            - "fp4"
+            - "--max-model-len"
+            - "32768"
+            - "--port"
+            - "8000"
+          env:
+            - name: VLLM_OTEL_TRACING
+              value: "1"
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
+          ports:
+            - name: http
+              containerPort: 8000
+
+          resources:
+            requests:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "24Gi"
+              nvidia.com/gpu: "1"
+
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /models
+
+  volumeClaimTemplates:
+    - metadata:
+        name: hf-cache
+      spec:
+        storageClassName: longhorn
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 80Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-analyst
+  namespace: ai-platform
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-analyst
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
