@@ -95,6 +95,10 @@ kind: Service
 metadata:
   name: analyst
   namespace: ai-platform
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "11434"
 spec:
   type: ClusterIP
   selector:

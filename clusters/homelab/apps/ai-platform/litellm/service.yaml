@@ -3,6 +3,10 @@ kind: Service
 metadata:
   name: litellm
   namespace: ai-platform
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "4000"
 spec:
   selector:
     app: litellm
