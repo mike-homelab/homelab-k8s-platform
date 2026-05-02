@@ -125,3 +125,9 @@ spec:
               memory: 128Mi
         minio:
           enabled: false
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
