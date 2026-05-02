@@ -14,3 +14,4 @@ spec:
     - port: gpu-metrics
       path: /metrics
       interval: 15s
+      honorLabels: true
