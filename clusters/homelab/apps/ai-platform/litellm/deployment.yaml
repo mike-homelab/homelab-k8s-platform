@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         app: litellm
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "4000"
     spec:
       containers:
         - name: litellm

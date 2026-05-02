@@ -45,14 +45,20 @@ data:
         },
         {
           "type": "timeseries",
-          "title": "Builder: CPU Usage (Cores)",
+          "title": "Builder: GPU Utilization (%)",
           "gridPos": {"h": 8, "w": 8, "x": 8, "y": 9},
+          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{pod=~\"builder-.*\"}", "legendFormat": "GPU Util"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: CPU Usage (Cores)",
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 9},
           "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"builder-.*\", container=\"ollama\"}[1m]))", "legendFormat": "CPU"}]
         },
         {
           "type": "timeseries",
           "title": "Builder: RAM Usage (GiB)",
-          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 9},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 17},
           "targets": [{"expr": "sum(container_memory_usage_bytes{pod=~\"builder-.*\", container=\"ollama\"}) / 1024 / 1024 / 1024", "legendFormat": "RAM"}]
         },
         {
@@ -81,14 +87,20 @@ data:
         },
         {
           "type": "timeseries",
-          "title": "Analyst: CPU Usage (Cores)",
+          "title": "Analyst: GPU Utilization (%)",
           "gridPos": {"h": 8, "w": 8, "x": 8, "y": 26},
+          "targets": [{"expr": "DCGM_FI_DEV_GPU_UTIL{pod=~\"analyst-.*\"}", "legendFormat": "GPU Util"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: CPU Usage (Cores)",
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 26},
           "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"analyst-.*\", container=\"ollama\"}[1m]))", "legendFormat": "CPU"}]
         },
         {
           "type": "timeseries",
           "title": "Analyst: RAM Usage (GiB)",
-          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 26},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 34},
           "targets": [{"expr": "sum(container_memory_usage_bytes{pod=~\"analyst-.*\", container=\"ollama\"}) / 1024 / 1024 / 1024", "legendFormat": "RAM"}]
         }
       ]

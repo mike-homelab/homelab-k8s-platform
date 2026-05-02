@@ -36,3 +36,4 @@ data:
     litellm_settings:
       drop_params: true
       set_verbose: true
+      callbacks: ["prometheus"]
