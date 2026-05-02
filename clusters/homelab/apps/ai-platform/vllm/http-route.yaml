@@ -28,7 +28,7 @@ spec:
               replacePrefixMatch: /
       backendRefs:
         - name: analyst
-          port: 8000
+          port: 11434
     - matches:
         - path:
             type: PathPrefix
@@ -46,7 +46,7 @@ spec:
               replacePrefixMatch: /
       backendRefs:
         - name: builder
-          port: 8000
+          port: 11434
     - matches:
         - path:
             type: PathPrefix
