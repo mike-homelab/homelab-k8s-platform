@@ -10,7 +10,7 @@ data:
         litellm_params:
           model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
           api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 65536
+          num_ctx: 73728
       - model_name: "analyst"
         litellm_params:
           model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
@@ -22,12 +22,12 @@ data:
         litellm_params:
           model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
           api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 65536
+          num_ctx: 73728
       - model_name: "reasoning"
         litellm_params:
           model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
           api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 65536
+          num_ctx: 73728
       - model_name: "agent-executor"
         litellm_params:
           model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"

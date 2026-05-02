@@ -29,13 +29,13 @@ data:
           "type": "timeseries",
           "title": "Builder: Input Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
-          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Input"}]
+          "targets": [{"expr": "sum(rate(litellm_input_tokens_metric_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Input"}]
         },
         {
           "type": "timeseries",
           "title": "Builder: Output Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
-          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Output"}]
+          "targets": [{"expr": "sum(rate(litellm_output_tokens_metric_total{requested_model=\"builder\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*builder.*\"}[1m]))", "legendFormat": "Output"}]
         },
         {
           "type": "timeseries",
@@ -71,13 +71,13 @@ data:
           "type": "timeseries",
           "title": "Analyst: Input Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
-          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Input"}]
+          "targets": [{"expr": "sum(rate(litellm_input_tokens_metric_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Input"}]
         },
         {
           "type": "timeseries",
           "title": "Analyst: Output Tokens / Sec",
           "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
-          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Output"}]
+          "targets": [{"expr": "sum(rate(litellm_output_tokens_metric_total{requested_model=\"analyst\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\".*analyst.*\"}[1m]))", "legendFormat": "Output"}]
         },
         {
           "type": "timeseries",

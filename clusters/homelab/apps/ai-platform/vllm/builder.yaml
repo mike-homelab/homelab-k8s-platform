@@ -52,7 +52,7 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "65536"
+              value: "73728"
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             - name: OLLAMA_FLASH_ATTENTION
