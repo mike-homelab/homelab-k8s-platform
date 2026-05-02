@@ -14,7 +14,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /coder
+            value: /analyst
       filters:
         - type: ExtensionRef
           extensionRef:
@@ -27,12 +27,12 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: vllm-coder
-          port: 11434
+        - name: analyst
+          port: 8000
     - matches:
         - path:
             type: PathPrefix
-            value: /reasoning
+            value: /builder
       filters:
         - type: ExtensionRef
           extensionRef:
@@ -45,8 +45,8 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: vllm-reasoning
-          port: 11434
+        - name: builder
+          port: 8000
     - matches:
         - path:
             type: PathPrefix
