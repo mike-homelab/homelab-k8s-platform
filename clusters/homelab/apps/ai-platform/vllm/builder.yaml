@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: vllm-builder
+  name: builder
   namespace: ai-platform
 spec:
-  serviceName: vllm-builder
+  serviceName: builder
   replicas: 1
   selector:
     matchLabels:
-      app: vllm-builder
+      app: builder
   template:
     metadata:
       labels:
-        app: vllm-builder
+        app: builder
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics"
@@ -92,12 +92,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: vllm-builder
+  name: builder
   namespace: ai-platform
 spec:
   type: ClusterIP
   selector:
-    app: vllm-builder
+    app: builder
   ports:
     - name: http
       port: 8000

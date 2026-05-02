@@ -6,26 +6,15 @@ metadata:
 data:
   config.yaml: |
     model_list:
-      - model_name: "agent-executor"
+      - model_name: "builder"
         litellm_params:
-          model: "ollama/mistral-small:24b"
-          api_base: "http://vllm-coder.ai-platform.svc:11434"
-          num_ctx: 16384
-      - model_name: "agent-planner"
+          model: "openai/Devstral-24B-v1-exl2-3_75"
+          api_base: "http://builder.ai-platform.svc:8000/v1"
+      - model_name: "analyst"
         litellm_params:
-          model: "ollama/deepseek-r1:14b"
-          api_base: "http://vllm-reasoning.ai-platform.svc:11434"
-          num_ctx: 32768
-      - model_name: "coder" # Legacy alias
-        litellm_params:
-          model: "ollama/mistral-small:24b"
-          api_base: "http://vllm-coder.ai-platform.svc:11434"
-          num_ctx: 16384
-      - model_name: "reasoning" # Legacy alias
-        litellm_params:
-          model: "ollama/deepseek-r1:14b"
-          api_base: "http://vllm-reasoning.ai-platform.svc:11434"
-          num_ctx: 32768
+          model: "openai/Mistral-Small-24B-exl2"
+          api_base: "http://analyst.ai-platform.svc:8000/v1"
+
     litellm_settings:
       drop_params: true
       set_verbose: true
