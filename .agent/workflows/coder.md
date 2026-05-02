@@ -4,7 +4,7 @@ description: Execute code logic planning using local LLMs and patch the workspac
 > [!IMPORTANT]
 > **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
-1. **Planning & Strategy**: Use the local `agent-planner` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions` to formulate an execution plan.
+1. **Planning & Strategy**: Use the local `builder` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions` to formulate an execution plan.
 2. Analyze the user request and identify the specific files or components needing modification.
 3. If a local MCP server is required for file manipulation, start it:
 // turbo

@@ -12,21 +12,84 @@ data:
   ai-inference.json: |
     {
       "uid": "ai-inference",
-      "title": "AI Inference Observability",
-      "tags": ["ai","inference"],
+      "title": "AI Inference Tiered Observability",
+      "tags": ["ai","inference","tiered"],
       "time": {"from": "now-6h", "to": "now"},
       "templating": {
-        "list": [
-          {"name":"model","type":"query","datasource":"Mimir","query":"label_values(litellm_prompt_tokens_total, model)","includeAll":true,"allValue":".*"},
-          {"name":"pod","type":"query","datasource":"Mimir","query":"label_values(kube_pod_info, pod)","includeAll":true,"allValue":".*"}
-        ]
+        "list": []
       },
       "panels": [
-        {"type":"graph","title":"Input Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(litellm_prompt_tokens_total[1m])) by (model) or sum(rate(ollama_prompt_tokens_total[1m])) by (model) or sum(rate(vllm_prompt_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}}"}]},
-        {"type":"graph","title":"Output Tokens / Sec","datasource":"Mimir","targets":[{"expr":"sum(rate(litellm_completion_tokens_total[1m])) by (model) or sum(rate(ollama_eval_tokens_total[1m])) by (model) or sum(rate(vllm_generation_tokens_total[1m])) by (model,namespace)","legendFormat":"{{model}}"}]},
-        {"type":"graph","title":"GPU Utilization (%)","datasource":"Mimir","targets":[{"expr":"DCGM_FI_DEV_GPU_UTIL{pod=~\"$pod\"}","legendFormat":"{{pod}} - {{GPU_I_ID}}"}]},
-        {"type":"graph","title":"VRAM Usage (MiB)","datasource":"Mimir","targets":[{"expr":"DCGM_FI_DEV_FB_USED{pod=~\"$pod\"}","legendFormat":"{{pod}} - {{GPU_I_ID}}"}]},
-        {"type":"graph","title":"Pod CPU Usage (Cores)","datasource":"Mimir","targets":[{"expr":"sum(rate(container_cpu_usage_seconds_total{pod=~\"$pod\"}[1m])) by (pod)","legendFormat":"{{pod}}"}]},
-        {"type":"graph","title":"Pod RAM Usage (Bytes)","datasource":"Mimir","targets":[{"expr":"sum(container_memory_usage_bytes{pod=~\"$pod\"}) by (pod)","legendFormat":"{{pod}}"}]}
+        {
+          "type": "row",
+          "title": "The Builder (RTX 5070-Ti)",
+          "collapsed": false,
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: Input Tokens / Sec",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 1},
+          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{model=\"builder\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\"builder.*\"}[1m]))", "legendFormat": "Input"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: Output Tokens / Sec",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 1},
+          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{model=\"builder\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\"builder.*\"}[1m]))", "legendFormat": "Output"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: VRAM Usage (MiB)",
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 9},
+          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{pod=~\"builder-.*\"}", "legendFormat": "VRAM Used"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: CPU Usage (Cores)",
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 9},
+          "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"builder-.*\", container=\"ollama\"}[1m]))", "legendFormat": "CPU"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Builder: RAM Usage (GiB)",
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 9},
+          "targets": [{"expr": "sum(container_memory_usage_bytes{pod=~\"builder-.*\", container=\"ollama\"}) / 1024 / 1024 / 1024", "legendFormat": "RAM"}]
+        },
+        {
+          "type": "row",
+          "title": "The Analyst (RTX 5060-Ti)",
+          "collapsed": false,
+          "gridPos": {"h": 1, "w": 24, "x": 0, "y": 17}
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: Input Tokens / Sec",
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
+          "targets": [{"expr": "sum(rate(litellm_prompt_tokens_total{model=\"analyst\"}[1m])) or sum(rate(ollama_prompt_tokens_total{model=~\"analyst.*\"}[1m]))", "legendFormat": "Input"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: Output Tokens / Sec",
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
+          "targets": [{"expr": "sum(rate(litellm_completion_tokens_total{model=\"analyst\"}[1m])) or sum(rate(ollama_eval_tokens_total{model=~\"analyst.*\"}[1m]))", "legendFormat": "Output"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: VRAM Usage (MiB)",
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 26},
+          "targets": [{"expr": "DCGM_FI_DEV_FB_USED{pod=~\"analyst-.*\"}", "legendFormat": "VRAM Used"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: CPU Usage (Cores)",
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 26},
+          "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{pod=~\"analyst-.*\", container=\"ollama\"}[1m]))", "legendFormat": "CPU"}]
+        },
+        {
+          "type": "timeseries",
+          "title": "Analyst: RAM Usage (GiB)",
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 26},
+          "targets": [{"expr": "sum(container_memory_usage_bytes{pod=~\"analyst-.*\", container=\"ollama\"}) / 1024 / 1024 / 1024", "legendFormat": "RAM"}]
+        }
       ]
     }

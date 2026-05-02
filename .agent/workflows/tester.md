@@ -13,7 +13,7 @@ description: Execute browser-based UI testing and performance diagnostics using 
 4. **Data Synthesis**:
    - Aggregate the HTML structure, Console logs, and Performance metrics into a single context block.
 5. **Local LLM Analysis**: 
-   - Send the context block to the local `reasoning` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions`.
+   - Send the context block to the local `builder` model via the LiteLLM proxy at `https://llm.michaelhomelab.work/v1/chat/completions`.
    - **Analysis Prompt**: "Analyze the provided browser logs and metrics. Identify any JavaScript exceptions, network failures, or UI elements that failed to load. Evaluate the performance and functional state. Provide a Pass/Fail status."
 6. **Reporting**: 
    - Present the pass/fail result with a summary of the analysis.
@@ -22,4 +22,4 @@ description: Execute browser-based UI testing and performance diagnostics using 
 7. **Usage Reporting**: Report total token consumption for Cloud API and Cluster LLM, including cost savings achieved compared to cloud-based testing.
 
 // turbo
-`run_command`: `curl -s -X POST https://llm.michaelhomelab.work/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer sk-michael-homelab-llm-proxy" -d '{"model": "reasoning", "messages": [{"role": "user", "content": "Analyze these logs: [PAGE_LOGS]"}]}'`
+`run_command`: `curl -s -X POST https://llm.michaelhomelab.work/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer sk-michael-homelab-llm-proxy" -d '{"model": "builder", "messages": [{"role": "user", "content": "Analyze these logs: [PAGE_LOGS]"}]}'`
