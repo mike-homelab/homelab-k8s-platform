@@ -29,10 +29,14 @@ spec:
           args:
             - |
               set -e
+              MODEL_PATH="/models/mistralai_Devstral-Small-2-24B-Instruct-2512-IQ4_XS.gguf"
+              if [ ! -f "$MODEL_PATH" ]; then
+                echo "Downloading model..."
+                curl -L "https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-IQ4_XS.gguf" -o "$MODEL_PATH"
+              fi
               ollama serve &
               sleep 5
-              ollama pull huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS
-              printf "FROM huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS\nPARAMETER num_ctx 32768" > /tmp/Modelfile
+              printf "FROM $MODEL_PATH\nPARAMETER num_ctx 32768" > /tmp/Modelfile
               ollama create builder -f /tmp/Modelfile
               pkill ollama
           env:
