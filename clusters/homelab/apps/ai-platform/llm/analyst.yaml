@@ -31,8 +31,8 @@ spec:
               set -e
               ollama serve &
               sleep 5
-              ollama pull huggingface.co/bartowski/Devstral-Small-2-24B-Instruct-2512-GGUF:IQ3_M
-              printf "FROM huggingface.co/bartowski/Devstral-Small-2-24B-Instruct-2512-GGUF:IQ3_M\nPARAMETER num_ctx 32768" > /tmp/Modelfile
+              ollama pull huggingface.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:IQ4_XS
+              printf "FROM huggingface.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:IQ4_XS\nPARAMETER num_ctx 32768" > /tmp/Modelfile
               ollama create analyst -f /tmp/Modelfile
               pkill ollama
           env:
