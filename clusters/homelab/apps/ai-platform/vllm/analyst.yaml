@@ -30,8 +30,8 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull hf.co/unsloth/Qwen2.5-14B-Instruct-GGUF:Q4_K_M
-              printf "FROM hf.co/unsloth/Qwen2.5-14B-Instruct-GGUF:Q4_K_M\nPARAMETER num_ctx 81920" > /tmp/Modelfile
+              ollama pull qwen2.5:14b
+              printf "FROM qwen2.5:14b\nPARAMETER num_ctx 81920" > /tmp/Modelfile
               ollama create analyst-80k -f /tmp/Modelfile
               pkill ollama
           env:

@@ -1,0 +1,70 @@
+====================================================
+STRESS TEST: 10K -> 80K (Qwen2.5-14B & Qwen2.5-Coder)
+====================================================
+Testing analyst | Context: 10000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 10000 tokens...
+  SUCCESS: 6.12s (Actual tokens: 10035)
+------------------------------
+Testing analyst | Context: 20000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 20000 tokens...
+  SUCCESS: 5.31s (Actual tokens: 20037)
+------------------------------
+Testing analyst | Context: 30000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 30000 tokens...
+  SUCCESS: 7.06s (Actual tokens: 30039)
+------------------------------
+Testing analyst | Context: 40000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 40000 tokens...
+  SUCCESS: 18.61s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 50000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 50000 tokens...
+  SUCCESS: 18.69s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 60000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 60000 tokens...
+  SUCCESS: 18.74s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 70000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 70000 tokens...
+  Error 502: <html>
+<head><title>502 Bad Gateway</title></head>
+<body>
+<center><h1>502 Bad Gateway</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+
+------------------------------
+Testing analyst | Context: 80000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - {\"error\":\"model 'analyst-80k' not found\"}. Received Model Group=analyst\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+Testing builder | Context: 80000 tokens...
+  Error 500: {"error":{"message":"litellm.APIConnectionError: OllamaException - Cannot connect to host builder.ai-platform.svc:11434 ssl:<ssl.SSLContext object at 0x7f2c8adf76b0> [Connect call failed ('10.102.74.118', 11434)]. Received Model Group=builder\nAvailable Model Group Fallbacks=None","type":null,"param":null,"code":"500"}}
+------------------------------
+
+FINAL RESULTS SUMMARY
+Target     | Model      | Time (s)   | Status    
+--------------------------------------------------
+10000      | analyst    | -          | FAIL      
+10000      | builder    | 6.12       | PASS      
+20000      | analyst    | -          | FAIL      
+20000      | builder    | 5.31       | PASS      
+30000      | analyst    | -          | FAIL      
+30000      | builder    | 7.06       | PASS      
+40000      | analyst    | -          | FAIL      
+40000      | builder    | 18.61      | PASS      
+50000      | analyst    | -          | FAIL      
+50000      | builder    | 18.69      | PASS      
+60000      | analyst    | -          | FAIL      
+60000      | builder    | 18.74      | PASS      
+70000      | analyst    | -          | FAIL      
+70000      | builder    | -          | FAIL      
+80000      | analyst    | -          | FAIL      
+80000      | builder    | -          | FAIL      
