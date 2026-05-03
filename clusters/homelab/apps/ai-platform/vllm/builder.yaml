@@ -30,7 +30,6 @@ spec:
             - |
               ollama serve &
               sleep 5
-              # Pull the Qwen2.5-Coder 14B model
               ollama pull qwen2.5-coder:14b
               pkill ollama
           env:
