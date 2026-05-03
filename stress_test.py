@@ -50,7 +50,7 @@ if __name__ == "__main__":
     results = []
 
     print("====================================================")
-    print("STRESS TEST: 10K -> 80K (Phi-4 & Qwen2.5-Coder)")
+    print("STRESS TEST: 10K -> 80K (Qwen2.5-14B & Qwen2.5-Coder)")
     print("====================================================")
 
     for tokens in test_rounds:

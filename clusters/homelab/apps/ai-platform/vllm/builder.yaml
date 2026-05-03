@@ -31,6 +31,8 @@ spec:
               ollama serve &
               sleep 5
               ollama pull qwen2.5-coder:14b
+              printf "FROM qwen2.5-coder:14b\nPARAMETER num_ctx 81920" > /tmp/Modelfile
+              ollama create builder-80k -f /tmp/Modelfile
               pkill ollama
           env:
             - name: OLLAMA_MODELS

@@ -8,12 +8,12 @@ data:
     model_list:
       - model_name: "builder"
         litellm_params:
-          model: "ollama/qwen2.5-coder:14b"
+          model: "ollama/builder-80k"
           api_base: "http://builder.ai-platform.svc:11434"
           num_ctx: 81920
       - model_name: "analyst"
         litellm_params:
-          model: "ollama/qwen2.5:14b"
+          model: "ollama/analyst-80k"
           api_base: "http://analyst.ai-platform.svc:11434"
           num_ctx: 81920
 
