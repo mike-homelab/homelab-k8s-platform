@@ -30,7 +30,7 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL
+              ollama pull phi4
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -51,11 +51,13 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "32768"
+              value: "81920"
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
+            - name: OLLAMA_KV_CACHE_TYPE
+              value: "q4_0"
             - name: OLLAMA_KEEP_ALIVE
               value: "-1"
             - name: OLLAMA_HOST

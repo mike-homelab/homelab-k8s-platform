@@ -8,36 +8,14 @@ data:
     model_list:
       - model_name: "builder"
         litellm_params:
-          model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
+          model: "ollama/qwen2.5-coder:14b"
           api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 73728
+          num_ctx: 81920
       - model_name: "analyst"
         litellm_params:
-          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
+          model: "ollama/phi4"
           api_base: "http://analyst.ai-platform.svc:11434"
-          num_ctx: 32768
-      
-      # Legacy aliases for backward compatibility
-      - model_name: "agent-planner"
-        litellm_params:
-          model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
-          api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 73728
-      - model_name: "reasoning"
-        litellm_params:
-          model: "ollama/hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M"
-          api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 73728
-      - model_name: "agent-executor"
-        litellm_params:
-          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
-          api_base: "http://analyst.ai-platform.svc:11434"
-          num_ctx: 32768
-      - model_name: "coder"
-        litellm_params:
-          model: "ollama/hf.co/unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF:UD-Q4_K_XL"
-          api_base: "http://analyst.ai-platform.svc:11434"
-          num_ctx: 32768
+          num_ctx: 81920
 
     litellm_settings:
       drop_params: true

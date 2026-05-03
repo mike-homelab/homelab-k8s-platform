@@ -30,8 +30,8 @@ spec:
             - |
               ollama serve &
               sleep 5
-              # Pull the GGUF model directly from HuggingFace
-              ollama pull hf.co/unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q4_K_M
+              # Pull the Qwen2.5-Coder 14B model
+              ollama pull qwen2.5-coder:14b
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -52,11 +52,13 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "73728"
+              value: "81920"
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
+            - name: OLLAMA_KV_CACHE_TYPE
+              value: "q4_0"
             - name: OLLAMA_KEEP_ALIVE
               value: "-1"
             - name: OLLAMA_HOST

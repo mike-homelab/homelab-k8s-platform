@@ -7,8 +7,8 @@ Two-phase pipeline:
   Phase 2 - Chapter Cleaner: Clean raw fan-translated chapters using the Bible
 
 LLM routing:
-  - reasoning  (qwen3 / ~128K ctx) : planning, bible synthesis, chapter cleaning, quality review
-  - coder      (qwen2.5-coder 14B / ~32K ctx) : (unused, reserved for future fast-pass)
+  - analyst (DeepSeek-R1 / ~128K ctx) : planning, bible synthesis, quality review
+  - builder (Mistral-Small / ~24K ctx) : execution & chapter cleaning
 
 Output: Markdown (.md) + optional PDF per chapter, cost savings report at end.
 Author: Antigravity for Michael's Homelab
@@ -92,8 +92,8 @@ LOCAL_COST_PER_CALL      = 0.0    # Local inference: $0 marginal cost
 
 LITELLM_BASE   = "https://llm.michaelhomelab.work/v1"
 LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
-MODEL_PLANNER  = "agent-planner"   # DeepSeek-R1 (14B) – Planning & QA
-MODEL_EXECUTOR = "agent-executor"  # Mistral-Small (24B) – Execution & Cleaning
+MODEL_PLANNER  = "analyst"   # DeepSeek-R1 (14B) – Planning & QA
+MODEL_EXECUTOR = "builder"   # Mistral-Small (24B) – Execution & Cleaning
 
 # Context budgets (in characters, ~4 chars/token estimate)
 PLANNER_CTX_CHARS  = 100_000   # 32K context safety limit
@@ -206,7 +206,7 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
         raise RuntimeError(f"LLM call failed for {model}: {exc}")
 
 def wakeup_models():
-    """Ensure both the planner and executor models are awake and responsive."""
+    """Ensure both the analyst and builder models are awake and responsive."""
     safe_log("\n[WAKEUP] Warming up Agentic Duo endpoints...")
     models = [MODEL_PLANNER, MODEL_EXECUTOR]
     
@@ -615,9 +615,9 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
 
 def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
     """
-    Clean raw text using the EXECUTOR model (Mistral Small) for high-fidelity cleaning.
+    Clean raw text using the BUILDER model (Mistral Small) for high-fidelity cleaning.
     """
-    # Max chars for chapter text = executor budget minus bible context and prompt overhead
+    # Max chars for chapter text = builder budget minus bible context and prompt overhead
     overhead   = len(bible_ctx) + 500
     max_text   = EXECUTOR_CTX_CHARS - overhead
 
@@ -639,7 +639,7 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
             f"=== RAW CHAPTER TEXT ({label}) ===\n\n"
             f"{chunk}"
         )
-        safe_log(f"      Executor cleaning pass part {i+1}/{len(chunks)} …")
+        safe_log(f"      Builder cleaning pass part {i+1}/{len(chunks)} …")
         
         result = llm_call(MODEL_EXECUTOR, CODER_CLEAN_SYSTEM, user_msg,
                           temperature=0.25, max_tokens=16384)
@@ -668,7 +668,7 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
 def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
                       chapter_label: str) -> str:
     """
-    Use the PLANNER model (DeepSeek-R1) for a QA pass.
+    Use the ANALYST model (DeepSeek-R1) for a QA pass.
     """
     total_len = len(bible_ctx) + len(raw_text) + len(cleaned_text) + 1000
     if total_len > PLANNER_CTX_CHARS:
@@ -681,7 +681,7 @@ def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
         f"=== RAW TEXT ===\n{raw_text}\n\n"
         f"=== CLEANED VERSION (needs QA) ===\n{cleaned_text}"
     )
-    print(f"      Planner QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
+    print(f"      Analyst QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
     # QA pass uses the planning model to verify the work
     result = llm_call(MODEL_PLANNER, REASON_QA_SYSTEM, user_msg,
                       temperature=0.15, max_tokens=32768)
@@ -716,7 +716,7 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
                           force: bool = False, skip_qa: bool = False) -> None:
     """
     Phase 2: Clean all raw chapter PDFs using the bible.
-    Groups output by volume under CLEANED_DIR/vol_XX/
+    Groups chapters by volume and creates a single PDF for the entire volume.
     """
     print("\n" + "="*60)
     print("PHASE 2 — Cleaning Raw Chapters")
@@ -737,58 +737,96 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
         print(f"[INFO] Found {len(all_pdfs)} total raw chapter(s).")
 
     CLEANED_DIR.mkdir(parents=True, exist_ok=True)
-    processed = skipped = errors = 0
+    
+    # Group chapters by volume
+    volume_groups: Dict[str, List[Path]] = {}
+    for p in all_pdfs:
+        v_key = get_volume_from_filename(p.name)
+        if v_key not in volume_groups:
+            volume_groups[v_key] = []
+        volume_groups[v_key].append(p)
 
-    def process_chapter(pdf_path):
-        nonlocal processed, skipped, errors
-        vol_key = get_volume_from_filename(pdf_path.name)
+    total_processed = total_skipped = total_errors = 0
+
+    for vol_key, vol_pdfs in sorted(volume_groups.items()):
+        print(f"\n[VOLUME] {vol_key.replace('_', ' ').upper()}")
         vol_dir = CLEANED_DIR / vol_key
         vol_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Sort chapters correctly
+        vol_pdfs.sort(key=lambda p: get_chapter_sort_key(p.name))
+        
+        chapter_mds = {} # stem -> markdown
+        
+        def process_chapter(pdf_path: Path):
+            nonlocal total_processed, total_skipped, total_errors
+            md_path  = vol_dir / (pdf_path.stem + ".md")
 
-        md_path  = vol_dir / (pdf_path.stem + ".md")
-        pdf_out  = vol_dir / (pdf_path.stem + ".pdf")
-
-        if md_path.exists() and not force:
-            with LOG_LOCK: skipped += 1
-            return
-
-        safe_log(f"\n  Processing [{vol_key}] {pdf_path.name}")
-
-        try:
-            raw_text = extract_pdf_text(pdf_path)
-            if len(raw_text.strip()) < 100:
-                safe_log(f"    [WARN] Very short text, skipping: {pdf_path.name}")
-                with LOG_LOCK: skipped += 1
+            # Check if MD already exists and not forcing
+            if md_path.exists() and not force:
+                with LOG_LOCK: total_skipped += 1
+                with open(md_path, "r", encoding="utf-8") as f:
+                    chapter_mds[pdf_path.stem] = f.read()
                 return
 
-            # Main Cleaning pass (Reasoning)
-            cleaned = clean_chapter_main(raw_text, bible_ctx, pdf_path.stem)
-
-            # Reasoning QA pass
-            if not skip_qa:
-                cleaned = qa_pass_reasoning(raw_text, cleaned, bible_ctx, pdf_path.stem)
-
-            chapter_title = pdf_path.stem.replace("_", " ").title()
-            md_content = render_chapter_markdown(chapter_title, cleaned, vol_key)
-            with open(md_path, "w", encoding="utf-8") as f:
-                f.write(md_content)
-            
+            safe_log(f"  Processing {pdf_path.name}...")
             try:
-                render_pdf(md_content, pdf_out)
+                raw_text = extract_pdf_text(pdf_path)
+                if len(raw_text.strip()) < 100:
+                    safe_log(f"    [WARN] Very short text, skipping: {pdf_path.name}")
+                    with LOG_LOCK: total_skipped += 1
+                    return
+
+                # Cleaning passes
+                cleaned = clean_chapter_main(raw_text, bible_ctx, pdf_path.stem)
+                if not skip_qa:
+                    cleaned = qa_pass_reasoning(raw_text, cleaned, bible_ctx, pdf_path.stem)
+
+                chapter_title = pdf_path.stem.replace("_", " ").title()
+                md_content = render_chapter_markdown(chapter_title, cleaned, vol_key)
+                
+                with open(md_path, "w", encoding="utf-8") as f:
+                    f.write(md_content)
+                
+                chapter_mds[pdf_path.stem] = md_content
+                with LOG_LOCK: total_processed += 1
+                safe_log(f"  ✓ Finished {pdf_path.name}")
+
+            except Exception as exc:
+                safe_log(f"    [ERROR] Failed to process {pdf_path.name}: {exc}")
+                with LOG_LOCK: total_errors += 1
+
+        # Use ThreadPoolExecutor for chapters within a volume
+        with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            executor.map(process_chapter, vol_pdfs)
+
+        # After all chapters in volume are processed, create single Volume PDF
+        if chapter_mds:
+            # Sort by original chapter order
+            sorted_stems = [p.stem for p in vol_pdfs if p.stem in chapter_mds]
+            
+            # Combine markdown with page breaks
+            # We add a page break before every chapter except the first one
+            combined_md_parts = []
+            for i, stem in enumerate(sorted_stems):
+                md = chapter_mds[stem]
+                if i > 0:
+                    # Inject page break div
+                    md = "\n\n<div style='page-break-before: always;'></div>\n\n" + md
+                combined_md_parts.append(md)
+            
+            combined_md = "\n\n".join(combined_md_parts)
+            vol_pdf_path = vol_dir / f"{vol_key}.pdf"
+            
+            print(f"  [PDF] Generating volume PDF: {vol_pdf_path.name} ...", end=" ", flush=True)
+            try:
+                render_pdf(combined_md, vol_pdf_path)
+                print("done")
             except Exception as pdf_err:
-                safe_log(f"    [WARN] PDF render failed for {pdf_path.name}: {pdf_err}")
+                print(f"FAILED: {pdf_err}")
 
-            with LOG_LOCK: processed += 1
-            safe_log(f"  ✓ Finished {pdf_path.name}")
+    print(f"\n[DONE] Processed: {total_processed}  |  Skipped: {total_skipped}  |  Errors: {total_errors}")
 
-        except Exception as exc:
-            safe_log(f"    [ERROR] Failed to process {pdf_path.name}: {exc}")
-            with LOG_LOCK: errors += 1
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        executor.map(process_chapter, all_pdfs)
-
-    print(f"\n[DONE] Processed: {processed}  |  Skipped: {skipped}  |  Errors: {errors}")
 
 
 # ─────────────────── MARKDOWN & PDF RENDERING ───────────────────────── #
@@ -1042,9 +1080,9 @@ def main():
     print("║  Novel Proofreader Agent — The Wrong Way to Use Healing  ║")
     print("║  Magic                                                    ║")
     print("╚══════════════════════════════════════════════════════════╝")
-    print(f"  Agent Planner : {MODEL_PLANNER} @ {LITELLM_BASE}")
-    print(f"  Agent Executor: {MODEL_EXECUTOR} @ {LITELLM_BASE}")
-    print(f"  (Phase 2 uses Executor for cleaning & Planner for QA)")
+    print(f"  Analyst (Planning & QA) : {MODEL_PLANNER} @ {LITELLM_BASE}")
+    print(f"  Builder (Execution)     : {MODEL_EXECUTOR} @ {LITELLM_BASE}")
+    print(f"  (Phase 2 uses Builder for cleaning & Analyst for QA)")
     print(f"  Bible path    : {BIBLE_PATH}")
     print(f"  Output dir    : {CLEANED_DIR} (.md + .pdf per chapter)")
 

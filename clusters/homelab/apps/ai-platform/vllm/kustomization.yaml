@@ -3,4 +3,3 @@ resources:
   - analyst.yaml
   - builder.yaml
   - perception.yaml
-  - http-route.yaml
