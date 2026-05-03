@@ -27,10 +27,11 @@ spec:
           image: ollama/ollama:latest
           command: ["sh", "-c"]
           args:
-            - |
               set -e
               MODEL_PATH="/models/mistralai_Devstral-Small-2-24B-Instruct-2512-IQ4_XS.gguf"
               if [ ! -f "$MODEL_PATH" ]; then
+                echo "Installing curl..."
+                apt-get update && apt-get install -y curl
                 echo "Downloading model..."
                 curl -L "https://huggingface.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/mistralai_Devstral-Small-2-24B-Instruct-2512-IQ4_XS.gguf" -o "$MODEL_PATH"
               fi
