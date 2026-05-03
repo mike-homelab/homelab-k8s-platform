@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: analyst
+  name: builder
   namespace: ai-platform
 spec:
-  serviceName: analyst
+  serviceName: builder
   replicas: 1
   selector:
     matchLabels:
-      app: analyst
+      app: builder
   template:
     metadata:
       labels:
-        app: analyst
+        app: builder
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics/"
@@ -20,7 +20,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
 
       initContainers:
         - name: pull-model
@@ -30,9 +30,9 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull qwen2.5:14b
-              printf "FROM qwen2.5:14b\nPARAMETER num_ctx 81920" > /tmp/Modelfile
-              ollama create analyst-80k -f /tmp/Modelfile
+              ollama pull hf.co/bartowski/Devstral-Small-2-24B-Instruct-2512-GGUF:IQ3_M
+              printf "FROM hf.co/bartowski/Devstral-Small-2-24B-Instruct-2512-GGUF:IQ3_M\nPARAMETER num_ctx 32768" > /tmp/Modelfile
+              ollama create builder -f /tmp/Modelfile
               pkill ollama
           env:
             - name: OLLAMA_MODELS
@@ -53,7 +53,7 @@ spec:
             - name: OLLAMA_MODELS
               value: /models
             - name: OLLAMA_NUM_CTX
-              value: "81920"
+              value: "32768"
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
             - name: OLLAMA_FLASH_ATTENTION
@@ -76,7 +76,7 @@ spec:
               memory: "24Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "4"
+              cpu: "8"
               memory: "32Gi"
               nvidia.com/gpu: "1"
 
@@ -92,12 +92,12 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 80Gi
+            storage: 120Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: analyst
+  name: builder
   namespace: ai-platform
   annotations:
     prometheus.io/scrape: "true"
@@ -106,7 +106,7 @@ metadata:
 spec:
   type: ClusterIP
   selector:
-    app: analyst
+    app: builder
   ports:
     - name: http
       port: 11434

@@ -1,0 +1,63 @@
+====================================================
+STRESS TEST: 10K -> 80K (Qwen2.5-14B & Qwen2.5-Coder)
+====================================================
+Testing analyst | Context: 10000 tokens...
+  SUCCESS: 9.94s (Actual tokens: 10056)
+Testing builder | Context: 10000 tokens...
+  SUCCESS: 6.13s (Actual tokens: 10056)
+------------------------------
+Testing analyst | Context: 20000 tokens...
+  SUCCESS: 11.35s (Actual tokens: 20058)
+Testing builder | Context: 20000 tokens...
+  SUCCESS: 5.30s (Actual tokens: 20058)
+------------------------------
+Testing analyst | Context: 30000 tokens...
+  SUCCESS: 15.57s (Actual tokens: 30060)
+Testing builder | Context: 30000 tokens...
+  SUCCESS: 7.06s (Actual tokens: 30060)
+------------------------------
+Testing analyst | Context: 40000 tokens...
+  SUCCESS: 39.74s (Actual tokens: 32768)
+Testing builder | Context: 40000 tokens...
+  SUCCESS: 20.78s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 50000 tokens...
+  SUCCESS: 39.81s (Actual tokens: 32768)
+Testing builder | Context: 50000 tokens...
+  SUCCESS: 20.83s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 60000 tokens...
+  SUCCESS: 39.86s (Actual tokens: 32768)
+Testing builder | Context: 60000 tokens...
+  SUCCESS: 20.89s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 70000 tokens...
+  SUCCESS: 39.94s (Actual tokens: 32768)
+Testing builder | Context: 70000 tokens...
+  SUCCESS: 20.96s (Actual tokens: 32768)
+------------------------------
+Testing analyst | Context: 80000 tokens...
+  SUCCESS: 39.99s (Actual tokens: 32768)
+Testing builder | Context: 80000 tokens...
+  SUCCESS: 21.03s (Actual tokens: 32768)
+------------------------------
+
+FINAL RESULTS SUMMARY
+Target     | Model      | Time (s)   | Status    
+--------------------------------------------------
+10000      | analyst    | 9.94       | PASS      
+10000      | builder    | 6.13       | PASS      
+20000      | analyst    | 11.35      | PASS      
+20000      | builder    | 5.3        | PASS      
+30000      | analyst    | 15.57      | PASS      
+30000      | builder    | 7.06       | PASS      
+40000      | analyst    | 39.74      | PASS      
+40000      | builder    | 20.78      | PASS      
+50000      | analyst    | 39.81      | PASS      
+50000      | builder    | 20.83      | PASS      
+60000      | analyst    | 39.86      | PASS      
+60000      | builder    | 20.89      | PASS      
+70000      | analyst    | 39.94      | PASS      
+70000      | builder    | 20.96      | PASS      
+80000      | analyst    | 39.99      | PASS      
+80000      | builder    | 21.03      | PASS      

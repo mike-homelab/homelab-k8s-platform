@@ -10,7 +10,7 @@ spec:
   source:
     repoURL: https://github.com/mike-homelab/homelab-k8s-platform
     targetRevision: main
-    path: clusters/homelab/apps/ai-platform/vllm
+    path: clusters/homelab/apps/ai-platform/llm
   destination:
     server: https://kubernetes.default.svc
     namespace: ai-platform
