@@ -30,7 +30,7 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull phi4
+              ollama pull qwen2.5:14b
               pkill ollama
           env:
             - name: OLLAMA_MODELS

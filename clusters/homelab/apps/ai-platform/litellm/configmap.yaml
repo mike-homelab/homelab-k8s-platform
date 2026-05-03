@@ -13,7 +13,7 @@ data:
           num_ctx: 81920
       - model_name: "analyst"
         litellm_params:
-          model: "ollama/phi4"
+          model: "ollama/qwen2.5:14b"
           api_base: "http://analyst.ai-platform.svc:11434"
           num_ctx: 81920
 
