@@ -7,8 +7,8 @@ Two-phase pipeline:
   Phase 2 - Chapter Cleaner: Clean raw fan-translated chapters using the Bible
 
 LLM routing:
-  - analyst (DeepSeek-R1 / ~128K ctx) : planning, bible synthesis, quality review
-  - builder (Mistral-Small / ~24K ctx) : execution & chapter cleaning
+  - analyst (Mistral-Small-24B / 32K ctx) : planning, bible synthesis, quality review
+  - builder (Devstral-24B / 32K ctx) : execution & chapter cleaning
 
 Output: Markdown (.md) + optional PDF per chapter, cost savings report at end.
 Author: Antigravity for Michael's Homelab
@@ -92,12 +92,12 @@ LOCAL_COST_PER_CALL      = 0.0    # Local inference: $0 marginal cost
 
 LITELLM_BASE   = "https://llm.michaelhomelab.work/v1"
 LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
-MODEL_PLANNER  = "analyst"   # DeepSeek-R1 (14B) – Planning & QA
-MODEL_EXECUTOR = "builder"   # Mistral-Small (24B) – Execution & Cleaning
+MODEL_PLANNER  = "analyst"
+MODEL_EXECUTOR = "builder"
 
-# Context budgets (in characters, ~4 chars/token estimate)
-PLANNER_CTX_CHARS  = 100_000   # 32K context safety limit
-EXECUTOR_CTX_CHARS = 50_000    # 16K context safety limit
+# Total context budget in characters (32,768 tokens * ~4 chars/token = 131,072)
+PLANNER_TOTAL_CHARS  = 128_000
+EXECUTOR_TOTAL_CHARS = 128_000
 
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
 RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")
@@ -119,7 +119,7 @@ def safe_log(msg: str):
 # ──────────────────────────── UTILITIES ──────────────────────────────── #
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
-             max_tokens: int = 4096, retries: int = 3) -> str:
+             max_tokens: int = 8192, retries: int = 3) -> str:
     """Send a chat completion request to the LiteLLM proxy and track token usage."""
     url = f"{LITELLM_BASE}/chat/completions"
     headers = {
@@ -376,7 +376,8 @@ def synthesize_bible(partial_bibles: list[dict]) -> dict:
     merged_str = json.dumps(merged, ensure_ascii=False, indent=2)
 
     # If merged JSON fits in one reasoning call, synthesize directly
-    if len(merged_str) < PLANNER_CTX_CHARS - 4000:
+    # Ensure total (input + output) fits in context. Bible response is also large.
+    if len(merged_str) < (PLANNER_TOTAL_CHARS // 2):
         system = BIBLE_SYNTHESIS_SYSTEM
         user = f"Here are all partial bible drafts merged:\n\n{merged_str}"
         raw = llm_call(MODEL_PLANNER, system, user, temperature=0.1, max_tokens=8192)
@@ -456,8 +457,9 @@ def phase1_build_bible(force: bool = False) -> dict:
         text = extract_pdf_text(pdf_path)
         print(f"    Extracted {len(text):,} characters of text.")
 
-        # Chunk to fit planner model context
-        chunks = chunk_text(text, PLANNER_CTX_CHARS - 4000)
+        # Chunk to fit planner model context. Bible extraction returns small JSON, 
+        # so we can use most of the context for input.
+        chunks = chunk_text(text, PLANNER_TOTAL_CHARS - 16000)
         safe_log(f"    Split into {len(chunks)} chunk(s). Processing in parallel...")
 
         vol_bibles = []
@@ -615,17 +617,18 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
 
 def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
     """
-    Clean raw text using the BUILDER model (Mistral Small) for high-fidelity cleaning.
+    Clean raw text using the BUILDER model (Devstral) for high-fidelity cleaning.
     """
-    # Max chars for chapter text = builder budget minus bible context and prompt overhead
-    overhead   = len(bible_ctx) + 500
-    max_text   = EXECUTOR_CTX_CHARS - overhead
+    # Since cleaning returns a text of similar length to the input, 
+    # we must leave half the context budget for the response.
+    overhead   = len(bible_ctx) + 1000
+    max_text   = (EXECUTOR_TOTAL_CHARS // 2) - overhead
 
-    if max_text < 10000:
+    if max_text < 15000:
         # Bible context too large – trim it further
-        bible_ctx = bible_ctx[:EXECUTOR_CTX_CHARS // 4]
-        overhead  = len(bible_ctx) + 500
-        max_text  = EXECUTOR_CTX_CHARS - overhead
+        bible_ctx = bible_ctx[:EXECUTOR_TOTAL_CHARS // 8]
+        overhead  = len(bible_ctx) + 1000
+        max_text  = (EXECUTOR_TOTAL_CHARS // 2) - overhead
 
     chunks = chunk_text(raw_text, max_text, overlap=2000)
     cleaned_chunks = [None] * len(chunks)
@@ -642,12 +645,12 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
         safe_log(f"      Builder cleaning pass part {i+1}/{len(chunks)} …")
         
         result = llm_call(MODEL_EXECUTOR, CODER_CLEAN_SYSTEM, user_msg,
-                          temperature=0.25, max_tokens=16384)
+                          temperature=0.25, max_tokens=24576)
         
         if not result:
             safe_log(f"      [WARN] Empty result for {label}. Retrying with higher temperature...")
             result = llm_call(MODEL_EXECUTOR, CODER_CLEAN_SYSTEM, user_msg,
-                              temperature=0.7, max_tokens=16384)
+                              temperature=0.7, max_tokens=24576)
             
         return i, result
 
@@ -668,12 +671,14 @@ def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str
 def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
                       chapter_label: str) -> str:
     """
-    Use the ANALYST model (DeepSeek-R1) for a QA pass.
+    Use the ANALYST model (Mistral Small) for a QA pass.
     """
-    total_len = len(bible_ctx) + len(raw_text) + len(cleaned_text) + 1000
-    if total_len > PLANNER_CTX_CHARS:
+    # Heuristic: prompt + response should fit in 32K context
+    # Response is roughly the same size as cleaned_text.
+    estimated_tokens = (len(bible_ctx) + len(raw_text) + 2 * len(cleaned_text)) // 4
+    if estimated_tokens > 32000:
         # Too large for QA pass — return cleaned_text as-is
-        print(f"      [QA] Chapter too long for QA pass ({total_len:,} chars), skipping.")
+        print(f"      [QA] Chapter too long for QA pass ({estimated_tokens:,} estimated tokens), skipping.")
         return cleaned_text
 
     user_msg = (
@@ -684,7 +689,7 @@ def qa_pass_reasoning(raw_text: str, cleaned_text: str, bible_ctx: str,
     print(f"      Analyst QA pass ({len(user_msg):,} chars) …", end=" ", flush=True)
     # QA pass uses the planning model to verify the work
     result = llm_call(MODEL_PLANNER, REASON_QA_SYSTEM, user_msg,
-                      temperature=0.15, max_tokens=32768)
+                      temperature=0.15, max_tokens=24576)
     print("done")
     return result
 
