@@ -1,0 +1,82 @@
+[
+  {
+    "model": "analyst",
+    "input_tokens": 1000,
+    "output_tokens": 2192,
+    "ttft": 4.50287652015686,
+    "tpot": 0.043674666842404945,
+    "total_duration": 100.2377462387085
+  },
+  {
+    "model": "analyst",
+    "input_tokens": 2000,
+    "output_tokens": 2877,
+    "ttft": 4.456522464752197,
+    "tpot": 0.04469019371393367,
+    "total_duration": 133.03020977973938
+  },
+  {
+    "model": "analyst",
+    "input_tokens": 4000,
+    "output_tokens": 1002,
+    "ttft": 5.222239017486572,
+    "tpot": 0.042580092500545785,
+    "total_duration": 47.88749170303345
+  },
+  {
+    "model": "analyst",
+    "input_tokens": 8000,
+    "output_tokens": 1510,
+    "ttft": 6.8918986320495605,
+    "tpot": 0.0456151771229624,
+    "total_duration": 75.77081608772278
+  },
+  {
+    "model": "analyst",
+    "input_tokens": 16000,
+    "output_tokens": 2647,
+    "ttft": 11.05391263961792,
+    "tpot": 0.05043460334702893,
+    "total_duration": 144.5543076992035
+  },
+  {
+    "model": "builder",
+    "input_tokens": 1000,
+    "output_tokens": 16384,
+    "ttft": 1.9113740921020508,
+    "tpot": 0.019567923853173852,
+    "total_duration": 322.51223850250244
+  },
+  {
+    "model": "builder",
+    "input_tokens": 2000,
+    "output_tokens": 2880,
+    "ttft": 1.9015135765075684,
+    "tpot": 0.017547417928775153,
+    "total_duration": 52.438077211380005
+  },
+  {
+    "model": "builder",
+    "input_tokens": 4000,
+    "output_tokens": 4915,
+    "ttft": 2.2723453044891357,
+    "tpot": 0.018483549216999042,
+    "total_duration": 93.11898970603943
+  },
+  {
+    "model": "builder",
+    "input_tokens": 8000,
+    "output_tokens": 15799,
+    "ttft": 3.0991902351379395,
+    "tpot": 0.021104933121618014,
+    "total_duration": 336.53602862358093
+  },
+  {
+    "model": "builder",
+    "input_tokens": 16000,
+    "output_tokens": 16384,
+    "ttft": 5.082052230834961,
+    "tpot": 0.023018397099804133,
+    "total_duration": 382.2154703140259
+  }
+]

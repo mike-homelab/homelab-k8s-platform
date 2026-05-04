@@ -1,82 +1,130 @@
 [
   {
     "model": "analyst",
-    "target": 4000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 4000,
+    "output_tokens": 41,
+    "ttft": 2.1122798919677734,
+    "tpot": 1.5886818490377288e-05,
+    "total_duration": 2.112931251525879
   },
   {
     "model": "analyst",
-    "target": 8000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 8000,
+    "output_tokens": 53,
+    "ttft": 5.144489765167236,
+    "tpot": 1.4350099383660083e-05,
+    "total_duration": 5.14525032043457
   },
   {
     "model": "analyst",
-    "target": 12000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 12000,
+    "output_tokens": 45,
+    "ttft": 5.11932635307312,
+    "tpot": 1.1258655124240451e-05,
+    "total_duration": 5.119832992553711
   },
   {
     "model": "analyst",
-    "target": 16000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 16000,
+    "output_tokens": 45,
+    "ttft": 5.56182336807251,
+    "tpot": 1.323488023546007e-05,
+    "total_duration": 5.5624189376831055
   },
   {
     "model": "analyst",
-    "target": 20000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 20000,
+    "output_tokens": 70,
+    "ttft": 7.248922824859619,
+    "tpot": 1.1069434029715402e-05,
+    "total_duration": 7.249697685241699
   },
   {
     "model": "analyst",
-    "target": 24000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 24000,
+    "output_tokens": 55,
+    "ttft": 6.888627767562866,
+    "tpot": 1.8722360784357245e-05,
+    "total_duration": 6.889657497406006
   },
   {
     "model": "analyst",
-    "target": 28000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 28000,
+    "output_tokens": 62,
+    "ttft": 7.6580517292022705,
+    "tpot": 1.3651386384041079e-05,
+    "total_duration": 7.658898115158081
   },
   {
     "model": "analyst",
-    "target": 32000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 32000,
+    "output_tokens": 44,
+    "ttft": 7.046433210372925,
+    "tpot": 1.4678998426957564e-05,
+    "total_duration": 7.047079086303711
   },
   {
     "model": "builder",
-    "target": 4000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 4000,
+    "output_tokens": 54,
+    "ttft": 1.1442129611968994,
+    "tpot": 1.9594475075050638e-05,
+    "total_duration": 1.1452710628509521
   },
   {
     "model": "builder",
-    "target": 8000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 8000,
+    "output_tokens": 43,
+    "ttft": 2.1666581630706787,
+    "tpot": 1.30132187244504e-05,
+    "total_duration": 2.16721773147583
   },
   {
     "model": "builder",
-    "target": 12000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 12000,
+    "output_tokens": 44,
+    "ttft": 2.345475912094116,
+    "tpot": 1.5470114621249113e-05,
+    "total_duration": 2.346156597137451
   },
   {
     "model": "builder",
-    "target": 16000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 16000,
+    "output_tokens": 44,
+    "ttft": 2.5228679180145264,
+    "tpot": 1.2186440554532139e-05,
+    "total_duration": 2.523404121398926
   },
   {
     "model": "builder",
-    "target": 20000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 20000,
+    "output_tokens": 48,
+    "ttft": 2.755817413330078,
+    "tpot": 1.2288490931193033e-05,
+    "total_duration": 2.7564072608947754
   },
   {
     "model": "builder",
-    "target": 24000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 24000,
+    "output_tokens": 44,
+    "ttft": 2.8314363956451416,
+    "tpot": 1.5665184367786754e-05,
+    "total_duration": 2.832125663757324
   },
   {
     "model": "builder",
-    "target": 28000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 28000,
+    "output_tokens": 45,
+    "ttft": 3.019928455352783,
+    "tpot": 1.6498565673828126e-05,
+    "total_duration": 3.0206708908081055
   },
   {
     "model": "builder",
-    "target": 32000,
-    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+    "target_tokens": 32000,
+    "output_tokens": 46,
+    "ttft": 3.2017624378204346,
+    "tpot": 1.2071236320163893e-05,
+    "total_duration": 3.202317714691162
   }
 ]

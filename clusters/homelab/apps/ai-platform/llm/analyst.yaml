@@ -74,11 +74,11 @@ spec:
           resources:
             requests:
               cpu: "4"
-              memory: "24Gi"
+              memory: "8Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "4"
-              memory: "32Gi"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
 
           volumeMounts:
