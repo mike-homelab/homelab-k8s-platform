@@ -41,6 +41,10 @@ spec:
               echo "Pulling Devstral natively from Hugging Face..."
               ollama pull hf.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS
               
+              # Create 'builder' alias with correct context
+              printf "FROM hf.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS\nPARAMETER num_ctx 32768" > /tmp/Modelfile
+              ollama create builder -f /tmp/Modelfile
+
               # Kill the background server so the initContainer can exit
               kill $SERVER_PID
           env:

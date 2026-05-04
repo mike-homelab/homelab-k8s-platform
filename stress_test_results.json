@@ -1,0 +1,82 @@
+[
+  {
+    "model": "analyst",
+    "target": 4000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 8000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 12000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 16000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 20000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 24000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 28000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "analyst",
+    "target": 32000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'analyst-80k' not found\\\"}. Received Model Group=analyst\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 4000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 8000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 12000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 16000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 20000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 24000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 28000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  },
+  {
+    "model": "builder",
+    "target": 32000,
+    "error": "Status 500: {\"error\":{\"message\":\"litellm.APIConnectionError: OllamaException - {\\\"error\\\":\\\"model 'builder-80k' not found\\\"}. Received Model Group=builder\\nAvailable Model Group Fallbacks=None\",\"type\":null,\"param\":null,\"code\":\"500\"}}"
+  }
+]
