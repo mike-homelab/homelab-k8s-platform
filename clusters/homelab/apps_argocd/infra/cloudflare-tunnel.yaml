@@ -13,7 +13,7 @@ spec:
     path: clusters/homelab/apps/infra/cloudflare-tunnel
   destination:
     server: https://kubernetes.default.svc
-    namespace: infra
+    namespace: cloudflare-tunnel
   syncPolicy:
     automated:
       prune: true
