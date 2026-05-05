@@ -11,7 +11,7 @@ logging.basicConfig(
 app = FastAPI(
     title="Observability Gateway",
     description="Unified API for Prometheus, Loki, and Tempo queries optimized for AI agents",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # Include routes

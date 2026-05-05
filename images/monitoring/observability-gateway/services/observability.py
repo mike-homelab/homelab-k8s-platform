@@ -1,6 +1,7 @@
 from clients.prometheus import PrometheusClient
 from clients.loki import LokiClient
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -58,4 +59,45 @@ class ObservabilityService:
             }
         except Exception as e:
             logger.error(f"Error retrieval failed for {service_name}: {e}")
+            return {"service": service_name, "status": "error", "error": str(e)}
+    async def get_summary(self, service_name: str, window: str = "5m"):
+        """
+        Provides a unified summary of metrics, logs, and traces for a service.
+        """
+        try:
+            # Get basic health (Prometheus)
+            health = await self.get_health(service_name)
+            
+            # Get error rate and logs (Prometheus + Loki)
+            errors = await self.get_errors(service_name, window)
+            
+            # Get trace/span summary (Prometheus metrics generated from traces)
+            # Using same logic as TempoSpanTraceService
+            latency_query = f'histogram_quantile(0.99, sum(rate(duration_ms_bucket{{service_name="{service_name}"}}[{window}])) by (le, service_name))'
+            rps_query = f'sum(rate(duration_ms_count{{service_name="{service_name}"}}[{window}])) by (service_name)'
+            
+            latency_res = await self.prom_client.query(latency_query)
+            rps_res = await self.prom_client.query(rps_query)
+            
+            def extract_val(res):
+                if res and res.get("data") and res["data"].get("result"):
+                    return float(res["data"]["result"][0]["value"][1])
+                return 0.0
+
+            return {
+                "service": service_name,
+                "window": window,
+                "health": health,
+                "metrics": {
+                    "p99_latency_ms": extract_val(latency_res),
+                    "requests_per_second": extract_val(rps_res),
+                    "error_rate_per_second": errors.get("error_rate_per_second", 0.0)
+                },
+                "logs": {
+                    "recent_error_logs": errors.get("recent_error_logs", [])
+                },
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Summary retrieval failed for {service_name}: {e}")
             return {"service": service_name, "status": "error", "error": str(e)}

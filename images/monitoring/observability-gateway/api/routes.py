@@ -44,3 +44,10 @@ async def get_trace_summary(
     service: TempoSpanTraceService = Depends(get_tempo_service)
 ):
     return await service.get_span_summary(service_name, window)
+@router.get("/service/summary")
+async def get_service_summary(
+    name: str = Query(..., description="Service name to get full summary for"),
+    window: str = Query("5m", description="Time window for summary"),
+    service: ObservabilityService = Depends(get_obs_service)
+):
+    return await service.get_summary(name, window)
