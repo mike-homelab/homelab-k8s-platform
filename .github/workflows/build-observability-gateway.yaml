@@ -1,0 +1,53 @@
+name: Build Observability Gateway Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - images/monitoring/observability-gateway/**
+      - .github/workflows/build-observability-gateway.yaml
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Push Observability Gateway
+    runs-on: [self-hosted]
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: echo "VERSION=$(cat images/monitoring/observability-gateway/VERSION)" >> $GITHUB_OUTPUT
+
+      - name: Log in to Nexus Docker registry
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | \
+            docker login docker.michaelhomelab.work \
+              --username "${{ secrets.NEXUS_USERNAME }}" \
+              --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:latest \
+            -t docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} \
+            images/monitoring/observability-gateway
+
+      - name: Push Docker image
+        run: |
+          for tag in latest ${{ steps.get_version.outputs.VERSION }}; do
+            for i in 1 2 3 4 5; do
+              echo "Attempt $i: Pushing observability-gateway:$tag...";
+              docker push docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:$tag && break || sleep 15;
+            done
+          done
+
+      - name: Clean up Docker image
+        if: always()
+        run: |
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:latest || true
+          docker rmi docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} || true

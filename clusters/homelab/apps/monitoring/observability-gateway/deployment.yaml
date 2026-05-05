@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: observability-gateway
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: observability-gateway
+  template:
+    metadata:
+      labels:
+        app: observability-gateway
+    spec:
+      containers:
+      - name: gateway
+        image: docker.michaelhomelab.work/homelab-docker-repo/monitoring/observability-gateway:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: PROMETHEUS_URL
+          value: "http://mimir-query-frontend.monitoring.svc.cluster.local:8080"
+        - name: LOKI_URL
+          value: "http://loki-gateway.monitoring.svc.cluster.local"
+        - name: TEMPO_URL
+          value: "http://tempo-query-frontend.monitoring.svc.cluster.local:3100"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
