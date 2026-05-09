@@ -7,8 +7,8 @@ Two-phase pipeline:
   Phase 2 - Chapter Cleaner: Clean raw fan-translated chapters using the Bible
 
 LLM routing:
-  - analyst (Mistral-Small-24B / 32K ctx) : planning, bible synthesis, quality review
-  - builder (Devstral-24B / 32K ctx) : execution & chapter cleaning
+  - analyst (Qwen3-14B / 80K ctx) : planning, bible synthesis, quality review
+  - builder (Qwen3-Coder-14B / 80K ctx) : execution & chapter cleaning
 
 Output: Markdown (.md) + optional PDF per chapter, cost savings report at end.
 Author: Antigravity for Michael's Homelab
@@ -95,9 +95,9 @@ LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
 MODEL_PLANNER  = "analyst"
 MODEL_EXECUTOR = "builder"
 
-# Total context budget in characters (32,768 tokens * ~4 chars/token = 131,072)
-PLANNER_TOTAL_CHARS  = 128_000
-EXECUTOR_TOTAL_CHARS = 128_000
+# Total context budget in characters (81,920 tokens * ~3.8 chars/token ≈ 310,000)
+PLANNER_TOTAL_CHARS  = 310_000
+EXECUTOR_TOTAL_CHARS = 310_000
 
 TRANSLATED_DIR = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/translated_vol")
 RAW_DIR        = Path("/home/michael/Documents/wrong_way_to_use_healing_magic/raw_files")

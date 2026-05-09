@@ -47,13 +47,13 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling Qwen3-Coder-14B..."
+              echo "Pulling qwen3-coder:14b..."
 
-              ollama pull hf.co/Qwen/Qwen3-Coder-14B-GGUF:Q4_K_M
+              ollama pull qwen3-coder:14b
 
               cat <<EOF >/tmp/Modelfile
-              FROM hf.co/Qwen/Qwen3-Coder-14B-GGUF:Q4_K_M
-              PARAMETER num_ctx 98304
+              FROM qwen3-coder:14b
+              PARAMETER num_ctx 81920
               EOF
 
               ollama create builder -f /tmp/Modelfile
@@ -88,7 +88,7 @@ spec:
               value: /models
 
             - name: OLLAMA_NUM_CTX
-              value: "98304"
+              value: "81920"
 
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
