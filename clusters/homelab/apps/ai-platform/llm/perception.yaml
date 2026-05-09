@@ -35,6 +35,7 @@ spec:
                 --port 8000 \
                 --gpu-memory-utilization 0.45 \
                 --max-model-len 8192 \
+                --trust-remote-code \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
               # Reranking Service: GTE-Multilingual-Reranker
@@ -43,6 +44,7 @@ spec:
                 --port 8001 \
                 --gpu-memory-utilization 0.45 \
                 --max-model-len 1024 \
+                --trust-remote-code \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
               wait
