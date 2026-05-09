@@ -47,12 +47,12 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling qwen3-coder:14b..."
+              echo "Pulling qwen2.5-coder:14b..."
 
-              ollama pull qwen3-coder:14b
+              ollama pull qwen2.5-coder:14b
 
               cat <<EOF >/tmp/Modelfile
-              FROM qwen3-coder:14b
+              FROM qwen2.5-coder:14b
               PARAMETER num_ctx 81920
               EOF
 
