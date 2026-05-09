@@ -26,6 +26,14 @@ spec:
           image: harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest
           imagePullPolicy: Always
           command: ["/bin/bash"]
+          env:
+            - name: VLLM_OTEL_TRACING
+              value: "1"
+            - name: VLLM_USE_V1
+              value: "0"
+          envFrom:
+            - configMapRef:
+                name: vllm-otel-env
           args: 
             - "-c"
             - |
@@ -38,22 +46,17 @@ spec:
                 --trust-remote-code \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
-              # Reranking Service: GTE-Multilingual-Reranker
+              # Reranking Service: GTE-Qwen2-1.5B (using Score Task)
               python3 -m vllm.entrypoints.openai.api_server \
-                --model Alibaba-NLP/gte-multilingual-reranker-base \
+                --model Alibaba-NLP/gte-Qwen2-1.5B-instruct \
+                --task score \
                 --port 8001 \
                 --gpu-memory-utilization 0.45 \
-                --max-model-len 1024 \
+                --max-model-len 8192 \
                 --trust-remote-code \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
               wait
-          env:
-            - name: VLLM_OTEL_TRACING
-              value: "1"
-          envFrom:
-            - configMapRef:
-                name: vllm-otel-env
           ports:
             - name: embed
               containerPort: 8000
