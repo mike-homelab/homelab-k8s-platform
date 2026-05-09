@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -6,91 +7,137 @@ metadata:
 spec:
   serviceName: builder
   replicas: 1
+
   selector:
     matchLabels:
       app: builder
+
   template:
     metadata:
       labels:
         app: builder
+
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics/"
         prometheus.io/port: "11434"
+
     spec:
       nodeSelector:
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
 
+      terminationGracePeriodSeconds: 60
+
       initContainers:
         - name: pull-model
           image: ollama/ollama:latest
+          imagePullPolicy: Always
+
           command: ["sh", "-c"]
+
           args:
             - |
-              set -e
-              # Start a temporary local ollama server to process the pull
+              set -euxo pipefail
+
               ollama serve &
               SERVER_PID=$!
-              
-              # Wait for the server to be ready
-              until ollama list >/dev/null 2>&1; do sleep 2; done
-              
-              # Pull natively from Hugging Face Hub
-              # Format: hf.co/{username}/{repository}:{quantization}
-              echo "Pulling Devstral natively from Hugging Face..."
-              ollama pull hf.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS
-              
-              # Create 'builder' alias with correct context
-              printf "FROM hf.co/bartowski/mistralai_Devstral-Small-2-24B-Instruct-2512-GGUF:IQ4_XS\nPARAMETER num_ctx 32768" > /tmp/Modelfile
+
+              until ollama list >/dev/null 2>&1; do
+                sleep 2
+              done
+
+              echo "Pulling Qwen3-Coder-14B..."
+
+              ollama pull hf.co/Qwen/Qwen3-Coder-14B-GGUF:Q4_K_M
+
+              cat <<EOF >/tmp/Modelfile
+              FROM hf.co/Qwen/Qwen3-Coder-14B-GGUF:Q4_K_M
+              PARAMETER num_ctx 98304
+              EOF
+
               ollama create builder -f /tmp/Modelfile
 
-              # Kill the background server so the initContainer can exit
               kill $SERVER_PID
+
           env:
             - name: OLLAMA_MODELS
               value: /models
+
           volumeMounts:
             - name: hf-cache
               mountPath: /models
+
           resources:
             requests:
-              cpu: "1"
-              memory: "4Gi"
+              cpu: "2"
+              memory: "6Gi"
 
       containers:
         - name: ollama
           image: ollama/ollama:latest
+          imagePullPolicy: Always
+
           args: ["serve"]
+
           env:
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+
             - name: OLLAMA_MODELS
               value: /models
+
             - name: OLLAMA_NUM_CTX
-              value: "32768"
+              value: "98304"
+
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
+
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
+
             - name: OLLAMA_KV_CACHE_TYPE
               value: "q4_0"
+
             - name: OLLAMA_KEEP_ALIVE
               value: "-1"
+
             - name: OLLAMA_HOST
               value: "0.0.0.0:11434"
+
             - name: OLLAMA_LOG_FORMAT
               value: "json"
+
+            - name: GIN_MODE
+              value: "release"
+
           ports:
             - name: http
               containerPort: 11434
 
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 20
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 11434
+            initialDelaySeconds: 60
+            periodSeconds: 20
+
           resources:
             requests:
-              cpu: "4"
-              memory: "8Gi"
+              cpu: "6"
+              memory: "12Gi"
               nvidia.com/gpu: "1"
+
             limits:
-              cpu: "8"
-              memory: "16Gi"
+              cpu: "10"
+              memory: "20Gi"
               nvidia.com/gpu: "1"
 
           volumeMounts:
@@ -100,9 +147,13 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
+
       spec:
         storageClassName: longhorn
-        accessModes: ["ReadWriteOnce"]
+
+        accessModes:
+          - ReadWriteOnce
+
         resources:
           requests:
             storage: 120Gi
@@ -112,14 +163,18 @@ kind: Service
 metadata:
   name: builder
   namespace: ai-platform
+
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/path: "/metrics/"
     prometheus.io/port: "11434"
+
 spec:
   type: ClusterIP
+
   selector:
     app: builder
+
   ports:
     - name: http
       port: 11434
