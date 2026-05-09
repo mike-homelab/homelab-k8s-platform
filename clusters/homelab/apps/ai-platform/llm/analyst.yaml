@@ -32,7 +32,7 @@ spec:
           image: ollama/ollama:latest
           imagePullPolicy: Always
 
-          command: ["sh", "-c"]
+          command: ["/bin/bash", "-c"]
 
           args:
             - |
