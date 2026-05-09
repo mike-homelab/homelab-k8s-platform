@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: infinity-embedding
+  name: perception
   namespace: ai-platform
 spec:
-  serviceName: infinity-embedding
+  serviceName: perception
   replicas: 1
   selector:
     matchLabels:
-      app: infinity-embedding
+      app: perception
   template:
     metadata:
       labels:
-        app: infinity-embedding
+        app: perception
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics"
@@ -22,25 +22,27 @@ spec:
         kubernetes.io/os: linux
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
-        - name: vllm-embed-rerank
+        - name: qwen-perception
           image: harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest
           imagePullPolicy: Always
           command: ["/bin/bash"]
           args: 
             - "-c"
             - |
+              # Embedding Service: GTE-Qwen2-1.5B
               python3 -m vllm.entrypoints.openai.api_server \
-                --model BAAI/bge-large-en-v1.5 \
+                --model Alibaba-NLP/gte-Qwen2-1.5B-instruct \
                 --port 8000 \
                 --gpu-memory-utilization 0.45 \
-                --max-model-len 512 \
+                --max-model-len 8192 \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
+              # Reranking Service: GTE-Multilingual-Reranker
               python3 -m vllm.entrypoints.openai.api_server \
-                --model BAAI/bge-reranker-v2-m3 \
+                --model Alibaba-NLP/gte-multilingual-reranker-base \
                 --port 8001 \
                 --gpu-memory-utilization 0.45 \
-                --max-model-len 512 \
+                --max-model-len 1024 \
                 --otlp-traces-endpoint $(OTEL_EXPORTER_OTLP_ENDPOINT) &
               
               wait
@@ -57,12 +59,12 @@ spec:
               containerPort: 8001
           resources:
             requests:
-              cpu: "2"
+              cpu: "4"
               memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "4"
-              memory: "16Gi"
+              cpu: "6"
+              memory: "20Gi"
               nvidia.com/gpu: "1"
           volumeMounts:
             - name: hf-cache
@@ -75,19 +77,23 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 20Gi
+            storage: 40Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: infinity-embedding
+  name: perception
   namespace: ai-platform
   labels:
-    app: infinity-embedding
+    app: perception
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "8000"
 spec:
   type: ClusterIP
   selector:
-    app: infinity-embedding
+    app: perception
   ports:
     - name: embed
       port: 8000
