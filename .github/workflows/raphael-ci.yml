@@ -36,8 +36,8 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/ai-agent/raphael:${{ env.VERSION }} \
-            -t harbor.michaelhomelab.work/devops-tools/ai-agent/raphael:latest \
+            -t harbor.michaelhomelab.work/homelab/ai-agent/raphael:${{ env.VERSION }} \
+            -t harbor.michaelhomelab.work/homelab/ai-agent/raphael:latest \
             images/ai-agent/raphael
 
       - name: Push Docker image
@@ -45,12 +45,12 @@ jobs:
           for tag in ${{ env.VERSION }} latest; do
             for i in 1 2 3 4 5; do
               echo "Attempt $i: Pushing raphael:${tag}...";
-              docker push harbor.michaelhomelab.work/devops-tools/ai-agent/raphael:${tag} && break || sleep 15;
+              docker push harbor.michaelhomelab.work/homelab/ai-agent/raphael:${tag} && break || sleep 15;
             done
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-agent/raphael:${{ env.VERSION }} || true
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-agent/raphael:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-agent/raphael:${{ env.VERSION }} || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-agent/raphael:latest || true

@@ -23,7 +23,7 @@ spec:
         nvidia.com/gpu.product: NVIDIA-GeForce-RTX-3060
       containers:
         - name: vllm-embed-rerank
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-platform/vllm-embedding:latest
+          image: harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest
           imagePullPolicy: Always
           command: ["/bin/bash"]
           args: 

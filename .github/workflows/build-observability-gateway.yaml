@@ -33,8 +33,8 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/monitoring/observability-gateway:latest \
-            -t harbor.michaelhomelab.work/devops-tools/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} \
+            -t harbor.michaelhomelab.work/homelab/monitoring/observability-gateway:latest \
+            -t harbor.michaelhomelab.work/homelab/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} \
             images/monitoring/observability-gateway
 
       - name: Push Docker image
@@ -42,12 +42,12 @@ jobs:
           for tag in latest ${{ steps.get_version.outputs.VERSION }}; do
             for i in 1 2 3 4 5; do
               echo "Attempt $i: Pushing observability-gateway:$tag...";
-              docker push harbor.michaelhomelab.work/devops-tools/monitoring/observability-gateway:$tag && break || sleep 15;
+              docker push harbor.michaelhomelab.work/homelab/monitoring/observability-gateway:$tag && break || sleep 15;
             done
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/monitoring/observability-gateway:latest || true
-          docker rmi harbor.michaelhomelab.work/devops-tools/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} || true
+          docker rmi harbor.michaelhomelab.work/homelab/monitoring/observability-gateway:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/monitoring/observability-gateway:${{ steps.get_version.outputs.VERSION }} || true

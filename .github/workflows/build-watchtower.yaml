@@ -29,17 +29,17 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/ai-application/watchtower:latest \
+            -t harbor.michaelhomelab.work/homelab/ai-application/watchtower:latest \
             images/ai-application/watchtower
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
             echo "Attempt $i: Pushing watchtower:latest...";
-            docker push harbor.michaelhomelab.work/devops-tools/ai-application/watchtower:latest && break || sleep 15;
+            docker push harbor.michaelhomelab.work/homelab/ai-application/watchtower:latest && break || sleep 15;
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-application/watchtower:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-application/watchtower:latest || true

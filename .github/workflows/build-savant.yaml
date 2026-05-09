@@ -29,17 +29,17 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/ai-application/savant:latest \
+            -t harbor.michaelhomelab.work/homelab/ai-application/savant:latest \
             images/ai-application/savant
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
             echo "Attempt $i: Pushing savant:latest...";
-            docker push harbor.michaelhomelab.work/devops-tools/ai-application/savant:latest && break || sleep 15;
+            docker push harbor.michaelhomelab.work/homelab/ai-application/savant:latest && break || sleep 15;
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-application/savant:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-application/savant:latest || true

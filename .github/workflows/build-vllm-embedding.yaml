@@ -29,16 +29,16 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-embedding:latest \
+            -t harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest \
             images/ai-platform/vllm/embedding
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-embedding:latest...";
-            docker push harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-embedding:latest && break || sleep 15;
+            echo "Attempt $i: Pushing harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest...";
+            docker push harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest && break || sleep 15;
           done
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-embedding:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-platform/vllm-embedding:latest || true

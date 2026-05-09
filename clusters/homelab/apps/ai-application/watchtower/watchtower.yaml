@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: watchtower
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/watchtower:latest
+          image: harbor.michaelhomelab.work/homelab/ai-application/watchtower:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80

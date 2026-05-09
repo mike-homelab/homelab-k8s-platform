@@ -29,17 +29,17 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-            -t harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-ray-blackwell:latest \
+            -t harbor.michaelhomelab.work/homelab/ai-platform/vllm-ray-blackwell:latest \
             images/ai-platform/vllm/ray
 
       - name: Push Docker image
         run: |
           for i in 1 2 3 4 5; do
-            echo "Attempt $i: Pushing harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-ray-blackwell:latest...";
-            docker push harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-ray-blackwell:latest && break || sleep 15;
+            echo "Attempt $i: Pushing harbor.michaelhomelab.work/homelab/ai-platform/vllm-ray-blackwell:latest...";
+            docker push harbor.michaelhomelab.work/homelab/ai-platform/vllm-ray-blackwell:latest && break || sleep 15;
           done
 
       - name: Clean up Docker image
         if: always()
         run: |
-          docker rmi harbor.michaelhomelab.work/devops-tools/ai-platform/vllm-ray-blackwell:latest || true
+          docker rmi harbor.michaelhomelab.work/homelab/ai-platform/vllm-ray-blackwell:latest || true

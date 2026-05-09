@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: savant
-          image: docker.michaelhomelab.work/homelab-docker-repo/ai-application/savant:latest
+          image: harbor.michaelhomelab.work/homelab/ai-application/savant:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
