@@ -1,0 +1,21 @@
+{
+  "service": "builder",
+  "window": "5m",
+  "health": {
+    "service": "builder",
+    "status": "healthy",
+    "up": true
+  },
+  "metrics": {
+    "p99_latency_ms": 150.5,
+    "requests_per_second": 10.2,
+    "error_rate_per_second": 0.05
+  },
+  "logs": {
+    "recent_error_logs": [
+      "2024-05-05 12:00:00 ERROR Database timeout",
+      "2024-05-05 12:01:00 ERROR Connection reset"
+    ]
+  },
+  "timestamp": "2024-05-05T12:05:00.000000"
+}

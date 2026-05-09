@@ -1,0 +1,44 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: harbor
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+spec:
+  project: devops-tools
+  source:
+    repoURL: https://helm.goharbor.io
+    chart: harbor
+    targetRevision: 1.14.0
+    helm:
+      values: |
+        expose:
+          type: clusterIP
+          tls:
+            enabled: false
+        externalURL: https://harbor.michaelhomelab.work
+        persistence:
+          persistentVolumeClaim:
+            registry:
+              storageClass: longhorn
+              size: 50Gi
+            jobservice:
+              storageClass: longhorn
+              size: 1Gi
+            database:
+              storageClass: longhorn
+              size: 5Gi
+            redis:
+              storageClass: longhorn
+              size: 1Gi
+        harborAdminPassword: "HarborPassword12345" # Change after login
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: devops-tools
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

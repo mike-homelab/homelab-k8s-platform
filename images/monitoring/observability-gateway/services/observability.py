@@ -80,7 +80,7 @@ class ObservabilityService:
             rps_res = await self.prom_client.query(rps_query)
             
             def extract_val(res):
-                if res and res.get("data") and res["data"].get("result"):
+                if res and res.get("data") and res["data"].get("result") and len(res["data"]["result"]) > 0:
                     return float(res["data"]["result"][0]["value"][1])
                 return 0.0
 

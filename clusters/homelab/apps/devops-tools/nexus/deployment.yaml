@@ -17,6 +17,7 @@ spec:
     spec:
       securityContext:
         fsGroup: 200
+        fsGroupChangePolicy: "OnRootMismatch"
       containers:
         - name: nexus
           image: sonatype/nexus3:3.68.1

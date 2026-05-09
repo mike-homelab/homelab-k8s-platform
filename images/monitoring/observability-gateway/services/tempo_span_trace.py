@@ -31,6 +31,6 @@ class TempoSpanTraceService:
             return {"error": str(e)}
 
     def _extract_value(self, prom_res):
-        if prom_res and prom_res.get("data") and prom_res["data"].get("result"):
+        if prom_res and prom_res.get("data") and prom_res["data"].get("result") and len(prom_res["data"]["result"]) > 0:
             return float(prom_res["data"]["result"][0]["value"][1])
         return 0.0

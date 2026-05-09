@@ -10,6 +10,7 @@ spec:
 
   sourceRepos:
   - https://github.com/mike-homelab/homelab-k8s-platform
+  - https://helm.goharbor.io
 
   destinations:
   - namespace: '*'
