@@ -12,6 +12,8 @@ spec:
   destinations:
     - namespace: 'ai-agent'
       server: https://kubernetes.default.svc
+    - namespace: 'coding-agent'
+      server: https://kubernetes.default.svc
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace

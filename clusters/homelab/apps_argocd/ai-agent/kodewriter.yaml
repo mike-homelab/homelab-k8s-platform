@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kodewriter
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+spec:
+  project: ai-agent
+  source:
+    repoURL: https://github.com/mike-homelab/homelab-k8s-platform
+    targetRevision: main
+    path: clusters/homelab/apps/coding-agent
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: coding-agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

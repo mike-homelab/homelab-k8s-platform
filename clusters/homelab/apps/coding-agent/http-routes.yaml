@@ -1,0 +1,33 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kodewriter-route
+  namespace: coding-agent
+spec:
+  parentRefs:
+    - name: nginx-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - kodewriter.michaelhomelab.work
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ide
+      backendRefs:
+        - name: openvscode-server
+          port: 3000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /agent
+      backendRefs:
+        - name: agent-ui
+          port: 3000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: harness-api
+          port: 8000

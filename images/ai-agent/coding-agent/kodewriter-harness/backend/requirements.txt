@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pydantic
+websockets
+requests
+python-multipart
+kubernetes
+qdrant-client
+tree-sitter
+tree-sitter-languages
+

@@ -93,7 +93,9 @@ LOCAL_COST_PER_CALL      = 0.0    # Local inference: $0 marginal cost
 LITELLM_BASE   = "https://llm.michaelhomelab.work/v1"
 LITELLM_KEY    = "sk-michael-homelab-llm-proxy"
 MODEL_PLANNER  = "analyst"
-MODEL_EXECUTOR = "builder"
+MODEL_EXECUTOR = "analyst"  # Switched from builder to analyst
+SAVANT_BASE    = "https://savant.michaelhomelab.work"
+MIN_TEMPERATURE = 0.1
 
 # Total context budget in characters (81,920 tokens * ~3.8 chars/token ≈ 310,000)
 PLANNER_TOTAL_CHARS  = 310_000
@@ -126,6 +128,9 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
         "Authorization": f"Bearer {LITELLM_KEY}",
         "Content-Type": "application/json",
     }
+    # Enforce minimum temperature to prevent hallucinations and maintain stability
+    temperature = max(temperature, MIN_TEMPERATURE)
+
     payload = {
         "model": model,
         "temperature": temperature,
@@ -204,6 +209,41 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
     except Exception as exc:
         safe_log(f"  [LLM] Call failed for {model}: {exc}")
         raise RuntimeError(f"LLM call failed for {model}: {exc}")
+
+def query_savant(query: str) -> str:
+    """Query the internet-enabled Savant service for character information."""
+    url = f"{SAVANT_BASE}/api/chat"
+    payload = {"message": query, "stream": True}
+    
+    safe_log(f"  [SAVANT] Searching internet for: {query} ...")
+    try:
+        resp = requests.post(url, json=payload, stream=True, timeout=120)
+        resp.raise_for_status()
+        
+        full_response = []
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            line_str = line.decode("utf-8")
+            if line_str.startswith("data: "):
+                data_str = line_str[6:]
+                try:
+                    data = json.loads(data_str)
+                    if "token" in data:
+                        full_response.append(data["token"])
+                    if data.get("done"):
+                        break
+                except Exception:
+                    continue
+        
+        result = "".join(full_response).strip()
+        if not result:
+            return "unknown"
+        return result
+    except Exception as e:
+        safe_log(f"  [SAVANT] Error: {e}")
+        return "unknown"
+
 
 def wakeup_models():
     """Ensure both the analyst and builder models are awake and responsive."""
@@ -313,8 +353,9 @@ BIBLE_EXTRACT_SYSTEM = textwrap.dedent("""\
       "honorifics_policy": "Description of how honorifics should be handled"
     }
 
-    Extract ONLY information present in the text. Use null for unknown fields.
+    Extract ONLY information present in the text. Use "unknown" for fields not explicitly clear.
     If a character appears with inconsistent gender, note both and flag under gender_fixes.
+    Be extremely careful with character names; identify aliases and nicknames to group them correctly.
 """)
 
 
@@ -366,6 +407,60 @@ BIBLE_SYNTHESIS_SYSTEM = textwrap.dedent("""\
 """)
 
 
+def enrich_bible_with_internet(bible: dict) -> dict:
+    """Use Savant to fill in missing character details in the Bible."""
+    characters = bible.get("characters", {})
+    if not characters:
+        return bible
+
+    safe_log("\n[ENRICH] Checking characters for missing info via internet...")
+    
+    # We only enrich characters with missing gender or pronouns
+    to_enrich = []
+    for name, info in characters.items():
+        # Check for various forms of "unknown"
+        gender = str(info.get("gender", "")).lower()
+        pronouns = str(info.get("pronouns", "")).lower()
+        
+        if gender in ("", "unknown", "null", "none") or \
+           pronouns in ("", "unknown", "null", "none"):
+            to_enrich.append(name)
+    
+    if not to_enrich:
+        safe_log("  [✓] All characters have complete data.")
+        return bible
+
+    safe_log(f"  [INFO] Found {len(to_enrich)} characters to verify.")
+
+    for name in to_enrich:
+        query = f"What is the gender and pronouns of the character '{name}' from the light novel 'The Wrong Way to Use Healing Magic'?"
+        result = query_savant(query)
+        
+        if result == "unknown":
+            continue
+
+        # Ask the analyst to parse the Savant response into JSON
+        parse_system = "You are a data parser. Extract gender (male|female|unknown) and pronouns (he/him|she/her|they/them) from the text. Output ONLY JSON: {\"gender\": \"...\", \"pronouns\": \"...\"}"
+        parse_raw = llm_call(MODEL_PLANNER, parse_system, f"Savant response: {result}", temperature=0)
+        
+        try:
+            # Clean possible markdown fences
+            parse_raw = re.sub(r"```json\s*", "", parse_raw)
+            parse_raw = re.sub(r"```\s*", "", parse_raw)
+            parsed = json.loads(parse_raw)
+            
+            if parsed.get("gender") and parsed["gender"] != "unknown":
+                characters[name]["gender"] = parsed["gender"]
+            if parsed.get("pronouns") and parsed["pronouns"] != "unknown":
+                characters[name]["pronouns"] = parsed["pronouns"]
+                
+            safe_log(f"  [✓] Enriched {name}: {characters[name].get('gender')} ({characters[name].get('pronouns')})")
+        except Exception as e:
+            safe_log(f"  [!] Failed to parse enrichment for {name}: {e}")
+
+    return bible
+
+
 def synthesize_bible(partial_bibles: list[dict]) -> dict:
     """Merge all partial bibles into one authoritative bible using the reasoning model."""
     # Merge in-memory first to reduce payload size
@@ -384,13 +479,15 @@ def synthesize_bible(partial_bibles: list[dict]) -> dict:
         raw = re.sub(r"```json\s*", "", raw)
         raw = re.sub(r"```\s*", "", raw)
         try:
-            return json.loads(raw)
+            bible = json.loads(raw)
+            # Enrich with internet if needed
+            return enrich_bible_with_internet(bible)
         except Exception:
             print("[WARN] Final synthesis parse failed, returning in-memory merge.")
-            return merged
+            return enrich_bible_with_internet(merged)
     else:
         print("[INFO] Merged bible too large for synthesis call, returning in-memory merge.")
-        return merged
+        return enrich_bible_with_internet(merged)
 
 
 def load_bible_progress() -> dict:
@@ -530,6 +627,8 @@ CODER_CLEAN_SYSTEM = textwrap.dedent("""\
     7. Do NOT add, remove, or summarize plot content. Every scene and event must be present.
     8. Do NOT add commentary or meta-notes — output the corrected chapter text ONLY.
     9. Dialogue tags should use natural English speech verbs (said, replied, asked, exclaimed, etc.).
+    10. Do NOT hallucinate characters or events that are not in the raw text.
+    11. If a character's gender is unknown (even after Bible/Internet checks), use their name or gender-neutral pronouns (they/them) to avoid errors.
 
     Output format: You MUST wrap the final corrected chapter text inside <cleaned_text> tags. 
     Example: <cleaned_text>Chapter content here...</cleaned_text>
@@ -545,7 +644,8 @@ REASON_QA_SYSTEM = textwrap.dedent("""\
     - Any remaining pronoun/gender errors the previous pass missed
     - Consistency with terminology in the Bible
     - Natural English flow in dialogue and narration
-    - Completeness: ensure NO plot content was dropped
+    - Completeness: ensure NO plot content was dropped and NO extra content was added.
+    - Character Fidelity: ensure all characters mentioned in the raw text are correctly represented.
 
     Output format: You MUST wrap the final corrected chapter text inside <cleaned_text> tags.
     Do NOT include any explanation or meta-notes outside these tags.
@@ -613,6 +713,50 @@ def build_bible_context(bible: dict, max_chars: int = 3000) -> str:
 
     result = "\n".join(lines)
     return result[:max_chars]  # hard-cap
+
+
+def discover_new_characters(raw_text: str, bible: dict) -> dict:
+    """Identify characters in raw text that are not in the Bible and verify them via Savant."""
+    system = "You are a character extractor. List all named characters mentioned in this text. Output ONLY a JSON list of strings: [\"Name1\", \"Name2\", ...]"
+    # Extract from a sample of the text to find characters
+    raw_list = llm_call(MODEL_PLANNER, system, raw_text[:25000], temperature=0)
+    
+    try:
+        raw_list = re.sub(r"```json\s*", "", raw_list)
+        raw_list = re.sub(r"```\s*", "", raw_list)
+        names = json.loads(raw_list)
+    except Exception:
+        return {}
+
+    new_info = {}
+    known_names = {n.lower() for n in bible.get("characters", {}).keys()}
+    
+    # Also include aliases in known_names
+    for char_info in bible.get("characters", {}).values():
+        aliases = char_info.get("aliases", [])
+        if isinstance(aliases, list):
+            for a in aliases:
+                known_names.add(str(a).lower())
+
+    for name in names:
+        if name.lower() not in known_names and len(name) > 2:
+            safe_log(f"    [NEW CHAR] '{name}' found in chapter. Searching internet...")
+            query = f"What is the gender and pronouns of the character '{name}' from the light novel 'The Wrong Way to Use Healing Magic'?"
+            result = query_savant(query)
+            
+            if result != "unknown":
+                parse_system = "Extract gender (male|female|unknown) and pronouns (he/him|she/her|they/them). Output ONLY JSON."
+                parse_raw = llm_call(MODEL_PLANNER, parse_system, f"Savant response: {result}", temperature=0)
+                try:
+                    parse_raw = re.sub(r"```json\s*", "", parse_raw)
+                    parse_raw = re.sub(r"```\s*", "", parse_raw)
+                    parsed = json.loads(parse_raw)
+                    if parsed.get("gender") and parsed["gender"] != "unknown":
+                        new_info[name] = parsed
+                        safe_log(f"    [✓] {name}: {parsed['gender']}")
+                except Exception:
+                    pass
+    return new_info
 
 
 def clean_chapter_main(raw_text: str, bible_ctx: str, chapter_label: str) -> str:
@@ -717,7 +861,7 @@ def get_chapter_sort_key(filename: str) -> tuple:
     return (9999, 0)
 
 
-def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
+def phase2_clean_chapters(bible: dict, start_time: float, volumes: Optional[list[int]] = None,
                           force: bool = False, skip_qa: bool = False) -> None:
     """
     Phase 2: Clean all raw chapter PDFs using the bible.
@@ -727,7 +871,7 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
     print("PHASE 2 — Cleaning Raw Chapters")
     print("="*60)
 
-    bible_ctx = build_bible_context(bible, max_chars=3500)
+    bible_ctx = build_bible_context(bible, max_chars=20000)
     print(f"[INFO] Bible context size: {len(bible_ctx):,} chars")
 
     all_pdfs = sorted(RAW_DIR.glob("*.pdf"), key=lambda p: get_chapter_sort_key(p.name))
@@ -782,10 +926,28 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
                     with LOG_LOCK: total_skipped += 1
                     return
 
+                # Character Discovery & Internet Lookup
+                new_chars = discover_new_characters(raw_text, bible)
+                local_bible_ctx = bible_ctx
+                if new_chars:
+                    # Update persistent bible
+                    with LOG_LOCK:
+                        if "characters" not in bible:
+                            bible["characters"] = {}
+                        for name, info in new_chars.items():
+                            bible["characters"][name] = info
+                        # Save to disk
+                        with open(BIBLE_PATH, "w", encoding="utf-8") as f:
+                            json.dump(bible, f, ensure_ascii=False, indent=2)
+                        safe_log(f"    [INFO] Added {len(new_chars)} discovered characters to Bible and saved to disk.")
+                    
+                    # Rebuild local context to include the newly saved characters
+                    local_bible_ctx = build_bible_context(bible, max_chars=20000)
+
                 # Cleaning passes
-                cleaned = clean_chapter_main(raw_text, bible_ctx, pdf_path.stem)
+                cleaned = clean_chapter_main(raw_text, local_bible_ctx, pdf_path.stem)
                 if not skip_qa:
-                    cleaned = qa_pass_reasoning(raw_text, cleaned, bible_ctx, pdf_path.stem)
+                    cleaned = qa_pass_reasoning(raw_text, cleaned, local_bible_ctx, pdf_path.stem)
 
                 chapter_title = pdf_path.stem.replace("_", " ").title()
                 md_content = render_chapter_markdown(chapter_title, cleaned, vol_key)
@@ -796,9 +958,14 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
                 chapter_mds[pdf_path.stem] = md_content
                 with LOG_LOCK: total_processed += 1
                 safe_log(f"  ✓ Finished {pdf_path.name}")
+                
+                # One-liner incremental progress
+                p, o = TRACKER.total_tokens()
+                safe_log(f"    [PROGRESS] Run Total: {p+o:,} tokens | Est. Savings vs Cloud: ${((p/1_000_000)*CLOUD_PRICE_INPUT_PER_M + (o/1_000_000)*CLOUD_PRICE_OUTPUT_PER_M):.2f}")
 
             except Exception as exc:
                 safe_log(f"    [ERROR] Failed to process {pdf_path.name}: {exc}")
+                traceback.print_exc()
                 with LOG_LOCK: total_errors += 1
 
         # Use ThreadPoolExecutor for chapters within a volume
@@ -829,6 +996,9 @@ def phase2_clean_chapters(bible: dict, volumes: Optional[list[int]] = None,
                 print("done")
             except Exception as pdf_err:
                 print(f"FAILED: {pdf_err}")
+        
+        # Print interim cost report after each volume
+        print_cost_report(start_time)
 
     print(f"\n[DONE] Processed: {total_processed}  |  Skipped: {total_skipped}  |  Errors: {total_errors}")
 
@@ -844,37 +1014,44 @@ body {
     font-size: 12pt;
     line-height: 1.85;
     color: #1a1a1a;
-    max-width: 680px;
-    margin: 0 auto;
-    padding: 48px 36px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
     background: #fafaf8;
+    text-rendering: optimizeLegibility;
+    overflow-wrap: break-word;
 }
 h1 {
-    font-size: 20pt;
+    font-size: 22pt;
     font-weight: 600;
     text-align: center;
-    margin-bottom: 0.3em;
+    margin-top: 1cm;
+    margin-bottom: 0.2em;
     color: #2c2c2c;
     letter-spacing: 0.03em;
     border-bottom: 2px solid #c8a97a;
     padding-bottom: 0.4em;
+    page-break-after: avoid;
 }
 h2 {
-    font-size: 13pt;
+    font-size: 14pt;
     font-weight: 600;
-    margin-top: 2em;
+    margin-top: 1.5em;
     color: #3a3a3a;
+    page-break-after: avoid;
 }
 p {
-    margin: 0.6em 0;
+    margin: 0.5em 0;
     text-indent: 1.5em;
+    orphans: 3;
+    widows: 3;
 }
 p:first-of-type { text-indent: 0; }
 blockquote {
     border-left: 3px solid #c8a97a;
-    margin: 1em 0 1em 1em;
+    margin: 1em 1.5em;
     padding-left: 1em;
-    color: #444;
+    color: #555;
     font-style: italic;
 }
 hr {
@@ -885,20 +1062,22 @@ hr {
 }
 hr::after { content: '✦  ✦  ✦'; }
 .meta {
-    font-size: 9pt;
+    font-size: 10pt;
     color: #888;
     text-align: center;
-    margin-bottom: 2em;
+    margin-bottom: 2.5em;
     font-style: italic;
+    border-top: 1px solid #eee;
+    padding-top: 0.5em;
 }
 @page {
     size: A4;
-    margin: 2.4cm 2.2cm;
+    margin: 2.5cm 2.5cm;
     @bottom-center {
         content: counter(page);
         font-family: 'EB Garamond', serif;
-        font-size: 9pt;
-        color: #aaa;
+        font-size: 10pt;
+        color: #999;
     }
 }
 """
@@ -1130,12 +1309,12 @@ def main():
                     sys.exit(1)
             phase2_clean_chapters(
                 bible,
+                start_time=start_time,
                 volumes=args.volumes,
                 force=args.force,
                 skip_qa=args.skip_qa,
             )
 
-    print_cost_report(start_time)
     print("✓ Agent finished.")
 
 
