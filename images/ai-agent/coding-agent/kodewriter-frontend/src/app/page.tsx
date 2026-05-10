@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface Message {
   role: "user" | "agent"
-  content: str
+  content: string
 }
 
 export default function Home() {
