@@ -6,8 +6,9 @@ import sys
 BASE_URL = "https://llm.michaelhomelab.work/v1"
 API_KEY = "sk-michael-homelab-llm-proxy"
 MODELS = ["analyst", "builder"]
-# Adjusted stages to allow room for large output tokens within 32K total context
-TOKEN_STAGES = [1000, 2000, 4000, 8000, 16000]
+# Testing from 8K to 80K in stages of 8K
+TOKEN_STAGES = [8000, 16000, 24000, 32000, 40000, 48000, 56000, 64000, 72000, 80000]
+TOTAL_CONTEXT_LIMIT = 81920
 
 def generate_prompt(approx_tokens):
     # Roughly 4 chars per token
@@ -18,13 +19,18 @@ def generate_prompt(approx_tokens):
 
 def run_test(model, target_tokens):
     prompt = generate_prompt(target_tokens)
+    # Calculate max_tokens to ensure we stay within the 80K model limit (Input + Output)
+    max_output_tokens = min(16384, TOTAL_CONTEXT_LIMIT - target_tokens)
+    if max_output_tokens < 100: # Ensure at least some room for a response
+        max_output_tokens = 100
+        
     payload = {
         "model": model,
         "messages": [
             {"role": "system", "content": "You are a creative writer. Your task is to EXPAND the following text as much as possible. For every sentence provided, you must write a very long and detailed paragraph. Aim for an output that is at least twice as long as the input."},
             {"role": "user", "content": f"Please expand this text significantly:\n\n{prompt}"}
         ],
-        "max_tokens": 16384, # Attempt large output
+        "max_tokens": max_output_tokens,
         "temperature": 0.7,
         "stream": True
     }
@@ -96,8 +102,8 @@ def run_test(model, target_tokens):
 
 def main():
     results = []
-    print(f"{'Model':<10} | {'Input':<7} | {'Output':<7} | {'TTFT (s)':<10} | {'TPOT (ms)':<10} | {'Total (s)':<10}")
-    print("-" * 75)
+    print(f"{'Model':<10} | {'Input Tok':<10} | {'Output Tok':<10} | {'Proc Time (s)':<13} | {'TTFT (s)':<10} | {'TPOT (ms)':<10}")
+    print("-" * 80)
     
     for model in MODELS:
         for stage in TOKEN_STAGES:
@@ -108,7 +114,7 @@ def main():
                 results.append({"model": model, "target": stage, "error": res["error"]})
             else:
                 tpot_ms = res['tpot'] * 1000
-                print(f"{model:<10} | {res['input_tokens']:<7} | {res['output_tokens']:<7} | {res['ttft']:<10.2f} | {tpot_ms:<10.2f} | {res['total_duration']:<10.2f}")
+                print(f"{model:<10} | {res['input_tokens']:<10} | {res['output_tokens']:<10} | {res['total_duration']:<13.2f} | {res['ttft']:<10.2f} | {tpot_ms:<10.2f}")
                 results.append(res)
             time.sleep(5) # Longer pause to allow VRAM to clear
             
