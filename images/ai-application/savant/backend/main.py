@@ -52,10 +52,12 @@ LITELLM_URL   = os.getenv("LITELLM_URL",   "https://llm.michaelhomelab.work/v1")
 LITELLM_MODEL = os.getenv("LITELLM_MODEL", "reasoning")
 LITELLM_KEY   = os.getenv("LITELLM_API_KEY", "sk-michael-homelab-llm-proxy")
 QDRANT_URL   = os.getenv("QDRANT_URL",   "http://qdrant.ai-platform.svc.cluster.local:6333")
-EMBED_URL    = os.getenv("EMBED_URL",    "http://infinity-embedding.ai-platform.svc.cluster.local:8000")
+EMBED_URL    = os.getenv("EMBED_URL",    "http://perception.ai-platform.svc.cluster.local:8000")
+EMBED_MODEL  = os.getenv("EMBED_MODEL",  "Alibaba-NLP/gte-Qwen2-1.5B-instruct")
 SEARCH_API   = os.getenv("SEARCH_API",   "https://api.duckduckgo.com/")
 SEARXNG_URL  = os.getenv("SEARXNG_URL",  "http://searxng.ai-platform.svc.cluster.local:8080")
-RERANK_URL   = os.getenv("RERANK_URL",   "http://infinity-embedding.ai-platform.svc.cluster.local:8001")
+RERANK_URL   = os.getenv("RERANK_URL",   "http://perception.ai-platform.svc.cluster.local:8001")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "Alibaba-NLP/gte-Qwen2-1.5B-instruct")
 COLLECTION   = os.getenv("QDRANT_COLLECTION", "knowledge")
 
 
@@ -71,12 +73,12 @@ class ChatRequest(BaseModel):
 async def get_embedding(text: str, request_id: str = None, session_id: str = None) -> list[float] | None:
     """Get embedding from vLLM embedding service."""
     with tracer.start_as_current_span("get_embedding") as span:
-        span.set_attribute("gen_ai.request.model", "BAAI/bge-large-en-v1.5")
+        span.set_attribute("gen_ai.request.model", EMBED_MODEL)
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.post(
                     f"{EMBED_URL}/v1/embeddings",
-                    json={"model": "BAAI/bge-large-en-v1.5", "input": text},
+                    json={"model": EMBED_MODEL, "input": text},
                 )
                 r.raise_for_status()
                 return r.json()["data"][0]["embedding"]
@@ -106,14 +108,14 @@ async def rerank_documents(query: str, docs: list[str], top_k: int = 3, request_
     if not docs:
         return []
     with tracer.start_as_current_span("rerank_documents") as span:
-        span.set_attribute("gen_ai.request.model", "BAAI/bge-reranker-large")
+        span.set_attribute("gen_ai.request.model", RERANK_MODEL)
         span.set_attribute("gen_ai.usage.input_documents", len(docs))
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.post(
                     f"{RERANK_URL}/v1/rerank",
                     json={
-                        "model": "BAAI/bge-reranker-large",
+                        "model": RERANK_MODEL,
                         "query": query,
                         "documents": docs,
                         "top_n": top_k

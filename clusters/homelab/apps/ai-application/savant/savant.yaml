@@ -25,7 +25,7 @@ spec:
             - name: LITELLM_URL
               value: "http://litellm.ai-platform.svc.cluster.local:4000/v1"
             - name: LITELLM_MODEL
-              value: "reasoning"
+              value: "analyst"
             - name: LITELLM_API_KEY
               value: "sk-michael-homelab-llm-proxy"
             - name: QDRANT_URL
@@ -33,11 +33,15 @@ spec:
             - name: QDRANT_COLLECTION
               value: "knowledge"
             - name: EMBED_URL
-              value: "http://infinity-embedding.ai-platform.svc.cluster.local:8000"
+              value: "http://perception.ai-platform.svc.cluster.local:8000"
+            - name: EMBED_MODEL
+              value: "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
             - name: SEARXNG_URL
               value: "http://searxng.ai-platform.svc.cluster.local:8080"
             - name: RERANK_URL
-              value: "http://infinity-embedding.ai-platform.svc.cluster.local:8001"
+              value: "http://perception.ai-platform.svc.cluster.local:8001"
+            - name: RERANK_MODEL
+              value: "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
             - name: WATCHTOWER_URL
               value: "http://watchtower.ai-platform.svc.cluster.local"
             - name: OTEL_SERVICE_NAME

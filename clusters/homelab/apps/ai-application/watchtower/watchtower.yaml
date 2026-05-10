@@ -25,7 +25,7 @@ spec:
             - name: LOKI_URL
               value: "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1"
             - name: TEMPO_URL
-              value: "http://tempo-query-frontend.monitoring.svc.cluster.local:3100"
+              value: "http://tempo-query-frontend.monitoring.svc.cluster.local:3200"
             - name: REDIS_URL
               value: "redis://redis.ai-platform.svc.cluster.local:6379/0"
             - name: OTEL_SERVICE_NAME

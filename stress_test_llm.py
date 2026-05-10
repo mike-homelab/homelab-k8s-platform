@@ -116,10 +116,11 @@ def main():
                 tpot_ms = res['tpot'] * 1000
                 print(f"{model:<10} | {res['input_tokens']:<10} | {res['output_tokens']:<10} | {res['total_duration']:<13.2f} | {res['ttft']:<10.2f} | {tpot_ms:<10.2f}")
                 results.append(res)
+                # Incremental save
+                with open("output_stress_test_results.json", "w") as f:
+                    json.dump(results, f, indent=2)
             time.sleep(5) # Longer pause to allow VRAM to clear
-            
-    with open("output_stress_test_results.json", "w") as f:
-        json.dump(results, f, indent=2)
+
 
 if __name__ == "__main__":
     main()
