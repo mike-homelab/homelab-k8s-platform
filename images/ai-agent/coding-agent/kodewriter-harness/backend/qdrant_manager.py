@@ -34,9 +34,9 @@ class QdrantManager:
         )
 
     def search(self, vector: List[float], limit: int = 10) -> List[Dict[str, Any]]:
-        results = self.client.search(
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=vector,
+            query=vector,
             limit=limit
-        )
+        ).points
         return [r.dict() for r in results]

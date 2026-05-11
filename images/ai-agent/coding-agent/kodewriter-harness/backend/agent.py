@@ -18,9 +18,12 @@ class KodewriterAgent:
         yield {"type": "plan", "content": plan}
 
         # 3. Execution Loop
-        # For MVP, we'll just do one round of coding
         code_solution = coder_call(task, f"Plan:\n{plan}\n\nContext:\n{context}")
         yield {"type": "code", "content": code_solution}
+        
+        # 4. Apply Changes
+        yield {"type": "status", "content": "Applying changes to workspace..."}
+        self._apply_patch(code_solution)
 
         # 4. Validation
         yield {"type": "status", "content": "Running tests..."}
@@ -40,6 +43,20 @@ class KodewriterAgent:
         else:
             yield {"type": "status", "content": "Tests passed!"}
 
-    def _apply_patch(self, patch: str):
-        # Placeholder for patch application logic
-        pass
+    def _apply_patch(self, code_solution: str):
+        """Rudimentary parser to extract code blocks and write them to disk."""
+        # In a real scenario, this would use a more robust parser or XML tags
+        if "```" in code_solution:
+            parts = code_solution.split("```")
+            for i in range(1, len(parts), 2):
+                content = parts[i]
+                # Skip language identifier
+                lines = content.split("\n")
+                if lines[0] and not lines[0].strip().startswith(" "):
+                    # Check if the first line is likely a language tag (e.g., python)
+                    if any(lang in lines[0].lower() for lang in ["python", "javascript", "typescript", "yaml", "html", "css"]):
+                        content = "\n".join(lines[1:])
+                
+                # For MVP, we assume the agent provides a filename in the first line of the block
+                # or we just write it to a default location if not found.
+                self.executor.write_file("generated_code.py", content)
