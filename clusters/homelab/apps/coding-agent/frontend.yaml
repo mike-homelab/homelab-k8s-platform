@@ -10,6 +10,8 @@ spec:
       app: agent-ui
   template:
     metadata:
+      annotations:
+        rollout-timestamp: "2026-05-11T12:30:00Z"
       labels:
         app: agent-ui
     spec:

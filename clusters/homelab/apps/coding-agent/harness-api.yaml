@@ -23,6 +23,13 @@ spec:
               value: "http://litellm.ai-platform.svc:4000/v1"
             - name: REDIS_URL
               value: "redis://redis.ai-platform.svc:6379"
+          volumeMounts:
+            - name: workspace
+              mountPath: /home/workspace
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: workspace-pvc
 ---
 apiVersion: v1
 kind: Service

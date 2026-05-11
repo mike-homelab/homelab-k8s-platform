@@ -14,7 +14,42 @@ interface Message {
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [socket, setSocket] = useState<WebSocket | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Create a new session on load
+    const initSession = async () => {
+      try {
+        const resp = await fetch('/api/session', { method: 'POST' })
+        const data = await resp.json()
+        setSessionId(data.id)
+      } catch (err) {
+        console.error("Failed to init session:", err)
+      }
+    }
+    initSession()
+  }, [])
+
+  useEffect(() => {
+    if (!sessionId) return
+
+    // Connect WebSocket
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/${sessionId}`
+    const ws = new WebSocket(wsUrl)
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type === 'agent_event') {
+        setMessages(prev => [...prev, { role: "agent", content: data.content }])
+      }
+    }
+
+    setSocket(ws)
+    return () => ws.close()
+  }, [sessionId])
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -23,14 +58,13 @@ export default function Home() {
   }, [messages])
 
   const handleSend = () => {
-    if (!input.trim()) return
-    setMessages([...messages, { role: "user", content: input }])
+    if (!input.trim() || !socket) return
+    
+    const userMsg = input.trim()
+    setMessages(prev => [...prev, { role: "user", content: userMsg }])
     setInput("")
     
-    // Simulate agent response
-    setTimeout(() => {
-      setMessages(prev => [...prev, { role: "agent", content: "I'm thinking... (Mock Response)" }])
-    }, 1000)
+    socket.send(JSON.stringify({ content: userMsg }))
   }
 
   return (
