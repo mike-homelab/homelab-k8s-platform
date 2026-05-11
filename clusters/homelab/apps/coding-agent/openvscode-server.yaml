@@ -47,11 +47,21 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+            - name: extension-config
+              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-sidebar/package.json
+              subPath: package.json
+            - name: extension-config
+              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-sidebar/extension.js
+              subPath: extension.js
 
       volumes:
         - name: workspace
           persistentVolumeClaim:
             claimName: workspace-pvc
+        - name: extension-config
+          configMap:
+            name: kodewriter-extension
+
 ---
 apiVersion: v1
 kind: Service
