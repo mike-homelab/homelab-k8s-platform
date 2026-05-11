@@ -9,3 +9,4 @@ resources:
   - harness-api.yaml
   - frontend.yaml
   - extension-configmap.yaml
+  - certificate.yaml

@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kodewriter-tls
+  namespace: coding-agent
+spec:
+  secretName: kodewriter-tls
+  issuerRef:
+    name: vault-issuer
+    kind: ClusterIssuer
+  commonName: kodewriter.michaelhomelab.work
+  dnsNames:
+    - kodewriter.michaelhomelab.work
