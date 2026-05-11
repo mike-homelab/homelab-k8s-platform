@@ -10,7 +10,7 @@ data:
       "displayName": "Kodewriter Sidebar",
       "version": "0.1.0",
       "publisher": "kodewriter",
-      "engines": { "vscode": "^1.80.0" },
+      "engines": { "vscode": "^1.60.0" },
       "categories": [ "Other" ],
       "activationEvents": ["*"],
       "contributes": {
@@ -53,9 +53,16 @@ data:
             return `
             <!DOCTYPE html>
             <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src https://kodewriter.michaelhomelab.work; style-src 'unsafe-inline';">
+                <style>
+                    html, body { padding: 0; margin: 0; width: 100%; height: 100%; overflow: hidden; background: #020617; color: white; }
+                    iframe { width: 100%; height: 100%; border: none; }
+                </style>
+            </head>
             <body>
-                <h1 style="color: white;">Hello from Kodewriter Extension</h1>
-                <p style="color: white;">If you see this, webviews are working.</p>
+                <iframe src="https://kodewriter.michaelhomelab.work/agent/" allow="clipboard-read; clipboard-write"></iframe>
             </body>
             </html>`;
         }
