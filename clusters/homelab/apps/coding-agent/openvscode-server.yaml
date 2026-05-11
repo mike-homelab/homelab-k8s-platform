@@ -3,23 +3,33 @@ kind: Deployment
 metadata:
   name: openvscode-server
   namespace: coding-agent
+
 spec:
   strategy:
     type: Recreate
+
   replicas: 1
+
   selector:
     matchLabels:
       app: openvscode-server
+
   template:
     metadata:
       labels:
         app: openvscode-server
-      annotations:
-        rollout-timestamp: "${{ date }}"
+
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+
       containers:
         - name: openvscode-server
+
           image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-ide:0.1.2
+
           args:
             - --host
             - 0.0.0.0
@@ -28,25 +38,17 @@ spec:
             - --without-connection-token
             - --server-base-path
             - /ide
+            - --workspace-folder
+            - /workspace
+
           ports:
             - containerPort: 3000
+
           volumeMounts:
             - name: workspace
-              mountPath: /home/workspace
+              mountPath: /workspace
+
       volumes:
         - name: workspace
           persistentVolumeClaim:
             claimName: workspace-pvc
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: openvscode-server
-  namespace: coding-agent
-spec:
-  selector:
-    app: openvscode-server
-  ports:
-    - protocol: TCP
-      port: 3000
-      targetPort: 3000
