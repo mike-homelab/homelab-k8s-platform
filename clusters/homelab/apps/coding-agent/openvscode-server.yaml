@@ -52,3 +52,16 @@ spec:
         - name: workspace
           persistentVolumeClaim:
             claimName: workspace-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openvscode-server
+  namespace: coding-agent
+spec:
+  selector:
+    app: openvscode-server
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
