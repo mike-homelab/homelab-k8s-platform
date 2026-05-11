@@ -48,16 +48,16 @@ spec:
             - name: workspace
               mountPath: /workspace
             - name: extension-config
-              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-sidebar/package.json
+              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-agent-chat/package.json
               subPath: package.json
             - name: extension-config
-              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-sidebar/extension.js
+              mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-agent-chat/extension.js
               subPath: extension.js
             - name: extension-config
-              mountPath: /workspace/.openvscode-server/extensions/kodewriter-sidebar/package.json
+              mountPath: /workspace/.openvscode-server/extensions/kodewriter-agent-chat/package.json
               subPath: package.json
             - name: extension-config
-              mountPath: /workspace/.openvscode-server/extensions/kodewriter-sidebar/extension.js
+              mountPath: /workspace/.openvscode-server/extensions/kodewriter-agent-chat/extension.js
               subPath: extension.js
 
       volumes:
