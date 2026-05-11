@@ -10,15 +10,25 @@ class KodewriterAgent:
 
     async def run_task(self, task: str):
         # 1. Retrieval (Local + Web)
-        yield {"type": "status", "content": "Searching local workspace and web..."}
+        yield {"type": "status", "content": "Analyzing request and searching local workspace..."}
         context_docs = self.retrieval.search(task)
+        
+        yield {"type": "status", "content": "Researching on the internet for additional context..."}
         web_docs = web_search(task)
         
         local_context = "\n".join([d["payload"]["content"] for d in context_docs])
         web_context = "\n".join(web_docs)
-        context = f"Local Context:\n{local_context}\n\nWeb Context:\n{web_context}"
+        
+        context = f"""
+### LOCAL WORKSPACE CONTEXT
+{local_context if local_context else "No relevant local files found."}
+
+### WEB RESEARCH CONTEXT
+{web_context if web_context else "No relevant web information found."}
+"""
         
         # 2. Planning
+        yield {"type": "status", "content": "Formulating execution plan..."}
         plan = planner_call(task, context)
         yield {"type": "plan", "content": plan}
 
