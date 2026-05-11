@@ -28,16 +28,16 @@ class RetrievalEngine:
         query_vector = get_embedding(query)
         initial_results = self.qdrant.search(query_vector, limit=limit)
         
-        # Reranking
-        docs = [r["payload"]["content"] for r in initial_results]
-        reranked = rerank(query, docs, top_n=5)
+        # Reranking is temporarily disabled due to stability issues in the perception service
+        # docs = [r["payload"]["content"] for r in initial_results]
+        # reranked = rerank(query, docs, top_n=5)
         
-        final_results = []
-        for r in reranked:
-            idx = r["index"]
-            final_results.append(initial_results[idx])
+        # final_results = []
+        # for r in reranked:
+        #     idx = r["index"]
+        #     final_results.append(initial_results[idx])
             
-        return final_results
+        return initial_results[:5]
 
     def _chunk_content(self, content: str, chunk_size: int = 1000) -> List[str]:
         # Simple character-based chunking for MVP
