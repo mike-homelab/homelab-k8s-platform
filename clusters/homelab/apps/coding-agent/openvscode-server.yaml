@@ -4,6 +4,8 @@ metadata:
   name: openvscode-server
   namespace: coding-agent
 spec:
+  strategy:
+    type: Recreate
   replicas: 1
   selector:
     matchLabels:
