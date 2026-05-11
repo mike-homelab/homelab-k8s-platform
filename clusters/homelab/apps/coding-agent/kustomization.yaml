@@ -8,4 +8,3 @@ resources:
   - http-routes.yaml
   - harness-api.yaml
   - frontend.yaml
-  - extension-configmap.yaml
