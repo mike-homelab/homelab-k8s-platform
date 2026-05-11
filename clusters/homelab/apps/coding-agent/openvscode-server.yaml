@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
         - name: openvscode-server
-          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-ide:0.1.0
+          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-ide:0.1.1
           args:
             - --host
             - 0.0.0.0
