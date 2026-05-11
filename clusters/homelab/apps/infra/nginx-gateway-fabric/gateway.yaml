@@ -21,6 +21,9 @@ spec:
         certificateRefs:
           - kind: Secret
             name: homelab-wildcard-tls
+          - kind: Secret
+            name: kodewriter-tls
+            namespace: coding-agent
       allowedRoutes:
         namespaces:
           from: All

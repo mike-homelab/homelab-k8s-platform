@@ -10,3 +10,4 @@ resources:
   - frontend.yaml
   - extension-configmap.yaml
   - certificate.yaml
+  - reference-grant.yaml
