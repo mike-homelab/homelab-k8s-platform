@@ -1,19 +1,13 @@
-FROM gitpod/openvscode-server:1.103.1
+FROM python:3.11-slim
 
-USER root
+WORKDIR /app
 
-RUN mkdir -p /tmp/kodewriter
+RUN apt-get update && apt-get install -y git curl iputils-ping && rm -rf /var/lib/apt/lists/*
 
-COPY package.json extension.js /tmp/kodewriter/
-COPY media /tmp/kodewriter/media
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN mkdir -p \
-    /home/openvscode-server/.openvscode-server/extensions/kodewriter-sidebar
+COPY backend/ ./backend/
+COPY VERSION .
 
-RUN cp -r /tmp/kodewriter/* \
-    /home/openvscode-server/.openvscode-server/extensions/kodewriter-sidebar/
-
-RUN chown -R openvscode-server:openvscode-server \
-    /home/openvscode-server/.openvscode-server
-
-USER openvscode-server
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
