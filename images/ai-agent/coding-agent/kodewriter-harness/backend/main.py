@@ -7,7 +7,28 @@ import uuid
 
 from .agent import KodewriterAgent
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="Kodewriter Harness API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def add_pna_header(request, call_next):
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    return response
+
 agent = KodewriterAgent()
 
 class Session(BaseModel):

@@ -20,6 +20,12 @@ spec:
             set:
               - name: Access-Control-Allow-Private-Network
                 value: "true"
+              - name: Access-Control-Allow-Origin
+                value: "*"
+              - name: Access-Control-Allow-Methods
+                value: "GET, POST, OPTIONS, PUT, DELETE"
+              - name: Access-Control-Allow-Headers
+                value: "*"
       backendRefs:
         - name: openvscode-server
           port: 3000
@@ -33,6 +39,12 @@ spec:
             set:
               - name: Access-Control-Allow-Private-Network
                 value: "true"
+              - name: Access-Control-Allow-Origin
+                value: "*"
+              - name: Access-Control-Allow-Methods
+                value: "GET, POST, OPTIONS, PUT, DELETE"
+              - name: Access-Control-Allow-Headers
+                value: "*"
       backendRefs:
         - name: agent-ui
           port: 3000
@@ -46,6 +58,12 @@ spec:
             set:
               - name: Access-Control-Allow-Private-Network
                 value: "true"
+              - name: Access-Control-Allow-Origin
+                value: "*"
+              - name: Access-Control-Allow-Methods
+                value: "GET, POST, OPTIONS, PUT, DELETE"
+              - name: Access-Control-Allow-Headers
+                value: "*"
       backendRefs:
         - name: harness-api
           port: 8000
