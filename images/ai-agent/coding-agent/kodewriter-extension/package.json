@@ -1,0 +1,30 @@
+{
+  "name": "kodewriter-sidebar",
+  "displayName": "Kodewriter Sidebar",
+  "version": "0.1.0",
+  "publisher": "kodewriter",
+  "engines": { "vscode": "^1.60.0" },
+  "categories": [ "Other" ],
+  "activationEvents": ["*"],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kodewriter-agent",
+          "title": "Kodewriter Agent",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "kodewriter-agent": [
+        {
+          "type": "webview",
+          "id": "kodewriter.agentView",
+          "name": "Agent Chat"
+        }
+      ]
+    }
+  },
+  "main": "./extension.js"
+}
