@@ -53,8 +53,8 @@ def get_embedding(text: str) -> List[float]:
     return resp.json()["data"][0]["embedding"]
 
 def rerank(query: str, documents: List[str], top_n: int = 5) -> List[Dict[str, Any]]:
-    """Rerank documents using Perception API (GTE-Qwen2-1.5B score task)."""
-    url = f"{RERANKER_BASE}/v1/score"
+    """Rerank documents using Perception API (GTE-Qwen2-1.5B)."""
+    url = f"{RERANKER_BASE}/v1/rerank"
     payload = {
         "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
         "query": query,
