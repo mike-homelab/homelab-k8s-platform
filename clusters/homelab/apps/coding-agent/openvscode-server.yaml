@@ -20,18 +20,14 @@ spec:
       containers:
         - name: openvscode-server
           image: gitpod/openvscode-server:1.103.1
-          command:
-            - sh
-            - -c
-            - |
-              # Start the server in the background
-              /home/.openvscode-server/bin/openvscode-server --host 0.0.0.0 --port 3000 --without-connection-token --server-base-path /ide &
-              # Wait for the server to start
-              sleep 10
-              # Attempt to open the Agent URL (this triggers the Simple Browser)
-              /home/.openvscode-server/bin/openvscode-server --open-url https://kodewriter.michaelhomelab.work/agent/
-              # Keep the container alive by waiting on the background process
-              wait
+          args:
+            - --host
+            - 0.0.0.0
+            - --port
+            - "3000"
+            - --without-connection-token
+            - --server-base-path
+            - /ide
           ports:
             - containerPort: 3000
           volumeMounts:
