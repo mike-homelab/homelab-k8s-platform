@@ -17,18 +17,18 @@ data:
         "viewsContainers": {
           "activitybar": [
             {
-              "id": "kodewriter-agent",
-              "title": "Kodewriter",
+              "id": "kodewriter-chat-container",
+              "title": "Kodewriter Chat",
               "icon": "$(robot)"
             }
           ]
         },
         "views": {
-          "kodewriter-agent": [
+          "kodewriter-chat-container": [
             {
               "type": "webview",
-              "id": "kodewriter.agentView",
-              "name": "Agent Chat"
+              "id": "kodewriter.chatView",
+              "name": "Agent Chat Box"
             }
           ]
         }
@@ -37,14 +37,14 @@ data:
     }
   extension.js: |
     const vscode = require('vscode');
-    console.log('Kodewriter Sidebar: Extension loading...');
+    console.log('Kodewriter Chat: Extension loading...');
 
     class KodewriterViewProvider {
-        static viewType = 'kodewriter.agentView';
+        static viewType = 'kodewriter.chatView';
         constructor(extensionUri) { this.extensionUri = extensionUri; }
 
         resolveWebviewView(webviewView) {
-            console.log('Kodewriter Sidebar: Resolving WebviewView...');
+            console.log('Kodewriter Chat: Resolving WebviewView...');
             webviewView.webview.options = { enableScripts: true };
             webviewView.webview.html = this.getHtml();
         }
@@ -69,11 +69,11 @@ data:
     }
 
     function activate(context) {
-        console.log('Kodewriter Sidebar: Extension activating...');
+        console.log('Kodewriter Chat: Extension activating...');
         const provider = new KodewriterViewProvider(context.extensionUri);
         context.subscriptions.push(
             vscode.window.registerWebviewViewProvider(KodewriterViewProvider.viewType, provider)
         );
-        console.log('Kodewriter Sidebar: Provider registered.');
+        console.log('Kodewriter Chat: Provider registered.');
     }
     module.exports = { activate, deactivate: () => {} };
