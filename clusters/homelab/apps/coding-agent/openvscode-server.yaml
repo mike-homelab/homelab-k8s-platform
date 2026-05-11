@@ -53,6 +53,12 @@ spec:
             - name: extension-config
               mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-sidebar/extension.js
               subPath: extension.js
+            - name: extension-config
+              mountPath: /workspace/.openvscode-server/extensions/kodewriter-sidebar/package.json
+              subPath: package.json
+            - name: extension-config
+              mountPath: /workspace/.openvscode-server/extensions/kodewriter-sidebar/extension.js
+              subPath: extension.js
 
       volumes:
         - name: workspace
