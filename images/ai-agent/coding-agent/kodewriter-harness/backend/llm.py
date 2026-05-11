@@ -54,7 +54,7 @@ def get_embedding(text: str) -> List[float]:
 
 def rerank(query: str, documents: List[str], top_n: int = 5) -> List[Dict[str, Any]]:
     """Rerank documents using Perception API (GTE-Qwen2-1.5B)."""
-    url = f"{RERANKER_BASE}/v1/rerank"
+    url = f"{RERANKER_BASE}/rerank"
     payload = {
         "model": "Alibaba-NLP/gte-Qwen2-1.5B-instruct",
         "query": query,
@@ -64,6 +64,23 @@ def rerank(query: str, documents: List[str], top_n: int = 5) -> List[Dict[str, A
     resp = requests.post(url, json=payload, timeout=30)
     resp.raise_for_status()
     return resp.json()["results"]
+
+SEARXNG_URL = os.getenv("SEARXNG_URL", "http://searxng.ai-platform.svc:8080")
+
+def web_search(query: str, limit: int = 5) -> List[str]:
+    """Search the web using SearxNG."""
+    try:
+        resp = requests.get(
+            f"{SEARXNG_URL}/search",
+            params={"q": query, "format": "json"},
+            timeout=15
+        )
+        resp.raise_for_status()
+        results = resp.json().get("results", [])
+        return [r.get("content", r.get("title", "")) for r in results[:limit]]
+    except Exception as e:
+        print(f"Web search failed: {e}")
+        return []
 
 def planner_call(prompt: str, context: str = "") -> str:
     # Use reasoning model for planning

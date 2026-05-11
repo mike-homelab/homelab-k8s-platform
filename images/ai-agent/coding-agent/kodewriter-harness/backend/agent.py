@@ -1,5 +1,5 @@
 from typing import List, Dict, Any
-from .llm import planner_call, coder_call, llm_call, MODEL_PLANNER
+from .llm import planner_call, coder_call, llm_call, MODEL_PLANNER, web_search
 from .tools import ToolExecutor
 from .retrieval import RetrievalEngine
 
@@ -9,9 +9,14 @@ class KodewriterAgent:
         self.retrieval = RetrievalEngine()
 
     async def run_task(self, task: str):
-        # 1. Retrieval
+        # 1. Retrieval (Local + Web)
+        yield {"type": "status", "content": "Searching local workspace and web..."}
         context_docs = self.retrieval.search(task)
-        context = "\n".join([d["payload"]["content"] for d in context_docs])
+        web_docs = web_search(task)
+        
+        local_context = "\n".join([d["payload"]["content"] for d in context_docs])
+        web_context = "\n".join(web_docs)
+        context = f"Local Context:\n{local_context}\n\nWeb Context:\n{web_context}"
         
         # 2. Planning
         plan = planner_call(task, context)
