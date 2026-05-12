@@ -11,3 +11,4 @@ resources:
   - extension-configmap.yaml
   - certificate.yaml
   - reference-grant.yaml
+  - data-pvc.yaml

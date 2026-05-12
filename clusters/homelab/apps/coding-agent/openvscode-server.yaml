@@ -47,6 +47,8 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /workspace
+            - name: data
+              mountPath: /data
             - name: extension-config
               mountPath: /home/workspace/.openvscode-server/extensions/kodewriter-agent-chat/package.json
               subPath: package.json
@@ -64,6 +66,9 @@ spec:
         - name: workspace
           persistentVolumeClaim:
             claimName: workspace-pvc
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
         - name: extension-config
           configMap:
             name: kodewriter-extension

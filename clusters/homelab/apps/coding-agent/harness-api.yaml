@@ -36,10 +36,15 @@ spec:
           volumeMounts:
             - name: workspace
               mountPath: /home/workspace
+            - name: data
+              mountPath: /data
       volumes:
         - name: workspace
           persistentVolumeClaim:
             claimName: workspace-pvc
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
 ---
 apiVersion: v1
 kind: Service
