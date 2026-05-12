@@ -7,7 +7,10 @@ import uuid
 
 from .agent import KodewriterAgent
 
-from fastapi.middleware.cors import CORSMiddleware
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("harness")
 
 app = FastAPI(title="Kodewriter Harness API")
 
@@ -29,9 +32,9 @@ async def add_pna_header(request, call_next):
     response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
-print("DEBUG: Initializing global agent...")
+logger.info("DEBUG: Initializing global agent...")
 agent = KodewriterAgent()
-print("DEBUG: Global agent initialized")
+logger.info("DEBUG: Global agent initialized")
 
 class Session(BaseModel):
     id: str
@@ -63,31 +66,31 @@ async def get_session(session_id: str):
 
 @app.websocket("/api/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    print(f"DEBUG: Entering websocket_endpoint for session {session_id}")
+    logger.info(f"DEBUG: Entering websocket_endpoint for session {session_id}")
     await websocket.accept()
-    print(f"DEBUG: WS accepted for session {session_id}")
+    logger.info(f"DEBUG: WS accepted for session {session_id}")
     if session_id not in sessions:
         await websocket.close(code=4004)
         return
     
     try:
         while True:
-            print("DEBUG: Waiting for WS message...")
+            logger.info("DEBUG: Waiting for WS message...")
             data = await websocket.receive_text()
-            print(f"DEBUG: WS received: {data}")
+            logger.info(f"DEBUG: WS received: {data}")
             try:
                 message = json.loads(data)
             except Exception as e:
-                print(f"DEBUG: JSON decode error: {e}")
+                logger.error(f"DEBUG: JSON decode error: {e}")
                 continue
             
-            print(f"DEBUG: Starting task: {message.get('content')}")
+            logger.info(f"DEBUG: Starting task: {message.get('content')}")
             async for event in agent.run_task(message.get("content")):
                 await websocket.send_text(json.dumps({
                     "type": "agent_event",
                     **event
                 }))
-            print("DEBUG: Task finished")
+            logger.info("DEBUG: Task finished")
     except WebSocketDisconnect:
         print(f"Session {session_id} disconnected")
 
