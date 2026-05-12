@@ -1,21 +1,20 @@
 import os
 import json
 import requests
+import httpx
 from typing import Optional, List, Dict, Any
+from langfuse import Langfuse
 
-LITELLM_BASE = os.getenv("LITELLM_BASE", "https://llm.michaelhomelab.work/v1")
+LITELLM_BASE = os.getenv("LITELLM_BASE", "http://litellm.ai-platform.svc:4000/v1")
 LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
 
-import httpx
-from langfuse import Langfuse
-
 # Initialize Langfuse
 LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
-LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://langfuse.michaelhomelab.work")
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "http://langfuse.ai-platform.svc:3000")
 
 langfuse = None
 if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
@@ -44,6 +43,7 @@ async def async_llm_call(model: str, system: str, user: str, temperature: float 
     }
 
     if langfuse:
+        print(f"DEBUG: async_llm_call (Langfuse) sending request to {url}")
         with langfuse.start_as_current_observation(
             name=f"llm-call-{model}",
             input={"system": system, "user": user},
@@ -52,6 +52,7 @@ async def async_llm_call(model: str, system: str, user: str, temperature: float 
         ) as generation:
             async with httpx.AsyncClient(verify=False) as client:
                 resp = await client.post(url, headers=headers, json=payload, timeout=300)
+                print(f"DEBUG: async_llm_call (Langfuse) received response: {resp.status_code}")
                 resp.raise_for_status()
                 result = resp.json()
                 content = result["choices"][0]["message"]["content"].strip()
@@ -64,13 +65,18 @@ async def async_llm_call(model: str, system: str, user: str, temperature: float 
                         "total_tokens": result.get("usage", {}).get("total_tokens")
                     }
                 )
+                print(f"DEBUG: async_llm_call (Langfuse) returning content")
                 return content
     else:
+        print(f"DEBUG: async_llm_call sending request to {url}")
         async with httpx.AsyncClient(verify=False) as client:
             resp = await client.post(url, headers=headers, json=payload, timeout=300)
+            print(f"DEBUG: async_llm_call received response: {resp.status_code}")
             resp.raise_for_status()
             result = resp.json()
-            return result["choices"][0]["message"]["content"].strip()
+            content = result["choices"][0]["message"]["content"].strip()
+            print(f"DEBUG: async_llm_call returning content")
+            return content
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
              max_tokens: int = 8192, stream: bool = False) -> str:
@@ -172,7 +178,6 @@ Action: {{ "tool": "final_answer", "args": {{ "content": "<your final response>"
 
 Always output valid JSON in the Action block.
 """
-    # Combine history into a single string for simplicity in MVP
     history_str = ""
     for msg in history:
         history_str += f"{msg['role'].capitalize()}: {msg['content']}\n"

@@ -25,7 +25,7 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       containers:
         - name: harness-api
-          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-harness:0.1.9
+          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-harness:0.1.10
           ports:
             - containerPort: 8000
           env:

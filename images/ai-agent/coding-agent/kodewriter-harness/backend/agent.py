@@ -95,8 +95,17 @@ class KodewriterAgent:
         max_steps = 10
         for i in range(max_steps):
             # Node 1: Call Model
+            print(f"DEBUG: Starting step {i+1}")
             yield {"type": "status", "content": f"Step {i+1}: Reasoning..."}
-            update = await self._call_model(state)
+            try:
+                print(f"DEBUG: Calling model...")
+                update = await self._call_model(state)
+                print(f"DEBUG: Model returned: {update}")
+            except Exception as e:
+                print(f"DEBUG: Model call failed: {e}")
+                yield {"type": "status", "content": f"Reasoning failed: {e}"}
+                break
+            
             state.update(update)
             state['history'].extend(update['history'])
             
