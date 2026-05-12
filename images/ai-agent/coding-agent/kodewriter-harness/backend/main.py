@@ -29,7 +29,9 @@ async def add_pna_header(request, call_next):
     response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
+print("DEBUG: Initializing global agent...")
 agent = KodewriterAgent()
+print("DEBUG: Global agent initialized")
 
 class Session(BaseModel):
     id: str
