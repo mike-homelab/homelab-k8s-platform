@@ -15,17 +15,12 @@ LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
 LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "http://langfuse.ai-platform.svc:3000")
 
-import httpx
-
 langfuse_client = None
 if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
-    # Use a dedicated httpx client with SSL bypass
-    # Setting debug=True to see any ingestion errors in pod logs
     langfuse_client = Langfuse(
         public_key=LANGFUSE_PUBLIC_KEY,
         secret_key=LANGFUSE_SECRET_KEY,
         base_url=LANGFUSE_HOST,
-        httpx_client=httpx.Client(verify=False),
         debug=True
     )
 
