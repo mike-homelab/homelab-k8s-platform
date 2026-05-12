@@ -9,6 +9,7 @@ LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
 
+import httpx
 from langfuse import Langfuse
 
 # Initialize Langfuse
