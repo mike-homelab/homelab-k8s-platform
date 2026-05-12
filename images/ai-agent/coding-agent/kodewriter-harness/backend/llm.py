@@ -9,6 +9,31 @@ LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
 
+import httpx
+
+async def async_llm_call(model: str, system: str, user: str, temperature: float = 0.2,
+                   max_tokens: int = 8192) -> str:
+    """Asynchronous call to the LiteLLM proxy."""
+    url = f"{LITELLM_BASE}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {LITELLM_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "temperature": max(temperature, 0.1),
+        "max_tokens": max_tokens,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+    }
+    async with httpx.AsyncClient(verify=False) as client:
+        resp = await client.post(url, headers=headers, json=payload, timeout=300)
+        resp.raise_for_status()
+        result = resp.json()
+        return result["choices"][0]["message"]["content"].strip()
+
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
              max_tokens: int = 8192, stream: bool = False) -> str:
     """Send a chat completion request to the LiteLLM proxy."""
@@ -116,3 +141,25 @@ Always output valid JSON in the Action block.
     
     user = f"History:\n{history_str}\n\nTask: {prompt}"
     return llm_call(MODEL_PLANNER, system, user)
+
+async def async_react_call(prompt: str, history: List[Dict[str, str]], tools_desc: str) -> str:
+    system = f"""You are the Kodewriter Agent (ReAct). You solve tasks by thinking and acting.
+You have access to the following tools:
+{tools_desc}
+
+Your response must follow this format:
+Thought: <your reasoning>
+Action: {{ "tool": "<tool_name>", "args": {{ ... }} }}
+
+When you are finished or have the final answer, use:
+Thought: I have finished the task.
+Action: {{ "tool": "final_answer", "args": {{ "content": "<your final response>" }} }}
+
+Always output valid JSON in the Action block.
+"""
+    history_str = ""
+    for msg in history:
+        history_str += f"{msg['role'].capitalize()}: {msg['content']}\n"
+    
+    user = f"History:\n{history_str}\n\nTask: {prompt}"
+    return await async_llm_call(MODEL_PLANNER, system, user)

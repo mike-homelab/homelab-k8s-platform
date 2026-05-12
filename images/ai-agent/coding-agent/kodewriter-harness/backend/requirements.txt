@@ -3,9 +3,11 @@ uvicorn
 pydantic
 websockets
 requests
+httpx
 python-multipart
 kubernetes
 qdrant-client
 tree-sitter
 tree-sitter-languages
-
+langgraph
+langchain-openai
