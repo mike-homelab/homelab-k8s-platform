@@ -9,11 +9,24 @@ LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
 
-import httpx
+from langfuse import Langfuse
+
+# Initialize Langfuse
+LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
+LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "https://langfuse.michaelhomelab.work")
+
+langfuse = None
+if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
+    langfuse = Langfuse(
+        public_key=LANGFUSE_PUBLIC_KEY,
+        secret_key=LANGFUSE_SECRET_KEY,
+        host=LANGFUSE_HOST
+    )
 
 async def async_llm_call(model: str, system: str, user: str, temperature: float = 0.2,
                    max_tokens: int = 8192) -> str:
-    """Asynchronous call to the LiteLLM proxy."""
+    """Asynchronous call to the LiteLLM proxy with Langfuse tracing."""
     url = f"{LITELLM_BASE}/chat/completions"
     headers = {
         "Authorization": f"Bearer {LITELLM_KEY}",
@@ -28,11 +41,32 @@ async def async_llm_call(model: str, system: str, user: str, temperature: float 
             {"role": "user", "content": user},
         ],
     }
+
+    trace = None
+    if langfuse:
+        trace = langfuse.trace(
+            name=f"llm-call-{model}",
+            input={"system": system, "user": user},
+            metadata={"model": model, "temperature": temperature}
+        )
+
     async with httpx.AsyncClient(verify=False) as client:
         resp = await client.post(url, headers=headers, json=payload, timeout=300)
         resp.raise_for_status()
         result = resp.json()
-        return result["choices"][0]["message"]["content"].strip()
+        content = result["choices"][0]["message"]["content"].strip()
+        
+        if trace:
+            trace.update(
+                output=content,
+                usage={
+                    "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
+                    "completion_tokens": result.get("usage", {}).get("completion_tokens"),
+                    "total_tokens": result.get("usage", {}).get("total_tokens")
+                }
+            )
+            
+        return content
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
              max_tokens: int = 8192, stream: bool = False) -> str:

@@ -11,3 +11,4 @@ tree-sitter
 tree-sitter-languages
 langgraph
 langchain-openai
+langfuse

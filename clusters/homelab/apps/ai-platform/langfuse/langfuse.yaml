@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langfuse
+  namespace: ai-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: langfuse
+  template:
+    metadata:
+      labels:
+        app: langfuse
+    spec:
+      containers:
+        - name: langfuse
+          image: langfuse/langfuse:2
+          ports:
+            - containerPort: 3000
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://langfuse:langfuse-password-123@langfuse-db:5432/langfuse"
+            - name: NEXTAUTH_URL
+              value: "https://langfuse.michaelhomelab.work"
+            - name: NEXTAUTH_SECRET
+              value: "my-very-secret-nextauth-token"
+            - name: SALT
+              value: "my-very-secret-salt"
+            - name: TELEMETRY_ENABLED
+              value: "false"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langfuse
+  namespace: ai-platform
+spec:
+  selector:
+    app: langfuse
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
