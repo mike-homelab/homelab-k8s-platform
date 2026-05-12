@@ -25,7 +25,7 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       containers:
         - name: harness-api
-          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-harness:0.2.4
+          image: harbor.michaelhomelab.work/homelab/ai-agent/coding-agent/kodewriter-harness:0.2.5
           ports:
             - containerPort: 8000
           env:
@@ -34,9 +34,9 @@ spec:
             - name: REDIS_URL
               value: "redis://redis.ai-platform.svc:6379"
             - name: LANGFUSE_PUBLIC_KEY
-              value: "pk-lf-8995995d-0d1f-4599-a9a0-f373bf7669b7"
+              value: "pk-lf-3f38b6db-6ab3-4708-bf00-9d581d00867c"
             - name: LANGFUSE_SECRET_KEY
-              value: "sk-lf-e670e906-96d3-49a7-9165-baa93cbe69bf"
+              value: "sk-lf-eabbf6b6-a131-4844-9f48-6a382ca9eb39"
             - name: LANGFUSE_HOST
               value: "http://langfuse.ai-platform.svc:3000"
           volumeMounts:

@@ -15,16 +15,16 @@ LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
 LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
 LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "http://langfuse.ai-platform.svc:3000")
 
-langfuse = None
+langfuse_client = None
 if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
-    langfuse = Langfuse(
+    langfuse_client = Langfuse(
         public_key=LANGFUSE_PUBLIC_KEY,
         secret_key=LANGFUSE_SECRET_KEY,
         base_url=LANGFUSE_HOST
     )
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
-             max_tokens: int = 8192, stream: bool = False) -> str:
+             max_tokens: int = 8192, stream: bool = False, parent: Any = None) -> str:
     """Send a chat completion request to the LiteLLM proxy with Langfuse tracing."""
     url = f"{LITELLM_BASE}/chat/completions"
     headers = {
@@ -42,14 +42,24 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
         "stream": stream
     }
     
-    if langfuse:
-        generation = langfuse.start_observation(
-            name=f"llm-call-{model}",
-            as_type="generation",
-            input={"system": system, "user": user},
-            model=model,
-            metadata={"temperature": temperature}
-        )
+    if langfuse_client:
+        # If parent is provided, start observation on parent, otherwise on client
+        if parent:
+            generation = parent.start_observation(
+                name=f"llm-call-{model}",
+                as_type="generation",
+                input={"system": system, "user": user},
+                model=model,
+                metadata={"temperature": temperature}
+            )
+        else:
+            generation = langfuse_client.start_observation(
+                name=f"llm-call-{model}",
+                as_type="generation",
+                input={"system": system, "user": user},
+                model=model,
+                metadata={"temperature": temperature}
+            )
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
             resp.raise_for_status()
@@ -64,11 +74,11 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
                     "total_tokens": result.get("usage", {}).get("total_tokens")
                 }
             )
-            langfuse.flush()
+            langfuse_client.flush()
             return content
         except Exception as e:
             generation.update(level="ERROR", status_message=str(e))
-            langfuse.flush()
+            langfuse_client.flush()
             print(f"LLM call failed for {model}: {e}")
             raise RuntimeError(f"LLM call failed: {e}")
     else:
@@ -125,14 +135,14 @@ def web_search(query: str, limit: int = 5) -> List[str]:
         print(f"Web search failed: {e}")
         return []
 
-def planner_call(prompt: str, context: str = "") -> str:
+def planner_call(prompt: str, context: str = "", parent: Any = None) -> str:
     # Use reasoning model for planning
     system = "You are the Kodewriter Planner (Analyst). Decompose the user request into a step-by-step execution plan. Use reasoning and reflection."
     user = f"Context:\n{context}\n\nRequest: {prompt}"
-    return llm_call(MODEL_PLANNER, system, user)
+    return llm_call(MODEL_PLANNER, system, user, parent=parent)
 
-def coder_call(prompt: str, context: str = "") -> str:
+def coder_call(prompt: str, context: str = "", parent: Any = None) -> str:
     # Use coding model for patch generation
     system = "You are the Kodewriter Coder (Builder). Generate precise code patches or solutions. Follow the plan strictly."
     user = f"Context:\n{context}\n\nTask: {prompt}"
-    return llm_call(MODEL_CODER, system, user)
+    return llm_call(MODEL_CODER, system, user, parent=parent)
