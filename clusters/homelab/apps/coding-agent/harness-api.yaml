@@ -38,7 +38,7 @@ spec:
             - name: LANGFUSE_SECRET_KEY
               value: "sk-lf-e670e906-96d3-49a7-9165-baa93cbe69bf"
             - name: LANGFUSE_HOST
-              value: "https://langfuse.michaelhomelab.work"
+              value: "http://langfuse.ai-platform.svc:3000"
           volumeMounts:
             - name: workspace
               mountPath: /home/workspace
