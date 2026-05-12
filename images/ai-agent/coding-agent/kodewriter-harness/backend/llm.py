@@ -93,3 +93,26 @@ def coder_call(prompt: str, context: str = "") -> str:
     system = "You are the Kodewriter Coder (Builder). Generate precise code patches or solutions. Follow the plan strictly."
     user = f"Context:\n{context}\n\nTask: {prompt}"
     return llm_call(MODEL_CODER, system, user)
+
+def react_call(prompt: str, history: List[Dict[str, str]], tools_desc: str) -> str:
+    system = f"""You are the Kodewriter Agent (ReAct). You solve tasks by thinking and acting.
+You have access to the following tools:
+{tools_desc}
+
+Your response must follow this format:
+Thought: <your reasoning>
+Action: {{ "tool": "<tool_name>", "args": {{ ... }} }}
+
+When you are finished or have the final answer, use:
+Thought: I have finished the task.
+Action: {{ "tool": "final_answer", "args": {{ "content": "<your final response>" }} }}
+
+Always output valid JSON in the Action block.
+"""
+    # Combine history into a single string for simplicity in MVP
+    history_str = ""
+    for msg in history:
+        history_str += f"{msg['role'].capitalize()}: {msg['content']}\n"
+    
+    user = f"History:\n{history_str}\n\nTask: {prompt}"
+    return llm_call(MODEL_PLANNER, system, user)

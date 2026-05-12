@@ -28,6 +28,22 @@ class ToolExecutor:
         full_path.write_text(content)
         return f"Successfully wrote to {path}"
 
+    def list_files(self, path: str = ".") -> str:
+        full_path = self.workspace_root / path
+        if not full_path.exists():
+            return f"Error: Directory {path} not found"
+        try:
+            files = os.listdir(full_path)
+            return "\n".join(files)
+        except Exception as e:
+            return f"Error listing {path}: {str(e)}"
+
+    def search_files(self, query: str, path: str = ".") -> str:
+        # Simple grep-like search
+        full_path = self.workspace_root / path
+        command = f"grep -rnE \"{query}\" {full_path}"
+        return self.run_command(command)
+
     def run_command(self, command: str) -> str:
         # In MVP, this runs in the worker pod. In Phase 2+, it should run in a sandbox pod.
         try:
