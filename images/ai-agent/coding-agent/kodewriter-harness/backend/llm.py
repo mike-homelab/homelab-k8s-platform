@@ -20,8 +20,7 @@ if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
     langfuse_client = Langfuse(
         public_key=LANGFUSE_PUBLIC_KEY,
         secret_key=LANGFUSE_SECRET_KEY,
-        base_url=LANGFUSE_HOST,
-        debug=True
+        host=LANGFUSE_HOST
     )
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
@@ -44,23 +43,25 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
     }
     
     if langfuse_client:
-        # If parent is provided, start observation on parent, otherwise on client
+        # v2 Syntax: Use generation() on parent (trace) or start a new trace
+        generation = None
         if parent:
-            generation = parent.start_observation(
+            generation = parent.generation(
                 name=f"llm-call-{model}",
-                as_type="generation",
                 input={"system": system, "user": user},
                 model=model,
                 metadata={"temperature": temperature}
             )
         else:
-            generation = langfuse_client.start_observation(
+            # Fallback if no parent provided
+            trace = langfuse_client.trace(name=f"orphan-llm-call-{model}")
+            generation = trace.generation(
                 name=f"llm-call-{model}",
-                as_type="generation",
                 input={"system": system, "user": user},
                 model=model,
                 metadata={"temperature": temperature}
             )
+            
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
             resp.raise_for_status()
@@ -69,7 +70,7 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             
             generation.update(
                 output=content,
-                usage_details={
+                usage={
                     "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
                     "completion_tokens": result.get("usage", {}).get("completion_tokens"),
                     "total_tokens": result.get("usage", {}).get("total_tokens")

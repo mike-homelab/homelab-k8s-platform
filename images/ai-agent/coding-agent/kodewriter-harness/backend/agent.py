@@ -13,7 +13,7 @@ class KodewriterAgent:
         from .llm import langfuse_client
         root_trace = None
         if langfuse_client:
-            root_trace = langfuse_client.start_observation(
+            root_trace = langfuse_client.trace(
                 name="kodewriter-task",
                 input=task
             )
