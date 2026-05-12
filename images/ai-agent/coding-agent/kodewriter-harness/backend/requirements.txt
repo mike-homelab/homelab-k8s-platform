@@ -11,4 +11,4 @@ tree-sitter
 tree-sitter-languages
 langgraph
 langchain-openai
-langfuse==2.5.34
+langfuse==2.60.10
