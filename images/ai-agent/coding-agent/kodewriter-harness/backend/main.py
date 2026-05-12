@@ -61,7 +61,9 @@ async def get_session(session_id: str):
 
 @app.websocket("/api/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
+    print(f"DEBUG: Entering websocket_endpoint for session {session_id}")
     await websocket.accept()
+    print(f"DEBUG: WS accepted for session {session_id}")
     if session_id not in sessions:
         await websocket.close(code=4004)
         return
