@@ -43,8 +43,9 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
     }
     
     if langfuse:
-        generation = langfuse.generation(
+        generation = langfuse.start_observation(
             name=f"llm-call-{model}",
+            as_type="generation",
             input={"system": system, "user": user},
             model=model,
             metadata={"temperature": temperature}
@@ -55,9 +56,9 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             result = resp.json()
             content = result["choices"][0]["message"]["content"].strip()
             
-            generation.end(
+            generation.update(
                 output=content,
-                usage={
+                usage_details={
                     "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
                     "completion_tokens": result.get("usage", {}).get("completion_tokens"),
                     "total_tokens": result.get("usage", {}).get("total_tokens")
@@ -66,7 +67,7 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
             langfuse.flush()
             return content
         except Exception as e:
-            generation.end(level="ERROR", status_message=str(e))
+            generation.update(level="ERROR", status_message=str(e))
             langfuse.flush()
             print(f"LLM call failed for {model}: {e}")
             raise RuntimeError(f"LLM call failed: {e}")
