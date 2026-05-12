@@ -8,16 +8,29 @@ LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
+from langfuse import Langfuse
+
+# Initialize Langfuse
+LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
+LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST", "http://langfuse.ai-platform.svc:3000")
+
+langfuse = None
+if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
+    langfuse = Langfuse(
+        public_key=LANGFUSE_PUBLIC_KEY,
+        secret_key=LANGFUSE_SECRET_KEY,
+        base_url=LANGFUSE_HOST
+    )
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
              max_tokens: int = 8192, stream: bool = False) -> str:
-    """Send a chat completion request to the LiteLLM proxy."""
+    """Send a chat completion request to the LiteLLM proxy with Langfuse tracing."""
     url = f"{LITELLM_BASE}/chat/completions"
     headers = {
         "Authorization": f"Bearer {LITELLM_KEY}",
         "Content-Type": "application/json",
     }
-
     payload = {
         "model": model,
         "temperature": max(temperature, 0.1),
@@ -29,14 +42,40 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
         "stream": stream
     }
     
-    try:
-        resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
-        resp.raise_for_status()
-        result = resp.json()
-        return result["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(f"LLM call failed for {model}: {e}")
-        raise RuntimeError(f"LLM call failed: {e}")
+    if langfuse:
+        with langfuse.start_as_current_observation(
+            name=f"llm-call-{model}",
+            input={"system": system, "user": user},
+            metadata={"model": model, "temperature": temperature},
+            as_type="generation"
+        ) as generation:
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
+                resp.raise_for_status()
+                result = resp.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                
+                generation.update(
+                    output=content,
+                    usage_details={
+                        "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
+                        "completion_tokens": result.get("usage", {}).get("completion_tokens"),
+                        "total_tokens": result.get("usage", {}).get("total_tokens")
+                    }
+                )
+                return content
+            except Exception as e:
+                print(f"LLM call failed for {model}: {e}")
+                raise RuntimeError(f"LLM call failed: {e}")
+    else:
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
+            resp.raise_for_status()
+            result = resp.json()
+            return result["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            print(f"LLM call failed for {model}: {e}")
+            raise RuntimeError(f"LLM call failed: {e}")
 
 PERCEPTION_BASE = os.getenv("PERCEPTION_BASE", "http://perception.ai-platform.svc:8000")
 RERANKER_BASE = os.getenv("RERANKER_BASE", "http://perception.ai-platform.svc:8001")
