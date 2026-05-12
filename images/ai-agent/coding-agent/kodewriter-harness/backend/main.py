@@ -7,10 +7,7 @@ import uuid
 
 from .agent import KodewriterAgent
 
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("harness")
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Kodewriter Harness API")
 
@@ -32,9 +29,7 @@ async def add_pna_header(request, call_next):
     response.headers["Access-Control-Allow-Private-Network"] = "true"
     return response
 
-logger.info("DEBUG: Initializing global agent...")
 agent = KodewriterAgent()
-logger.info("DEBUG: Global agent initialized")
 
 class Session(BaseModel):
     id: str
@@ -66,31 +61,21 @@ async def get_session(session_id: str):
 
 @app.websocket("/api/ws/{session_id}")
 async def websocket_endpoint(websocket: WebSocket, session_id: str):
-    logger.info(f"DEBUG: Entering websocket_endpoint for session {session_id}")
     await websocket.accept()
-    logger.info(f"DEBUG: WS accepted for session {session_id}")
     if session_id not in sessions:
         await websocket.close(code=4004)
         return
     
     try:
         while True:
-            logger.info("DEBUG: Waiting for WS message...")
             data = await websocket.receive_text()
-            logger.info(f"DEBUG: WS received: {data}")
-            try:
-                message = json.loads(data)
-            except Exception as e:
-                logger.error(f"DEBUG: JSON decode error: {e}")
-                continue
+            message = json.loads(data)
             
-            logger.info(f"DEBUG: Starting task: {message.get('content')}")
             async for event in agent.run_task(message.get("content")):
                 await websocket.send_text(json.dumps({
                     "type": "agent_event",
                     **event
                 }))
-            logger.info("DEBUG: Task finished")
     except WebSocketDisconnect:
         print(f"Session {session_id} disconnected")
 

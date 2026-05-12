@@ -1,135 +1,77 @@
-import json
-import asyncio
-from typing import List, Dict, Any, TypedDict, Annotated, Union
-import operator
-
-from .llm import async_react_call, web_search
+from typing import List, Dict, Any
+from .llm import planner_call, coder_call, llm_call, MODEL_PLANNER, web_search
 from .tools import ToolExecutor
 from .retrieval import RetrievalEngine
-
-# LangGraph imports (will be active after rebuild)
-try:
-    from langgraph.graph import StateGraph, END
-except ImportError:
-    StateGraph = None
-
-class AgentState(TypedDict):
-    task: str
-    history: Annotated[List[Dict[str, str]], operator.add]
-    current_thought: str
-    current_action: Dict[str, Any]
-    current_observation: str
-    final_answer: str
 
 class KodewriterAgent:
     def __init__(self, workspace_root: str = "/home/workspace"):
         self.executor = ToolExecutor(workspace_root)
         self.retrieval = RetrievalEngine()
-        self.tools_desc = """
-- read_file(path: str): Read content of a file.
-- write_file(path: str, content: str): Write content to a file.
-- list_files(path: str): List files in a directory.
-- search_files(query: str, path: str): Search for a string in files (grep).
-- run_command(command: str): Run a shell command in the workspace.
-- run_tests(test_command: str): Run tests (defaults to pytest).
-- web_search(query: str): Search the internet for information.
-"""
-
-    async def _call_model(self, state: AgentState):
-        response = await async_react_call(state['task'], state['history'], self.tools_desc)
-        
-        thought = ""
-        action_json = ""
-        if "Thought:" in response:
-            thought = response.split("Thought:")[1].split("Action:")[0].strip()
-        if "Action:" in response:
-            action_json = response.split("Action:")[1].strip()
-        
-        try:
-            action = json.loads(action_json)
-        except:
-            if "```json" in action_json:
-                action_json = action_json.split("```json")[1].split("```")[0].strip()
-                action = json.loads(action_json)
-            else:
-                action = {"tool": "error", "args": {"message": "Failed to parse action JSON"}}
-
-        return {
-            "current_thought": thought,
-            "current_action": action,
-            "history": [{"role": "assistant", "content": response}]
-        }
-
-    async def _execute_tool(self, state: AgentState):
-        action = state['current_action']
-        tool_name = action.get("tool")
-        args = action.get("args", {})
-
-        if tool_name == "final_answer":
-            return {"final_answer": args.get("content", "Task complete.")}
-        
-        if tool_name == "web_search":
-            results = web_search(args.get("query", ""))
-            observation = "\n".join(results)
-        else:
-            observation = self.executor.execute(tool_name, args)
-        
-        return {
-            "current_observation": observation,
-            "history": [{"role": "system", "content": f"Observation: {observation}"}]
-        }
 
     async def run_task(self, task: str):
-        yield {"type": "status", "content": "Initializing LangGraph reasoning engine..."}
+        # 1. Retrieval (Local + Web)
+        yield {"type": "status", "content": "Analyzing request and searching local workspace..."}
+        context_docs = self.retrieval.search(task)
         
-        state: AgentState = {
-            "task": task,
-            "history": [],
-            "current_thought": "",
-            "current_action": {},
-            "current_observation": "",
-            "final_answer": ""
-        }
+        yield {"type": "status", "content": "Researching on the internet for additional context..."}
+        web_docs = web_search(task)
+        
+        local_context = "\n".join([d["payload"]["content"] for d in context_docs])
+        web_context = "\n".join(web_docs)
+        
+        context = f"""
+### LOCAL WORKSPACE CONTEXT
+{local_context if local_context else "No relevant local files found."}
 
-        # Manual execution of the "Graph" for MVP stability, but structured as nodes
-        max_steps = 10
-        for i in range(max_steps):
-            # Node 1: Call Model
-            print(f"DEBUG: Starting step {i+1}")
-            yield {"type": "status", "content": f"Step {i+1}: Reasoning..."}
-            try:
-                print(f"DEBUG: Calling model...")
-                update = await self._call_model(state)
-                print(f"DEBUG: Model returned: {update}")
-            except Exception as e:
-                print(f"DEBUG: Model call failed: {e}")
-                yield {"type": "status", "content": f"Reasoning failed: {e}"}
-                break
-            
-            state.update(update)
-            state['history'].extend(update['history'])
-            
-            yield {"type": "thought", "content": state['current_thought']}
-            
-            if state['current_action'].get("tool") == "final_answer":
-                yield {"type": "final_answer", "content": state['current_action']['args'].get("content")}
-                break
-            
-            if state['current_action'].get("tool") == "error":
-                yield {"type": "status", "content": f"Error: {state['current_action']['args'].get('message')}"}
-                break
+### WEB RESEARCH CONTEXT
+{web_context if web_context else "No relevant web information found."}
+"""
+        
+        # 2. Planning
+        yield {"type": "status", "content": "Formulating execution plan..."}
+        plan = planner_call(task, context)
+        yield {"type": "plan", "content": plan}
 
-            # Node 2: Execute Tool
-            yield {"type": "action", "content": f"Action: {state['current_action']['tool']}"}
-            update = await self._execute_tool(state)
-            
-            if "final_answer" in update:
-                 yield {"type": "final_answer", "content": update['final_answer']}
-                 break
-                 
-            state.update(update)
-            state['history'].extend(update['history'])
-            yield {"type": "observation", "content": state['current_observation']}
+        # 3. Execution Loop
+        code_solution = coder_call(task, f"Plan:\n{plan}\n\nContext:\n{context}")
+        yield {"type": "code", "content": code_solution}
+        
+        # 4. Apply Changes
+        yield {"type": "status", "content": "Applying changes to workspace..."}
+        self._apply_patch(code_solution)
 
+        # 4. Validation
+        yield {"type": "status", "content": "Running tests..."}
+        test_result = self.executor.run_tests()
+        
+        if not test_result["success"]:
+            # 5. Reflection
+            yield {"type": "status", "content": "Tests failed. Reflecting..."}
+            reflection_system = "You are a senior debugger. Analyze the test failure and suggest a fix."
+            reflection_user = f"Task: {task}\n\nFailure:\n{test_result['output']}\n\nCode:\n{code_solution}"
+            fix_suggestion = llm_call(MODEL_PLANNER, reflection_system, reflection_user)
+            yield {"type": "reflection", "content": fix_suggestion}
+            
+            # Re-run coding with fix suggestion
+            final_code = coder_call(task, f"Previous Attempt:\n{code_solution}\n\nFix Suggestion:\n{fix_suggestion}")
+            yield {"type": "code", "content": final_code}
         else:
-            yield {"type": "status", "content": "Reached maximum reasoning depth."}
+            yield {"type": "status", "content": "Tests passed!"}
+
+    def _apply_patch(self, code_solution: str):
+        """Rudimentary parser to extract code blocks and write them to disk."""
+        # In a real scenario, this would use a more robust parser or XML tags
+        if "```" in code_solution:
+            parts = code_solution.split("```")
+            for i in range(1, len(parts), 2):
+                content = parts[i]
+                # Skip language identifier
+                lines = content.split("\n")
+                if lines[0] and not lines[0].strip().startswith(" "):
+                    # Check if the first line is likely a language tag (e.g., python)
+                    if any(lang in lines[0].lower() for lang in ["python", "javascript", "typescript", "yaml", "html", "css"]):
+                        content = "\n".join(lines[1:])
+                
+                # For MVP, we assume the agent provides a filename in the first line of the block
+                # or we just write it to a default location if not found.
+                self.executor.write_file("generated_code.py", content)
