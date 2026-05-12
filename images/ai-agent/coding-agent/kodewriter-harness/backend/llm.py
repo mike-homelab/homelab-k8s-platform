@@ -43,30 +43,31 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
     }
     
     if langfuse:
-        with langfuse.start_as_current_observation(
+        generation = langfuse.generation(
             name=f"llm-call-{model}",
             input={"system": system, "user": user},
-            metadata={"model": model, "temperature": temperature},
-            as_type="generation"
-        ) as generation:
-            try:
-                resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
-                resp.raise_for_status()
-                result = resp.json()
-                content = result["choices"][0]["message"]["content"].strip()
-                
-                generation.update(
-                    output=content,
-                    usage_details={
-                        "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
-                        "completion_tokens": result.get("usage", {}).get("completion_tokens"),
-                        "total_tokens": result.get("usage", {}).get("total_tokens")
-                    }
-                )
-                return content
-            except Exception as e:
-                print(f"LLM call failed for {model}: {e}")
-                raise RuntimeError(f"LLM call failed: {e}")
+            model=model,
+            metadata={"temperature": temperature}
+        )
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
+            resp.raise_for_status()
+            result = resp.json()
+            content = result["choices"][0]["message"]["content"].strip()
+            
+            generation.end(
+                output=content,
+                usage={
+                    "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
+                    "completion_tokens": result.get("usage", {}).get("completion_tokens"),
+                    "total_tokens": result.get("usage", {}).get("total_tokens")
+                }
+            )
+            return content
+        except Exception as e:
+            generation.end(level="ERROR", status_message=str(e))
+            print(f"LLM call failed for {model}: {e}")
+            raise RuntimeError(f"LLM call failed: {e}")
     else:
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=300, verify=False)
