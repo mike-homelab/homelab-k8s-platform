@@ -33,6 +33,12 @@ spec:
               value: "http://litellm.ai-platform.svc:4000/v1"
             - name: REDIS_URL
               value: "redis://redis.ai-platform.svc:6379"
+            - name: LANGFUSE_PUBLIC_KEY
+              value: "pk-lf-8995995d-0d1f-4599-a9a0-f373bf7669b7"
+            - name: LANGFUSE_SECRET_KEY
+              value: "sk-lf-e670e906-96d3-49a7-9165-baa93cbe69bf"
+            - name: LANGFUSE_HOST
+              value: "https://langfuse.michaelhomelab.work"
           volumeMounts:
             - name: workspace
               mountPath: /home/workspace
