@@ -63,9 +63,11 @@ def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
                     "total_tokens": result.get("usage", {}).get("total_tokens")
                 }
             )
+            langfuse.flush()
             return content
         except Exception as e:
             generation.end(level="ERROR", status_message=str(e))
+            langfuse.flush()
             print(f"LLM call failed for {model}: {e}")
             raise RuntimeError(f"LLM call failed: {e}")
     else:
