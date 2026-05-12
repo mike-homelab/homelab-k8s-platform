@@ -21,7 +21,7 @@ if LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY:
     langfuse = Langfuse(
         public_key=LANGFUSE_PUBLIC_KEY,
         secret_key=LANGFUSE_SECRET_KEY,
-        host=LANGFUSE_HOST
+        base_url=LANGFUSE_HOST
     )
 
 async def async_llm_call(model: str, system: str, user: str, temperature: float = 0.2,
@@ -42,31 +42,34 @@ async def async_llm_call(model: str, system: str, user: str, temperature: float 
         ],
     }
 
-    trace = None
     if langfuse:
-        trace = langfuse.trace(
+        with langfuse.start_as_current_observation(
             name=f"llm-call-{model}",
             input={"system": system, "user": user},
-            metadata={"model": model, "temperature": temperature}
-        )
-
-    async with httpx.AsyncClient(verify=False) as client:
-        resp = await client.post(url, headers=headers, json=payload, timeout=300)
-        resp.raise_for_status()
-        result = resp.json()
-        content = result["choices"][0]["message"]["content"].strip()
-        
-        if trace:
-            trace.update(
-                output=content,
-                usage={
-                    "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
-                    "completion_tokens": result.get("usage", {}).get("completion_tokens"),
-                    "total_tokens": result.get("usage", {}).get("total_tokens")
-                }
-            )
-            
-        return content
+            metadata={"model": model, "temperature": temperature},
+            as_type="generation"
+        ) as generation:
+            async with httpx.AsyncClient(verify=False) as client:
+                resp = await client.post(url, headers=headers, json=payload, timeout=300)
+                resp.raise_for_status()
+                result = resp.json()
+                content = result["choices"][0]["message"]["content"].strip()
+                
+                generation.update(
+                    output=content,
+                    usage_details={
+                        "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
+                        "completion_tokens": result.get("usage", {}).get("completion_tokens"),
+                        "total_tokens": result.get("usage", {}).get("total_tokens")
+                    }
+                )
+                return content
+    else:
+        async with httpx.AsyncClient(verify=False) as client:
+            resp = await client.post(url, headers=headers, json=payload, timeout=300)
+            resp.raise_for_status()
+            result = resp.json()
+            return result["choices"][0]["message"]["content"].strip()
 
 def llm_call(model: str, system: str, user: str, temperature: float = 0.2,
              max_tokens: int = 8192, stream: bool = False) -> str:
