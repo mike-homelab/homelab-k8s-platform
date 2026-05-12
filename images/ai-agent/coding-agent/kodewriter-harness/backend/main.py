@@ -68,14 +68,22 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     
     try:
         while True:
+            print("DEBUG: Waiting for WS message...")
             data = await websocket.receive_text()
-            message = json.loads(data)
+            print(f"DEBUG: WS received: {data}")
+            try:
+                message = json.loads(data)
+            except Exception as e:
+                print(f"DEBUG: JSON decode error: {e}")
+                continue
             
+            print(f"DEBUG: Starting task: {message.get('content')}")
             async for event in agent.run_task(message.get("content")):
                 await websocket.send_text(json.dumps({
                     "type": "agent_event",
                     **event
                 }))
+            print("DEBUG: Task finished")
     except WebSocketDisconnect:
         print(f"Session {session_id} disconnected")
 
