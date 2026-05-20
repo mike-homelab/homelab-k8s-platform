@@ -8,14 +8,18 @@ data:
     model_list:
       - model_name: "builder"
         litellm_params:
-          model: "ollama/builder"
+          model: "ollama_chat/builder"
           api_base: "http://builder.ai-platform.svc:11434"
           num_ctx: 81920
+          model_info:
+            supports_function_calling: true
       - model_name: "analyst"
         litellm_params:
-          model: "ollama/analyst"
+          model: "ollama_chat/analyst"
           api_base: "http://analyst.ai-platform.svc:11434"
           num_ctx: 81920
+          model_info:
+            supports_function_calling: true
 
     litellm_settings:
       drop_params: true
