@@ -29,6 +29,8 @@ spec:
           env:
             - name: LITELLM_MASTER_KEY
               value: "sk-michael-homelab-llm-proxy"
+            - name: LITELLM_LOG
+              value: "DEBUG"
           volumeMounts:
             - name: config-volume
               mountPath: /app/config.yaml
