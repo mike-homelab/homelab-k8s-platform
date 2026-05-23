@@ -3,10 +3,23 @@ from .llm import planner_call, coder_call, llm_call, MODEL_PLANNER, web_search
 from .tools import ToolExecutor
 from .retrieval import RetrievalEngine
 
+# MCP Server Configuration
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8080/sse")
+MCP_ENABLED = os.getenv("MCP_ENABLED", "true").lower() == "true"
+
+try:
+    import os
+except NameError:
+    import os
+
 class KodewriterAgent:
-    def __init__(self, workspace_root: str = "/home/workspace"):
+    def __init__(self, workspace_root: str = "/home/workspace", mcp_enabled: bool = True):
         self.executor = ToolExecutor(workspace_root)
         self.retrieval = RetrievalEngine()
+        self.mcp_enabled = mcp_enabled
+        self.mcp_session = None
+        if mcp_enabled:
+            self._init_mcp_session()
 
     async def run_task(self, task: str):
         # 0. Start Langfuse Trace

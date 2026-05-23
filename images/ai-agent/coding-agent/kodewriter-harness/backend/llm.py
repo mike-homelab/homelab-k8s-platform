@@ -8,6 +8,11 @@ LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-michael-homelab-llm-proxy")
 
 MODEL_PLANNER = "analyst"  # Qwen3-14B
 MODEL_CODER = "builder"    # Qwen2.5-Coder-14B
+
+# MCP server configuration
+MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://localhost:8080/sse")
+MCP_SERVER_TIMEOUT = 30
+
 from langfuse import Langfuse
 
 # Initialize Langfuse
