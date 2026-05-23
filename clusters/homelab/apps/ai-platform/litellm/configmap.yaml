@@ -10,7 +10,7 @@ data:
         litellm_params:
           model: "ollama_chat/builder"
           api_base: "http://builder.ai-platform.svc:11434"
-          num_ctx: 81920
+          num_ctx: 262144
           model_info:
             supports_function_calling: true
       - model_name: "analyst"

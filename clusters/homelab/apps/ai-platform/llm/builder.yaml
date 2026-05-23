@@ -25,7 +25,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
 
       terminationGracePeriodSeconds: 60
 
@@ -47,13 +47,13 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling qwen2.5-coder:14b..."
+              echo "Pulling carstenuhlig/omnicoder-9b:q4_k_m..."
 
-              ollama pull qwen2.5-coder:14b
+              ollama pull carstenuhlig/omnicoder-9b:q4_k_m
 
               cat <<EOF >/tmp/Modelfile
-              FROM qwen2.5-coder:14b
-              PARAMETER num_ctx 81920
+              FROM carstenuhlig/omnicoder-9b:q4_k_m
+              PARAMETER num_ctx 262144
               EOF
 
               ollama create builder -f /tmp/Modelfile
@@ -88,7 +88,7 @@ spec:
               value: /models
 
             - name: OLLAMA_NUM_CTX
-              value: "81920"
+              value: "262144"
 
             - name: OLLAMA_NUM_PARALLEL
               value: "1"

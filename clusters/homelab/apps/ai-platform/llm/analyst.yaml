@@ -23,7 +23,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5060-Ti
+        nvidia.com/gpu.product: NVIDIA-GeForce-RTX-5070-Ti
 
       terminationGracePeriodSeconds: 60
 
