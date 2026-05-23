@@ -2,13 +2,22 @@ import requests
 import time
 import json
 import sys
+import urllib3
 
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 BASE_URL = "https://llm.michaelhomelab.work/v1"
 API_KEY = "sk-michael-homelab-llm-proxy"
 MODELS = ["analyst", "builder"]
-# Testing from 8K to 80K in stages of 8K
-TOKEN_STAGES = [8000, 16000, 24000, 32000, 40000, 48000, 56000, 64000, 72000, 80000]
-TOTAL_CONTEXT_LIMIT = 81920
+MODEL_CONFIGS = {
+    "analyst": {
+        "context_limit": 81920,
+        "stages": [16000, 32000, 48000, 64000, 80000]
+    },
+    "builder": {
+        "context_limit": 262144,
+        "stages": [32000, 64000, 128000, 192000, 256000]
+    }
+}
 
 def generate_prompt(approx_tokens):
     # Roughly 4 chars per token
@@ -19,8 +28,9 @@ def generate_prompt(approx_tokens):
 
 def run_test(model, target_tokens):
     prompt = generate_prompt(target_tokens)
-    # Calculate max_tokens to ensure we stay within the 80K model limit (Input + Output)
-    max_output_tokens = min(16384, TOTAL_CONTEXT_LIMIT - target_tokens)
+    # Calculate max_tokens to ensure we stay within the model limit (Input + Output)
+    model_limit = MODEL_CONFIGS[model]["context_limit"]
+    max_output_tokens = min(16384, model_limit - target_tokens)
     if max_output_tokens < 100: # Ensure at least some room for a response
         max_output_tokens = 100
         
@@ -49,8 +59,9 @@ def run_test(model, target_tokens):
             f"{BASE_URL}/chat/completions", 
             headers=headers, 
             json=payload, 
-            timeout=600, # Increased timeout for long generation
-            stream=True
+            timeout=3600, # Increased timeout to 1 hour for extreme 256K context prefill times
+            stream=True,
+            verify=False
         )
         
         if response.status_code != 200:
@@ -69,7 +80,8 @@ def run_test(model, target_tokens):
                     try:
                         data = json.loads(data_str)
                         content = data['choices'][0]['delta'].get('content')
-                        if content:
+                        reasoning_content = data['choices'][0]['delta'].get('reasoning_content')
+                        if content or reasoning_content:
                             if first_token_time is None:
                                 first_token_time = time.time()
                             output_tokens += 1
@@ -106,11 +118,12 @@ def main():
     print("-" * 80)
     
     for model in MODELS:
-        for stage in TOKEN_STAGES:
+        for stage in MODEL_CONFIGS[model]["stages"]:
             print(f"Testing {model} output stress with {stage} input tokens...", file=sys.stderr)
             res = run_test(model, stage)
             if "error" in res:
                 print(f"{model:<10} | {stage:<7} | {'ERROR':<7} | {'-':<10} | {'-':<10} | {'-':<10}")
+                print(f"Error Details: {res['error']}", file=sys.stderr)
                 results.append({"model": model, "target": stage, "error": res["error"]})
             else:
                 tpot_ms = res['tpot'] * 1000

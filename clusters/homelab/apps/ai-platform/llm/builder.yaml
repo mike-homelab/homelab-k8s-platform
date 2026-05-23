@@ -53,7 +53,7 @@ spec:
 
               cat <<EOF >/tmp/Modelfile
               FROM carstenuhlig/omnicoder-9b:q4_k_m
-              PARAMETER num_ctx 262144
+              PARAMETER num_ctx 131072
               EOF
 
               ollama create builder -f /tmp/Modelfile
@@ -88,7 +88,7 @@ spec:
               value: /models
 
             - name: OLLAMA_NUM_CTX
-              value: "262144"
+              value: "131072"
 
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
