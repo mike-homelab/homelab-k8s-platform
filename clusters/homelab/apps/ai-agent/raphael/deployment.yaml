@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.5
+        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.6
         ports:
         - containerPort: 8000
         env:

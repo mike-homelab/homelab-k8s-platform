@@ -15,11 +15,22 @@ class ObservabilityEngine:
         self.llm_host = os.getenv("LLM_HOST", "http://litellm.ai-platform.svc:4000/v1")
         self.llm_url = f"{self.llm_host}/chat/completions"
         self.loki_url = "http://loki-gateway.monitoring.svc/loki/api/v1/query_range"
+        self.prometheus_url = "http://kube-prometheus-stack-prometheus.monitoring.svc:9090/api/v1/query"
+        self.last_diagnosed = {}  # maps (pod_name, alert_type) -> float (timestamp)
     
     def start(self):
         asyncio.create_task(self.monitor_logs())
         asyncio.create_task(self.monitor_metrics())
         asyncio.create_task(self.monitor_traces())
+
+    def _check_cooldown(self, pod_name, monitor_type):
+        now = asyncio.get_event_loop().time()
+        key = (pod_name, monitor_type)
+        last_time = self.last_diagnosed.get(key, 0)
+        if now - last_time < 600:  # 10-minute cooldown
+            return False
+        self.last_diagnosed[key] = now
+        return True
 
     async def monitor_logs(self):
         while True:
@@ -35,10 +46,31 @@ class ObservabilityEngine:
     async def monitor_metrics(self):
         while True:
             try:
-                logger.info("Running real-time metrics monitor...")
-                query = '{namespace=~"ai-agent|monitoring"} |= "HTTP 5" |~ "(?i)error"'
-                params = {"query": query, "limit": 2, "direction": "backward"}
-                await self._run_monitor(self.loki_url, params, "metric")
+                logger.info("Running real-time metrics monitor (Prometheus)...")
+                queries = [
+                    ("OOMKilled", 'kube_pod_container_status_last_terminated_reason{namespace=~"ai-agent|monitoring|default",reason="OOMKilled"} == 1'),
+                    ("CrashLoopBackOff", 'kube_pod_container_status_waiting_reason{namespace=~"ai-agent|monitoring|default",reason="CrashLoopBackOff"} == 1')
+                ]
+                async with aiohttp.ClientSession() as session:
+                    for alert_type, q in queries:
+                        async with session.get(self.prometheus_url, params={"query": q}) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                results = data.get("data", {}).get("result", [])
+                                for result in results:
+                                    metric = result.get("metric", {})
+                                    pod_name = metric.get("pod")
+                                    namespace = metric.get("namespace", "monitoring")
+                                    if pod_name:
+                                        if self._check_cooldown(pod_name, alert_type):
+                                            logger.info(f"Detected metric alert {alert_type} on pod {pod_name} in {namespace}")
+                                            logs = await self.get_pod_logs(pod_name, namespace)
+                                            diagnosis = await self.agentic_diagnosis(
+                                                f"Real-time metrics alert: {pod_name} is in {alert_type} state",
+                                                logs
+                                            )
+                                            logger.info(f"Diagnosis completed for {pod_name}. Sending to Discord...")
+                                            await self.send_diagnosis_to_discord(pod_name, diagnosis)
             except Exception as e:
                 logger.error(f"monitor_metrics loop error: {e}")
             await asyncio.sleep(120)
@@ -64,6 +96,8 @@ class ObservabilityEngine:
                             pod_name = result.get("stream", {}).get("pod", "unknown")
                             logs = "\n".join([v[1] for v in result.get("values", [])])
                             if logs:
+                                if not self._check_cooldown(pod_name, monitor_type):
+                                    continue
                                 logger.info(f"Detected {monitor_type} error in {pod_name}, running agentic diagnosis...")
                                 diagnosis = await self.agentic_diagnosis(f"Real-time {monitor_type} error in {pod_name}", logs)
                                 logger.info(f"Diagnosis completed for {pod_name}. Sending to Discord...")
