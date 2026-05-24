@@ -3,17 +3,22 @@ import asyncio
 import discord
 from fastapi import FastAPI, Request
 from .discord_bot import RaphaelBot
+from .observability import ObservabilityEngine
 
 app = FastAPI(title="Raphael Observability Agent")
 
 # Environment Variables
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 
-# Initialize Discord Bot
+# Initialize Discord Bot and Observability Engine
 bot = RaphaelBot(command_prefix="!")
+obs_engine = ObservabilityEngine()
 
 @app.on_event("startup")
 async def startup_event():
+    # Start observability monitor loops
+    obs_engine.start()
+    
     # Run Discord Bot in the background
     if DISCORD_TOKEN:
         try:
@@ -38,12 +43,12 @@ async def health():
 async def receive_alert(request: Request):
     """
     Endpoint to receive webhooks from Grafana.
-    Delegates to the bot which now uses a Webhook for delivery.
+    Delegates to the observability engine which uses a Webhook for delivery.
     """
     try:
         alert_data = await request.json()
         print(f"Received alert: {alert_data.get('status', 'unknown')}")
-        await bot.handle_alert(alert_data)
+        await obs_engine.handle_alert(alert_data)
         return {"status": "received"}
     except Exception as e:
         print(f"Error processing alert: {e}")

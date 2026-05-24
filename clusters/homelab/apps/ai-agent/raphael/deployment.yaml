@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.0
+        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.1
         ports:
         - containerPort: 8000
         env:
@@ -48,6 +48,12 @@ spec:
           value: "1497901155634909276"
         - name: DISCORD_APP_ID
           value: "1497902452417237083"
+        - name: OTEL_HOST
+          value: "observability-gateway.monitoring.svc.cluster.local"
+        - name: OTEL_PORT
+          value: "8000"
+        - name: OTEL_METRICS_ENDPOINT
+          value: "/metrics"
         resources:
           requests:
             cpu: "500m"
@@ -55,3 +61,7 @@ spec:
           limits:
             cpu: "1"
             memory: "2Gi"
+        annotations:
+          prometheus.io/scrape: "true"
+          prometheus.io/path: "/metrics"
+          prometheus.io/port: "8000"
