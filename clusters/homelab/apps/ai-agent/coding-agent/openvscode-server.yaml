@@ -30,6 +30,8 @@ spec:
               value: "1000"
             - name: TZ
               value: "Etc/UTC"
+            - name: PATH
+              value: "/lsiopy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/config/.opencode/bin"
             - name: VSCODE_GALLERY_SERVICE_URL
               value: "https://marketplace.visualstudio.com/_apis/public/gallery"
             - name: VSCODE_GALLERY_ITEM_URL
