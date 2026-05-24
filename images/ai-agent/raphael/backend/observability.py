@@ -3,7 +3,7 @@ import io
 import aiohttp
 import asyncio
 import discord
-from discord.ext import tasks
+
 import re
 
 class ObservabilityEngine:
@@ -13,16 +13,20 @@ class ObservabilityEngine:
         self.loki_url = "http://loki-gateway.monitoring.svc/loki/api/v1/query_range"
     
     def start(self):
-        self.monitor_logs.start()
-        self.monitor_metrics.start()
-        self.monitor_traces.start()
+        asyncio.create_task(self.monitor_logs())
+        asyncio.create_task(self.monitor_metrics())
+        asyncio.create_task(self.monitor_traces())
 
-    @tasks.loop(minutes=2)
     async def monitor_logs(self):
-        print("Running real-time log monitor...")
-        query = '{namespace=~"ai-agent|monitoring|default"} |= "error" |~ "(?i)(exception|failed|fatal|error)"'
-        params = {"query": query, "limit": 2, "direction": "backward"}
-        await self._run_monitor(self.loki_url, params, "log")
+        while True:
+            try:
+                print("Running real-time log monitor...")
+                query = '{namespace=~"ai-agent|monitoring|default"} |= "error" |~ "(?i)(exception|failed|fatal|error)"'
+                params = {"query": query, "limit": 2, "direction": "backward"}
+                await self._run_monitor(self.loki_url, params, "log")
+            except Exception as e:
+                print(f"monitor_logs loop error: {e}")
+            await asyncio.sleep(120)
 
     @tasks.loop(minutes=2)
     async def monitor_metrics(self):
@@ -31,12 +35,16 @@ class ObservabilityEngine:
         params = {"query": query, "limit": 2, "direction": "backward"}
         await self._run_monitor(self.loki_url, params, "metric")
 
-    @tasks.loop(minutes=2)
     async def monitor_traces(self):
-        print("Running real-time trace monitor...")
-        query = '{namespace=~"ai-agent|monitoring"} |= "trace" |~ "(?i)error"'
-        params = {"query": query, "limit": 2, "direction": "backward"}
-        await self._run_monitor(self.loki_url, params, "trace")
+        while True:
+            try:
+                print("Running real-time trace monitor...")
+                query = '{namespace=~"ai-agent|monitoring"} |= "trace" |~ "(?i)error"'
+                params = {"query": query, "limit": 2, "direction": "backward"}
+                await self._run_monitor(self.loki_url, params, "trace")
+            except Exception as e:
+                print(f"monitor_traces loop error: {e}")
+            await asyncio.sleep(120)
 
     async def _run_monitor(self, url, params, monitor_type):
         try:
