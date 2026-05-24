@@ -13,7 +13,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /ide
+            value: /
       filters:
         - type: ResponseHeaderModifier
           responseHeaderModifier:
@@ -29,41 +29,3 @@ spec:
       backendRefs:
         - name: openvscode-server
           port: 3000
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /agent
-      filters:
-        - type: ResponseHeaderModifier
-          responseHeaderModifier:
-            set:
-              - name: Access-Control-Allow-Private-Network
-                value: "true"
-              - name: Access-Control-Allow-Origin
-                value: "*"
-              - name: Access-Control-Allow-Methods
-                value: "GET, POST, OPTIONS, PUT, DELETE"
-              - name: Access-Control-Allow-Headers
-                value: "*"
-      backendRefs:
-        - name: agent-ui
-          port: 3000
-    - matches:
-        - path:
-            type: PathPrefix
-            value: /api
-      filters:
-        - type: ResponseHeaderModifier
-          responseHeaderModifier:
-            set:
-              - name: Access-Control-Allow-Private-Network
-                value: "true"
-              - name: Access-Control-Allow-Origin
-                value: "*"
-              - name: Access-Control-Allow-Methods
-                value: "GET, POST, OPTIONS, PUT, DELETE"
-              - name: Access-Control-Allow-Headers
-                value: "*"
-      backendRefs:
-        - name: harness-api
-          port: 8000
