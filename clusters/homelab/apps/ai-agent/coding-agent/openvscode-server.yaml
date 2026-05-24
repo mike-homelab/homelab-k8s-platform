@@ -30,6 +30,14 @@ spec:
               value: "1000"
             - name: TZ
               value: "Etc/UTC"
+            - name: VSCODE_GALLERY_SERVICE_URL
+              value: "https://marketplace.visualstudio.com/_apis/public/gallery"
+            - name: VSCODE_GALLERY_ITEM_URL
+              value: "https://marketplace.visualstudio.com/items"
+            - name: VSCODE_GALLERY_CACHE_URL
+              value: "https://vscode.blob.core.windows.net/gallery/index"
+            - name: VSCODE_GALLERY_CONTROL_URL
+              value: ""
             # Setting CONNECTION_TOKEN if needed, or leave open for internal cluster access
           ports:
             - containerPort: 8000
