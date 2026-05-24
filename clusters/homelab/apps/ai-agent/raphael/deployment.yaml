@@ -15,10 +15,12 @@ spec:
     spec:
       containers:
       - name: raphael
-        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.4
+        image: harbor.michaelhomelab.work/homelab/ai-agent/raphael:0.3.5
         ports:
         - containerPort: 8000
         env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
         - name: REDIS_HOST
           value: "raphael-redis"
         - name: QDRANT_HOST

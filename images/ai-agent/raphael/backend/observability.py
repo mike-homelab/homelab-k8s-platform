@@ -5,6 +5,10 @@ import asyncio
 import discord
 
 import re
+import logging
+
+logger = logging.getLogger("observability")
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 class ObservabilityEngine:
     def __init__(self):
@@ -20,34 +24,34 @@ class ObservabilityEngine:
     async def monitor_logs(self):
         while True:
             try:
-                print("Running real-time log monitor...")
+                logger.info("Running real-time log monitor...")
                 query = '{namespace=~"ai-agent|monitoring|default"} |= "error" |~ "(?i)(exception|failed|fatal|error)"'
                 params = {"query": query, "limit": 2, "direction": "backward"}
                 await self._run_monitor(self.loki_url, params, "log")
             except Exception as e:
-                print(f"monitor_logs loop error: {e}")
+                logger.error(f"monitor_logs loop error: {e}")
             await asyncio.sleep(120)
 
     async def monitor_metrics(self):
         while True:
             try:
-                print("Running real-time metrics monitor...")
+                logger.info("Running real-time metrics monitor...")
                 query = '{namespace=~"ai-agent|monitoring"} |= "HTTP 5" |~ "(?i)error"'
                 params = {"query": query, "limit": 2, "direction": "backward"}
                 await self._run_monitor(self.loki_url, params, "metric")
             except Exception as e:
-                print(f"monitor_metrics loop error: {e}")
+                logger.error(f"monitor_metrics loop error: {e}")
             await asyncio.sleep(120)
 
     async def monitor_traces(self):
         while True:
             try:
-                print("Running real-time trace monitor...")
+                logger.info("Running real-time trace monitor...")
                 query = '{namespace=~"ai-agent|monitoring"} |= "trace" |~ "(?i)error"'
                 params = {"query": query, "limit": 2, "direction": "backward"}
                 await self._run_monitor(self.loki_url, params, "trace")
             except Exception as e:
-                print(f"monitor_traces loop error: {e}")
+                logger.error(f"monitor_traces loop error: {e}")
             await asyncio.sleep(120)
 
     async def _run_monitor(self, url, params, monitor_type):
@@ -60,12 +64,12 @@ class ObservabilityEngine:
                             pod_name = result.get("stream", {}).get("pod", "unknown")
                             logs = "\n".join([v[1] for v in result.get("values", [])])
                             if logs:
-                                print(f"Detected {monitor_type} error in {pod_name}, running agentic diagnosis...")
+                                logger.info(f"Detected {monitor_type} error in {pod_name}, running agentic diagnosis...")
                                 diagnosis = await self.agentic_diagnosis(f"Real-time {monitor_type} error in {pod_name}", logs)
-                                print(f"Diagnosis completed for {pod_name}. Sending to Discord...")
+                                logger.info(f"Diagnosis completed for {pod_name}. Sending to Discord...")
                                 await self.send_diagnosis_to_discord(pod_name, diagnosis)
         except Exception as e:
-            print(f"Monitor error ({monitor_type}): {e}")
+            logger.error(f"Monitor error ({monitor_type}): {e}")
             
     async def search_searxng(self, query: str):
         searxng_url = "http://searxng.ai-platform.svc:8080/search"
@@ -78,7 +82,7 @@ class ObservabilityEngine:
                         results = data.get("results", [])
                         return "\n".join([f"- {r.get('title')}: {r.get('content')}" for r in results[:3]])
         except Exception as e:
-            print(f"SearxNG error: {e}")
+            logger.error(f"SearxNG error: {e}")
         return "No search results."
 
     async def agentic_diagnosis(self, alert_desc: str, logs: str):
@@ -101,19 +105,19 @@ class ObservabilityEngine:
                                 match = re.search(r"SEARCH:\s*(.*)", content)
                                 if match:
                                     query = match.group(1).strip()
-                                    print(f"Agent requested search for: {query}")
+                                    logger.info(f"Agent requested search for: {query}")
                                     search_res = await self.search_searxng(query)
                                     messages.append({"role": "assistant", "content": content})
                                     messages.append({"role": "user", "content": f"Search Results:\n{search_res}"})
                                     continue
                             
                             if "DIAGNOSIS:" in content:
-                                print("Agent reached final diagnosis.")
+                                logger.info("Agent reached final diagnosis.")
                                 return content.replace("DIAGNOSIS:", "").strip()
-                            print("Agent reached intermediate step or finished without DIAGNOSIS block.")
+                            logger.info("Agent reached intermediate step or finished without DIAGNOSIS block.")
                             return content
             except Exception as e:
-                print(f"LLM error: {e}")
+                logger.error(f"LLM error: {e}")
                 return "Diagnosis failed due to LLM error."
         return "Diagnosis incomplete after max steps."
 
@@ -131,7 +135,7 @@ class ObservabilityEngine:
                                 logs.append(value[1])
                         return "\n".join(logs[-50:])
         except Exception as e:
-            print(f"Error fetching logs from Loki: {e}")
+            logger.error(f"Error fetching logs from Loki: {e}")
         return "No logs found or Loki unreachable."
 
     async def handle_alert(self, alert_data: dict):
@@ -187,15 +191,15 @@ class ObservabilityEngine:
     async def send_diagnosis_to_discord(self, pod_name, diagnosis):
         webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
         if not webhook_url:
-            print("DISCORD_WEBHOOK_URL not set! Cannot send Discord message.")
+            logger.error("DISCORD_WEBHOOK_URL not set! Cannot send Discord message.")
             return
-        print(f"Sending diagnosis to webhook for pod: {pod_name}")
+        logger.info(f"Sending diagnosis to webhook for pod: {pod_name}")
         async with aiohttp.ClientSession() as session:
             webhook = discord.Webhook.from_url(webhook_url, session=session)
             embed = discord.Embed(title=f"🚨 Real-time Monitor: {pod_name}", description=diagnosis[:4000], color=discord.Color.orange())
             embed.set_footer(text="Agentic Reasoning + SearxNG Internet Search")
             try:
                 await webhook.send(embed=embed)
-                print("Successfully sent to Discord via webhook.")
+                logger.info("Successfully sent to Discord via webhook.")
             except Exception as e:
-                print(f"Failed to send to Discord webhook: {e}")
+                logger.error(f"Failed to send to Discord webhook: {e}")
