@@ -28,12 +28,16 @@ class ObservabilityEngine:
                 print(f"monitor_logs loop error: {e}")
             await asyncio.sleep(120)
 
-    @tasks.loop(minutes=2)
     async def monitor_metrics(self):
-        print("Running real-time metrics monitor...")
-        query = '{namespace=~"ai-agent|monitoring"} |= "HTTP 5" |~ "(?i)error"'
-        params = {"query": query, "limit": 2, "direction": "backward"}
-        await self._run_monitor(self.loki_url, params, "metric")
+        while True:
+            try:
+                print("Running real-time metrics monitor...")
+                query = '{namespace=~"ai-agent|monitoring"} |= "HTTP 5" |~ "(?i)error"'
+                params = {"query": query, "limit": 2, "direction": "backward"}
+                await self._run_monitor(self.loki_url, params, "metric")
+            except Exception as e:
+                print(f"monitor_metrics loop error: {e}")
+            await asyncio.sleep(120)
 
     async def monitor_traces(self):
         while True:
