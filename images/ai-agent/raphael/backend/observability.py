@@ -45,11 +45,12 @@ class ObservabilityEngine:
                     if resp.status == 200:
                         data = await resp.json()
                         for result in data.get("data", {}).get("result", []):
-                            pod_name = result.get("metric", {}).get("pod", "unknown")
+                            pod_name = result.get("stream", {}).get("pod", "unknown")
                             logs = "\n".join([v[1] for v in result.get("values", [])])
                             if logs:
                                 print(f"Detected {monitor_type} error in {pod_name}, running agentic diagnosis...")
                                 diagnosis = await self.agentic_diagnosis(f"Real-time {monitor_type} error in {pod_name}", logs)
+                                print(f"Diagnosis completed for {pod_name}. Sending to Discord...")
                                 await self.send_diagnosis_to_discord(pod_name, diagnosis)
         except Exception as e:
             print(f"Monitor error ({monitor_type}): {e}")
@@ -88,13 +89,16 @@ class ObservabilityEngine:
                                 match = re.search(r"SEARCH:\s*(.*)", content)
                                 if match:
                                     query = match.group(1).strip()
+                                    print(f"Agent requested search for: {query}")
                                     search_res = await self.search_searxng(query)
                                     messages.append({"role": "assistant", "content": content})
                                     messages.append({"role": "user", "content": f"Search Results:\n{search_res}"})
                                     continue
                             
                             if "DIAGNOSIS:" in content:
+                                print("Agent reached final diagnosis.")
                                 return content.replace("DIAGNOSIS:", "").strip()
+                            print("Agent reached intermediate step or finished without DIAGNOSIS block.")
                             return content
             except Exception as e:
                 print(f"LLM error: {e}")
@@ -170,9 +174,16 @@ class ObservabilityEngine:
 
     async def send_diagnosis_to_discord(self, pod_name, diagnosis):
         webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-        if not webhook_url: return
+        if not webhook_url:
+            print("DISCORD_WEBHOOK_URL not set! Cannot send Discord message.")
+            return
+        print(f"Sending diagnosis to webhook for pod: {pod_name}")
         async with aiohttp.ClientSession() as session:
             webhook = discord.Webhook.from_url(webhook_url, session=session)
             embed = discord.Embed(title=f"🚨 Real-time Monitor: {pod_name}", description=diagnosis[:4000], color=discord.Color.orange())
             embed.set_footer(text="Agentic Reasoning + SearxNG Internet Search")
-            await webhook.send(embed=embed)
+            try:
+                await webhook.send(embed=embed)
+                print("Successfully sent to Discord via webhook.")
+            except Exception as e:
+                print(f"Failed to send to Discord webhook: {e}")
