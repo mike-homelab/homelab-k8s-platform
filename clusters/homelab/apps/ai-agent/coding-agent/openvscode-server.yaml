@@ -32,7 +32,7 @@ spec:
               value: "Etc/UTC"
             # Setting CONNECTION_TOKEN if needed, or leave open for internal cluster access
           ports:
-            - containerPort: 3000
+            - containerPort: 8000
           volumeMounts:
             - name: workspace
               mountPath: /workspace
@@ -58,4 +58,4 @@ spec:
   ports:
     - protocol: TCP
       port: 3000
-      targetPort: 3000
+      targetPort: 8000
