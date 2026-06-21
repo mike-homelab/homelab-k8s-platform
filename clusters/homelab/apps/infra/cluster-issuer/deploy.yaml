@@ -2,17 +2,19 @@
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
-  name: vault-issuer
+  name: letsencrypt-production
 spec:
-  vault:
-    server: https://vault.michaelhomelab.work:8200
-    path: pki_int/sign/k8s-issuer
-    caBundleSecretRef:
-      name: vault-tls-ca
-      key: ca.crt
-    auth:
-      kubernetes:
-        mountPath: /v1/auth/kubernetes
-        role: k8s-issuer
-        serviceAccountRef:
-          name: cert-manager
+  acme:
+    email: pradeepmichaelwork@gmail.com
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-production-account-key
+    solvers:
+    - dns01:
+        rfc2136:
+          nameserver: cthomelabdns
+          tsigKeyName: cert-manager-key
+          tsigAlgorithm: HMACSHA256
+          tsigSecretSecretRef:
+            name: technitium-tsig
+            key: tsig-secret-key

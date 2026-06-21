@@ -4,6 +4,7 @@ description: Monitor CI/CD pipelines, digest GitHub Action failures, and auto-he
 > [!IMPORTANT]
 > **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
+0. **Memory Bank Context**: Read and incorporate the context from `c:\workspace\homelab-memory-bank.html` before proceeding.
 1. Triggered on command or after pushing commits to check GitHub workflow statuses.
 2. Use Antigravity to run `run_command` on the host: `gh run list --limit 5` to inspect the most recent build jobs.
 3. If the most recent pipeline failed, run `run_command`: `gh run view --log` to extract the error traces. Since Antigravity directly runs on the host shell, it automatically authenticates seamlessly with your `gh auth status`.

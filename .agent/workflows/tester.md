@@ -4,6 +4,7 @@ description: Execute browser-based UI testing and performance diagnostics using 
 > [!IMPORTANT]
 > **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
+0. **Memory Bank Context**: Read and incorporate the context from `c:\workspace\homelab-memory-bank.html` before proceeding.
 1. **Initialization**: Navigate to the target URL provided by the calling workflow (Researcher, Reviewer, or User) using the `browser_subagent`.
 2. **Interaction**: Perform the necessary user actions (clicking buttons, filling forms, refreshing, scrolling) to reach the target state.
 3. **Diagnostic Capture**:

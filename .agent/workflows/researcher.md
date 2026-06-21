@@ -4,6 +4,7 @@ description: Perform web searches, fetch documentation, and rerank context via t
 > [!IMPORTANT]
 > **Cloud API Restriction**: NEVER use cloud APIs (Vertex, OpenAI, Anthropic, Gemini, etc.) for generation or logic. You MUST exclusively use the local LLM endpoints via `curl`. Cloud APIs are permitted ONLY for high-level orchestration; all reasoning, code generation, and research analysis MUST be offloaded to the cluster models. Usage of both Cloud and Local tokens MUST be reported at the end of the workflow.
 
+0. **Memory Bank Context**: Read and incorporate the context from `c:\workspace\homelab-memory-bank.html` before proceeding.
 1. Understand the user's research request. Identify missing context or unknown APIs required for the build.
 2. Search the local Obsidian vault at `/home/michael/obsidian/homelab-k8s-platform/` for internal documentation, architecture notes, and credentials.
 3. Use Antigravity web search tools to pull relevant documentation, repositories, or error solutions from the internet if internal docs are insufficient.

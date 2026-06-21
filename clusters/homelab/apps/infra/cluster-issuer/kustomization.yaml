@@ -1,2 +1,3 @@
 resources:
+  - tsig-secret.yaml
   - deploy.yaml
