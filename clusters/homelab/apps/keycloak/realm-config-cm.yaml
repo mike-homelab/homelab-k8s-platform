@@ -13,54 +13,7 @@ data:
       "loginWithEmailAllowed": true,
       "duplicateEmailsAllowed": false,
       "accessTokenLifespan": 3600,
-      "clients": [
-        {
-          "clientId": "savant",
-          "name": "Savant - AI Knowledge Chat",
-          "enabled": true,
-          "protocol": "openid-connect",
-          "publicClient": true,
-          "standardFlowEnabled": true,
-          "implicitFlowEnabled": false,
-          "directAccessGrantsEnabled": false,
-          "rootUrl": "https://savant.michaelhomelab.work",
-          "baseUrl": "/",
-          "redirectUris": [
-            "https://savant.michaelhomelab.work/*",
-            "http://savant.michaelhomelab.work/*"
-          ],
-          "webOrigins": [
-            "https://savant.michaelhomelab.work",
-            "http://savant.michaelhomelab.work"
-          ],
-          "attributes": {
-            "pkce.code.challenge.method": "S256"
-          }
-        },
-        {
-          "clientId": "watchtower",
-          "name": "Watchtower - Observability Dashboard",
-          "enabled": true,
-          "protocol": "openid-connect",
-          "publicClient": true,
-          "standardFlowEnabled": true,
-          "implicitFlowEnabled": false,
-          "directAccessGrantsEnabled": false,
-          "rootUrl": "https://watchtower.michaelhomelab.work",
-          "baseUrl": "/",
-          "redirectUris": [
-            "https://watchtower.michaelhomelab.work/*",
-            "http://watchtower.michaelhomelab.work/*"
-          ],
-          "webOrigins": [
-            "https://watchtower.michaelhomelab.work",
-            "http://watchtower.michaelhomelab.work"
-          ],
-          "attributes": {
-            "pkce.code.challenge.method": "S256"
-          }
-        }
-      ],
+      "clients": [],
       "roles": {
         "realm": [
           {
