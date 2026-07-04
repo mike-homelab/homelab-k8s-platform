@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kito-bot-service
+  namespace: kito
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kito-bot-service
+  template:
+    metadata:
+      labels:
+        app: kito-bot-service
+    spec:
+      containers:
+      - name: bot-service
+        image: harbor.michaelhomelab.work/kito/bot-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: kito-config
+        - secretRef:
+            name: kito-slack-secrets
+        env:
+        - name: PORT
+          value: "3000"
+        - name: DATABASE_URL
+          value: "postgresql://postgres:postgres@postgres.kito.svc:5432/kito"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10

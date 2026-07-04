@@ -47,12 +47,12 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling carstenuhlig/omnicoder-9b:q4_k_m..."
+              echo "Pulling qwen3-vl:8b..."
 
-              ollama pull carstenuhlig/omnicoder-9b:q4_k_m
+              ollama pull qwen3-vl:8b
 
               cat <<EOF >/tmp/Modelfile
-              FROM carstenuhlig/omnicoder-9b:q4_k_m
+              FROM qwen3-vl:8b
               PARAMETER num_ctx 131072
               EOF
 

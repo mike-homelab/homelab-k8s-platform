@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kito-config
+  namespace: kito
+data:
+  MINIO_ENDPOINT: "http://minio.monitoring.svc:9000"
+  AZURE_SEARCH_ENDPOINT: "https://srch-tiko-prod.search.windows.net"

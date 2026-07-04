@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kito-storage-init
+  namespace: kito
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: mc
+        image: minio/mc:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -eux
+            # Configure MC alias
+            mc alias set myminio http://minio.monitoring.svc:9000 17uuYRVLzEsc3HMa9lQ5 gmYROYuVNQCAzx3EpkXk4W8EP2Nc9FKDJhRzJX1U --insecure
+            
+            # Create buckets if they don't exist
+            for bucket in kito-raw-documents kito-processed-documents kito-generated-artifacts; do
+              if ! mc ls myminio/$bucket >/dev/null 2>&1; then
+                mc mb myminio/$bucket
+                mc anonymous set download myminio/$bucket
+              fi
+            done
+            echo "Storage initialization successful!"

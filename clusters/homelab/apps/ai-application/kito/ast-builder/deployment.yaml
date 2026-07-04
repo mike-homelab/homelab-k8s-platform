@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kito-ast-builder
+  namespace: kito
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kito-ast-builder
+  template:
+    metadata:
+      labels:
+        app: kito-ast-builder
+    spec:
+      containers:
+      - name: ast-builder
+        image: harbor.michaelhomelab.work/kito/ast-builder:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5001
+          name: http
+        envFrom:
+        - configMapRef:
+            name: kito-config
+        - secretRef:
+            name: kito-slack-secrets
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5001
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5001
+          initialDelaySeconds: 10
+          periodSeconds: 10

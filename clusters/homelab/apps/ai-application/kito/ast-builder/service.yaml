@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kito-ast-builder
+  namespace: kito
+spec:
+  type: ClusterIP
+  selector:
+    app: kito-ast-builder
+  ports:
+  - name: http
+    port: 5001
+    targetPort: http
