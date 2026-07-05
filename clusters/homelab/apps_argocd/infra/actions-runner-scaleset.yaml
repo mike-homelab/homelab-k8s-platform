@@ -37,9 +37,14 @@ spec:
               - name: dind
                 image: docker:dind
                 command:
-                  - dockerd
-                  - --host=unix:///run/docker/docker.sock
-                  - --host=tcp://0.0.0.0:2375
+                  - /bin/sh
+                  - -c
+                  - |
+                    dockerd --host=unix:///run/docker/docker.sock --host=tcp://0.0.0.0:2375 &
+                    until [ -S /run/docker/docker.sock ]; do sleep 0.5; done
+                    chmod 666 /run/docker/docker.sock
+                    wait
+
                 securityContext:
                   privileged: true
                 env:
