@@ -36,6 +36,10 @@ spec:
                     mountPath: /run/docker
               - name: dind
                 image: docker:dind
+                command:
+                  - dockerd
+                  - --host=unix:///run/docker/docker.sock
+                  - --host=tcp://0.0.0.0:2375
                 securityContext:
                   privileged: true
                 env:
@@ -46,6 +50,7 @@ spec:
                     mountPath: /home/runner/_work
                   - name: docker-socket
                     mountPath: /run/docker
+
             volumes:
               - name: work
                 emptyDir: {}
