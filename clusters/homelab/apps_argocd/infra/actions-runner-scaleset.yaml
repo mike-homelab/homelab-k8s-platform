@@ -20,6 +20,38 @@ spec:
         controllerServiceAccount:
           namespace: "arc-systems"
           name: "arc-gha-rs-controller"
+        template:
+          spec:
+            containers:
+              - name: runner
+                image: ghcr.io/actions/actions-runner:latest
+                command: ["/home/runner/run.sh"]
+                env:
+                  - name: DOCKER_HOST
+                    value: unix:///run/docker/docker.sock
+                volumeMounts:
+                  - name: work
+                    mountPath: /home/runner/_work
+                  - name: docker-socket
+                    mountPath: /run/docker
+              - name: dind
+                image: docker:dind
+                securityContext:
+                  privileged: true
+                env:
+                  - name: DOCKER_TLS_CERTDIR
+                    value: ""
+                volumeMounts:
+                  - name: work
+                    mountPath: /home/runner/_work
+                  - name: docker-socket
+                    mountPath: /run/docker
+            volumes:
+              - name: work
+                emptyDir: {}
+              - name: docker-socket
+                emptyDir: {}
+
 
   destination:
     server: https://kubernetes.default.svc
