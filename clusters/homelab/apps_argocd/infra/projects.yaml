@@ -18,6 +18,7 @@ spec:
   - https://github.com/kubernetes-sigs/gateway-api
   - https://github.com/kubernetes-sigs/gateway-api.git
   - https://github.com/kubernetes-sigs/*
+  - https://charts.external-secrets.io
 
   destinations:
   - namespace: '*'
