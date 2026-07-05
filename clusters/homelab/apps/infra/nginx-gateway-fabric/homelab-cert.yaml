@@ -6,7 +6,7 @@ metadata:
 spec:
   secretName: homelab-wildcard-tls
   issuerRef:
-    name: vault-issuer
+    name: letsencrypt-production
     kind: ClusterIssuer
   commonName: michaelhomelab.work
   dnsNames:
