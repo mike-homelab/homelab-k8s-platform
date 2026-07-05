@@ -19,6 +19,7 @@ spec:
   - https://github.com/kubernetes-sigs/gateway-api.git
   - https://github.com/kubernetes-sigs/*
   - https://charts.external-secrets.io
+  - https://ghcr.io/actions/actions-runner-controller-charts
 
   destinations:
   - namespace: '*'
