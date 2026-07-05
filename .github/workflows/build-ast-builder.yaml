@@ -12,7 +12,7 @@ on:
 jobs:
   build:
     name: Build & Push Kito AST Builder
-    runs-on: [self-hosted]
+    runs-on: arc-runner-set
     timeout-minutes: 30
 
     steps:

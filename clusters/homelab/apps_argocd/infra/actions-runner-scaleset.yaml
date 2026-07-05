@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: actions-runner-scaleset
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+spec:
+  project: infrastructure
+  source:
+    chart: gha-runner-scale-set
+    repoURL: ghcr.io/actions/actions-runner-controller-charts
+    targetRevision: "0.14.2"
+    helm:
+      releaseName: arc-runner-set
+      values: |
+        githubConfigUrl: "https://github.com/mike-homelab/homelab-k8s-platform"
+        githubConfigSecret: arc-github-secret
+        runnerScaleSetName: "arc-runner-set"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: arc-runners
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
