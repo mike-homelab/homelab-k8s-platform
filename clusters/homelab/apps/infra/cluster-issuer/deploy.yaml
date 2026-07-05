@@ -12,7 +12,8 @@ spec:
     solvers:
     - dns01:
         rfc2136:
-          nameserver: cthomelabdns
+          nameserver: 10.0.0.2
+
           tsigKeyName: cert-manager-key
           tsigAlgorithm: HMACSHA256
           tsigSecretSecretRef:
