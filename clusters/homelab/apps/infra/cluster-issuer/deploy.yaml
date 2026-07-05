@@ -11,11 +11,7 @@ spec:
       name: letsencrypt-production-account-key
     solvers:
     - dns01:
-        rfc2136:
-          nameserver: 10.0.0.2
-
-          tsigKeyName: cert-manager-key
-          tsigAlgorithm: HMACSHA256
-          tsigSecretSecretRef:
-            name: technitium-tsig
-            key: tsig-secret-key
+        cloudflare:
+          apiTokenSecretRef:
+            name: cloudflare-api-token
+            key: api-token

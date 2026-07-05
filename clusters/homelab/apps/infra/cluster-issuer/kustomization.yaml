@@ -1,3 +1,4 @@
 resources:
   - tsig-secret.yaml
+  - cloudflare-token-secret.yaml
   - deploy.yaml
