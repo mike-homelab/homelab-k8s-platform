@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
   - storage-init
+  - postgres
   - bot-service
   - pdf-splitter
   - ast-builder
