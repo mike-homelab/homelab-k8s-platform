@@ -19,12 +19,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Wait for Docker daemon
+        run: |
+          echo "Waiting for Docker daemon to start..."
+          for i in {1..30}; do
+            if docker info >/dev/null 2>&1; then
+              echo "Docker daemon is ready!"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Docker daemon failed to start"
+          exit 1
+
       - name: Log in to Harbor Docker registry
         run: |
           echo "${{ secrets.HARBOR_PASSWORD }}" | \
             docker login harbor.michaelhomelab.work \
               --username "${{ secrets.HARBOR_USERNAME }}" \
               --password-stdin
+
 
       - name: Build Docker image
         run: |
