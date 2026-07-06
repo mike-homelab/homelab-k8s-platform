@@ -1,0 +1,15 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: langfuse-route
+  namespace: ai-platform
+spec:
+  parentRefs:
+    - name: nginx-gateway
+      namespace: nginx-gateway
+  hostnames:
+    - langfuse.michaelhomelab.work
+  rules:
+    - backendRefs:
+        - name: langfuse
+          port: 3000

@@ -31,6 +31,12 @@ spec:
               value: "sk-michael-homelab-llm-proxy"
             - name: LITELLM_LOG
               value: "DEBUG"
+            - name: LANGFUSE_HOST
+              value: "http://langfuse.ai-platform.svc:3000"
+            - name: LANGFUSE_PUBLIC_KEY
+              value: "pk-lf-placeholder"
+            - name: LANGFUSE_SECRET_KEY
+              value: "sk-lf-placeholder"
           volumeMounts:
             - name: config-volume
               mountPath: /app/config.yaml

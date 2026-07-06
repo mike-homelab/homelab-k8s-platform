@@ -6,3 +6,4 @@ metadata:
 data:
   MINIO_ENDPOINT: "http://minio.monitoring.svc:9000"
   AZURE_SEARCH_ENDPOINT: "https://srch-tiko-prod.search.windows.net"
+  LANGFUSE_HOST: "http://langfuse.ai-platform.svc:3000"
