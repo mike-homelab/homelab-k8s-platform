@@ -16,7 +16,7 @@ spec:
       containers:
       - name: artifact-generator
         image: harbor.michaelhomelab.work/kito/artifact-generator:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5002
           name: http

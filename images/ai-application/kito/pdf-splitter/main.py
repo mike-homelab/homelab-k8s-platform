@@ -1,4 +1,5 @@
 import os
+import tempfile
 import logging
 from fastapi import FastAPI, Response
 import fitz  # PyMuPDF
@@ -13,15 +14,18 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio.monitoring.svc:9000").replac
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
+def get_minio_client():
+    return Minio(
+        MINIO_ENDPOINT,
+        access_key=MINIO_ACCESS_KEY,
+        secret_key=MINIO_SECRET_KEY,
+        secure=False
+    )
+
 @app.get("/healthz")
 async def healthz():
     try:
-        minio_client = Minio(
-            MINIO_ENDPOINT,
-            access_key=MINIO_ACCESS_KEY,
-            secret_key=MINIO_SECRET_KEY,
-            secure=False
-        )
+        minio_client = get_minio_client()
         if not minio_client.bucket_exists("kito-processed-documents"):
             minio_client.make_bucket("kito-processed-documents")
     except Exception as e:
@@ -32,8 +36,35 @@ async def healthz():
 @app.post("/split")
 async def split_pdf(bucket_name: str, object_name: str):
     logger.info(f"Splitting PDF from bucket {bucket_name}, object {object_name}")
-    # PDF splitting logic goes here
-    return {"status": "success", "pages": 0}
+    
+    minio_client = get_minio_client()
+    
+    # Ensure processed bucket exists
+    if not minio_client.bucket_exists("kito-processed-documents"):
+        minio_client.make_bucket("kito-processed-documents")
+        
+    pages = []
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pdf_path = os.path.join(tmpdir, "input.pdf")
+        
+        # Download PDF from MinIO
+        minio_client.fget_object(bucket_name, object_name, pdf_path)
+        
+        # Open PDF and split
+        doc = fitz.open(pdf_path)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap()
+            page_filename = f"{os.path.splitext(object_name)[0]}_page_{i}.png"
+            page_path = os.path.join(tmpdir, page_filename)
+            pix.save(page_path)
+            
+            # Upload to MinIO processed bucket
+            minio_client.fput_object("kito-processed-documents", page_filename, page_path)
+            pages.append(page_filename)
+            logger.info(f"Uploaded page {i} as {page_filename}")
+            
+    return {"status": "success", "pages": pages, "count": len(pages)}
 
 if __name__ == "__main__":
     import uvicorn

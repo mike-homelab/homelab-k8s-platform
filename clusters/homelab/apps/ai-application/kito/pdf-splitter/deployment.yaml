@@ -16,7 +16,7 @@ spec:
       containers:
       - name: pdf-splitter
         image: harbor.michaelhomelab.work/kito/pdf-splitter:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5000
           name: http

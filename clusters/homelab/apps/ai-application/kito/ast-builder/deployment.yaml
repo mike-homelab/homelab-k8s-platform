@@ -16,7 +16,7 @@ spec:
       containers:
       - name: ast-builder
         image: harbor.michaelhomelab.work/kito/ast-builder:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         ports:
         - containerPort: 5001
           name: http
