@@ -122,6 +122,30 @@ def post_message_to_slack(channel_id: str, text: str):
     }
     requests.post(url, headers=headers, json=payload, timeout=10)
 
+def process_simple_message(channel_id: str, text: str):
+    try:
+        headers = {
+            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "analyst",
+            "messages": [
+                {"role": "system", "content": "You are Kito, a helpful and friendly AI assistant. You process text and answer questions."},
+                {"role": "user", "content": text}
+            ],
+            "max_tokens": 150
+        }
+        response = requests.post(f"{LITELLM_ENDPOINT}/chat/completions", json=payload, headers=headers, timeout=15)
+        if response.status_code == 200:
+            reply = response.json()["choices"][0]["message"]["content"].strip()
+            post_message_to_slack(channel_id, reply)
+        else:
+            logger.error(f"LLM simple message failed: {response.status_code} {response.text}")
+            post_message_to_slack(channel_id, "I'm having trouble thinking right now.")
+    except Exception as e:
+        logger.error(f"Simple message error: {e}")
+
 def process_pipeline(download_url: str, original_filename: str, channel_id: str, format_type: str):
     try:
         minio_client = get_minio_client()
@@ -224,6 +248,9 @@ async def slack_events(request: Request, background_tasks: BackgroundTasks):
             
             # Process in background
             background_tasks.add_task(process_pipeline, download_url, original_filename, channel_id, format_type)
+            
+        elif user_message.strip():
+            background_tasks.add_task(process_simple_message, channel_id, user_message)
             
     elif event_type == "file_shared":
         file_id = event.get("file_id")
