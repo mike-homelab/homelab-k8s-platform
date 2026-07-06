@@ -220,6 +220,25 @@ async def slack_events(request: Request):
             # Process in background (simplified here for execution sync)
             process_pipeline(download_url, original_filename, channel_id, format_type)
             
+    elif event_type == "file_shared":
+        file_id = event.get("file_id")
+        channel_id = event.get("channel_id")
+        
+        headers = {"Authorization": f"Bearer {SLACK_BOT_TOKEN}"}
+        info_resp = requests.get(f"https://slack.com/api/files.info?file={file_id}", headers=headers, timeout=15)
+        logger.info(f"files.info response: {info_resp.text}")
+        
+        if info_resp.status_code == 200 and info_resp.json().get("ok"):
+            file_data = info_resp.json().get("file", {})
+            # Only process if it is a PDF
+            if file_data.get("filetype") == "pdf":
+                download_url = file_data.get("url_private_download")
+                original_filename = file_data.get("name", "document.pdf")
+                format_type = "pdf" # Default to pdf for simple uploads
+                
+                post_message_to_slack(channel_id, f"Received file '{original_filename}'. Processing pipeline started...")
+                process_pipeline(download_url, original_filename, channel_id, format_type)
+            
     return {"status": "event_processed"}
 
 if __name__ == "__main__":
