@@ -5,3 +5,6 @@ psycopg2-binary
 minio
 python-multipart
 requests
+pymupdf
+python-docx
+reportlab

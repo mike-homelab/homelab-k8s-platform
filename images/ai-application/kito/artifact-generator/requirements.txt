@@ -1,8 +1,0 @@
-fastapi
-uvicorn
-python-docx
-python-pptx
-reportlab
-pydantic
-requests
-minio

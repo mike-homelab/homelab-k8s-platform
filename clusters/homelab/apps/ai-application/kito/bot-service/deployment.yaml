@@ -30,20 +30,22 @@ spec:
           value: "3000"
         - name: DATABASE_URL
           value: "postgresql://postgres:postgres@postgres.kito.svc:5432/kito"
+        - name: BUILDER_VL_ENDPOINT
+          value: "http://builder.ai-platform.svc:11434/v1"
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
             cpu: 500m
-            memory: 256Mi
+            memory: 512Mi
+          limits:
+            cpu: 2
+            memory: 1Gi
         livenessProbe:
           httpGet:
             path: /healthz
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 20
-          timeoutSeconds: 5
+          timeoutSeconds: 10
           failureThreshold: 5
         readinessProbe:
           httpGet:
@@ -51,5 +53,5 @@ spec:
             port: 3000
           initialDelaySeconds: 20
           periodSeconds: 20
-          timeoutSeconds: 5
+          timeoutSeconds: 10
           failureThreshold: 5
