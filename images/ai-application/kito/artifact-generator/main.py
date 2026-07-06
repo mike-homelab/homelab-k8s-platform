@@ -37,8 +37,16 @@ async def healthz():
         return Response(status_code=500, content="MinIO degraded")
     return {"status": "healthy"}
 
+from pydantic import BaseModel
+
+class GenerateRequest(BaseModel):
+    ast_data: dict
+    format: str
+
 @app.post("/generate")
-async def generate_artifact(ast_data: dict, format: str):
+async def generate_artifact(request: GenerateRequest):
+    ast_data = request.ast_data
+    format = request.format
     logger.info(f"Generating artifact in format: {format}")
     
     minio_client = get_minio_client()
