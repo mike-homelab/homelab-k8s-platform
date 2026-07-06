@@ -7,3 +7,5 @@ data:
   MINIO_ENDPOINT: "http://minio.monitoring.svc:9000"
   AZURE_SEARCH_ENDPOINT: "https://srch-tiko-prod.search.windows.net"
   LANGFUSE_HOST: "http://langfuse.ai-platform.svc:3000"
+  LANGFUSE_PUBLIC_KEY: "pk-lf-c696e432-5183-47fb-81d4-cb34ce3a03cc"
+  LANGFUSE_SECRET_KEY: "sk-lf-62703832-cb7d-4333-9e30-6c55a7b9dbee"

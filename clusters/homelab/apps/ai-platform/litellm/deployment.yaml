@@ -34,9 +34,9 @@ spec:
             - name: LANGFUSE_HOST
               value: "http://langfuse.ai-platform.svc:3000"
             - name: LANGFUSE_PUBLIC_KEY
-              value: "pk-lf-placeholder"
+              value: "pk-lf-c696e432-5183-47fb-81d4-cb34ce3a03cc"
             - name: LANGFUSE_SECRET_KEY
-              value: "sk-lf-placeholder"
+              value: "sk-lf-62703832-cb7d-4333-9e30-6c55a7b9dbee"
           volumeMounts:
             - name: config-volume
               mountPath: /app/config.yaml
