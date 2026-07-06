@@ -25,6 +25,9 @@ spec:
             name: kito-config
         - secretRef:
             name: kito-slack-secrets
+        env:
+        - name: QWEN_VL_ENDPOINT
+          value: "http://builder.ai-platform.svc:11434/v1"
         resources:
           requests:
             cpu: 200m
