@@ -14,6 +14,12 @@ MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio.monitoring.svc:9000").replac
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
+from pydantic import BaseModel
+
+class SplitRequest(BaseModel):
+    bucket_name: str
+    object_name: str
+
 def get_minio_client():
     return Minio(
         MINIO_ENDPOINT,
@@ -34,7 +40,9 @@ async def healthz():
     return {"status": "healthy"}
 
 @app.post("/split")
-async def split_pdf(bucket_name: str, object_name: str):
+async def split_pdf(req: SplitRequest):
+    bucket_name = req.bucket_name
+    object_name = req.object_name
     logger.info(f"Splitting PDF from bucket {bucket_name}, object {object_name}")
     
     minio_client = get_minio_client()
