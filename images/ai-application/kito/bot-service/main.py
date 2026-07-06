@@ -4,7 +4,7 @@ import logging
 import requests
 import uuid
 import psycopg2
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, BackgroundTasks
 from minio import Minio
 
 logging.basicConfig(level=logging.INFO)
@@ -102,8 +102,13 @@ def upload_file_to_slack(file_path: str, channel_id: str, filename: str, comment
             "channels": channel_id,
             "initial_comment": comment
         }
-        response = requests.post(url, headers=headers, data=payload, files=files, timeout=120)
-        logger.info(f"Slack upload response: {response.text}")
+        try:
+            response = requests.post(url, headers=headers, data=payload, files=files, timeout=120)
+            response.raise_for_status()
+            logger.info(f"Slack upload succeeded: {response.status_code}, response: {response.text}")
+        except Exception as e:
+            logger.error(f"Slack upload failed: {e}")
+            raise
 
 def post_message_to_slack(channel_id: str, text: str):
     url = "https://slack.com/api/chat.postMessage"
@@ -187,7 +192,7 @@ def process_pipeline(download_url: str, original_filename: str, channel_id: str,
         post_message_to_slack(channel_id, f"Sorry, processing failed: {str(e)}")
 
 @app.post("/slack/events")
-async def slack_events(request: Request):
+async def slack_events(request: Request, background_tasks: BackgroundTasks):
     body = await request.json()
     logger.info(f"Received event: {body}")
     
@@ -217,8 +222,8 @@ async def slack_events(request: Request):
             format_type = classify_format_request(user_message)
             post_message_to_slack(channel_id, f"Formatting output as: {format_type.upper()}. Processing pipeline started...")
             
-            # Process in background (simplified here for execution sync)
-            process_pipeline(download_url, original_filename, channel_id, format_type)
+            # Process in background
+            background_tasks.add_task(process_pipeline, download_url, original_filename, channel_id, format_type)
             
     elif event_type == "file_shared":
         file_id = event.get("file_id")
@@ -237,7 +242,7 @@ async def slack_events(request: Request):
                 format_type = "pdf" # Default to pdf for simple uploads
                 
                 post_message_to_slack(channel_id, f"Received file '{original_filename}'. Processing pipeline started...")
-                process_pipeline(download_url, original_filename, channel_id, format_type)
+                background_tasks.add_task(process_pipeline, download_url, original_filename, channel_id, format_type)
             
     return {"status": "event_processed"}
 
