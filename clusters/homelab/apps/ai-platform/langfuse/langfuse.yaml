@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: langfuse
-          image: langfuse/langfuse:2
+          image: langfuse/langfuse:3
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000
@@ -31,6 +31,18 @@ spec:
             - name: ENCRYPTION_KEY
               value: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             - name: TELEMETRY_ENABLED
+              value: "false"
+            - name: CLICKHOUSE_URL
+              value: "http://clickhouse:8123"
+            - name: CLICKHOUSE_MIGRATION_URL
+              value: "clickhouse://default:clickhouse-password-123@clickhouse:9000/default"
+            - name: CLICKHOUSE_USER
+              value: "default"
+            - name: CLICKHOUSE_PASSWORD
+              value: "clickhouse-password-123"
+            - name: CLICKHOUSE_DB
+              value: "default"
+            - name: CLICKHOUSE_CLUSTER_ENABLED
               value: "false"
           resources:
             requests:

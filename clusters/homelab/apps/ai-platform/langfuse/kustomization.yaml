@@ -3,5 +3,6 @@ kind: Kustomization
 
 resources:
   - postgres.yaml
+  - clickhouse.yaml
   - langfuse.yaml
   - http-route.yaml
