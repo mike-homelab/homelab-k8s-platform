@@ -53,9 +53,9 @@ spec:
             - name: LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT
               value: "http://minio.monitoring.svc:9000"
             - name: LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID
-              value: "minioadmin"
+              value: "17uuYRVLzEsc3HMa9lQ5"
             - name: LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY
-              value: "minioadmin"
+              value: "gmYROYuVNQCAzx3EpkXk4W8EP2Nc9FKDJhRzJX1U"
             - name: LANGFUSE_S3_EVENT_UPLOAD_REGION
               value: "us-east-1"
             - name: LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE
