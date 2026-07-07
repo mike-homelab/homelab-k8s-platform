@@ -5,6 +5,9 @@ WORKDIR /app
 # Install system libraries needed by PyMuPDF / fitz
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

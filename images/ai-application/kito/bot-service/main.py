@@ -1,5 +1,6 @@
 import os
 import re
+import io
 import json
 import tempfile
 import logging
@@ -12,6 +13,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2
 import fitz  # PyMuPDF
 import pypandoc
+import pytesseract
+from PIL import Image
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
 from minio import Minio
@@ -562,203 +565,445 @@ def split_pdf(pdf_path: str, doc_id: str) -> dict:
             if page_images:
                 extracted_images[i] = page_images
 
-            logger.info(f"Split page {i}: {page_filename} ({len(page_images)} images extracted)")
-
     return {"pages": pages, "images": extracted_images}
 
 
-def build_page_ast(image_path: str) -> dict:
-    """Call VLM to extract structured markdown from a page image.
-    This is the ONLY external HTTP call in the pipeline (to Ollama VLM).
-    Formerly: ast-builder microservice.
-    Includes retry with backoff for resilience.
+def _call_vlm_on_crop(pil_crop: Image.Image, prompt: str) -> str:
+    """Send a cropped image region to the VLM for a focused task (table or figure).
+    Returns clean text, stripping any thinking tags.
+    """
+    buf = io.BytesIO()
+    pil_crop.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    headers = {
+        "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "builder",
+        "messages": [{"role": "user", "content": [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}}
+        ]}],
+        "max_tokens": 2048
+    }
+
+    for attempt in range(3):
+        try:
+            resp = requests.post(
+                f"{BUILDER_VL_ENDPOINT}/chat/completions",
+                json=payload, headers=headers, timeout=120
+            )
+            if resp.status_code == 200:
+                msg = resp.json()["choices"][0]["message"]
+                content = msg.get("content", "").strip()
+                reasoning = msg.get("reasoning", "").strip()
+                result = content if content else reasoning
+                result = re.sub(r'<think>.*?</think>', '', result, flags=re.DOTALL).strip()
+                return result
+            logger.error(f"VLM crop call failed: {resp.status_code}")
+        except Exception as e:
+            logger.error(f"VLM crop error (attempt {attempt+1}): {e}")
+        if attempt < 2:
+            time.sleep(2 ** (attempt + 1))
+
+    return ""
+
+
+def _extract_digital_page(fitz_page) -> str:
+    """Extract text from a digital (non-scanned) PDF page using PyMuPDF.
+    Returns structured markdown preserving headings, paragraphs, and lists.
+    """
+    blocks = fitz_page.get_text("dict")["blocks"]
+    # Sort blocks top-to-bottom
+    blocks = sorted(blocks, key=lambda b: b.get("bbox", [0, 0, 0, 0])[1])
+
+    lines_md = []
+    for block in blocks:
+        if block.get("type") != 0:  # 0 = text block
+            continue
+        for line in block.get("lines", []):
+            spans = line.get("spans", [])
+            if not spans:
+                continue
+
+            line_text = "".join(s.get("text", "") for s in spans).strip()
+            if not line_text:
+                continue
+
+            # Determine heading level by font size
+            max_size = max(s.get("size", 11) for s in spans)
+            is_bold = any(s.get("flags", 0) & 2**4 for s in spans)  # bold flag
+
+            if max_size >= 20 or (max_size >= 16 and is_bold):
+                lines_md.append(f"# {line_text}")
+            elif max_size >= 15 or (max_size >= 13 and is_bold):
+                lines_md.append(f"## {line_text}")
+            elif max_size >= 13 or (max_size >= 11 and is_bold):
+                lines_md.append(f"### {line_text}")
+            else:
+                lines_md.append(line_text)
+
+    return "\n\n".join(lines_md)
+
+
+def _detect_regions(tsv_data: list, img_width: int, img_height: int) -> dict:
+    """Analyse Tesseract TSV output to find table and figure candidate regions.
+
+    Returns:
+        {
+            "tables": [(x0, y0, x1, y1), ...],
+            "figures": [(x0, y0, x1, y1), ...]
+        }
+    """
+    # Filter valid word-level rows
+    words = [r for r in tsv_data if r["level"] == 5 and r["conf"] > 0 and r["text"].strip()]
+    if not words:
+        return {"tables": [], "figures": []}
+
+    # --- Table detection ---
+    # Group words by (block_num, par_num, line_num) and check for column alignment
+    from collections import defaultdict
+    line_groups = defaultdict(list)
+    for w in words:
+        key = (w["block_num"], w["par_num"], w["line_num"])
+        line_groups[key].append(w)
+
+    # A block is a table candidate if:
+    # - ≥4 lines that share similar x-starting positions (column alignment)
+    block_lines = defaultdict(list)
+    for key, wlist in line_groups.items():
+        block_lines[key[0]].append(wlist)
+
+    table_regions = []
+    for block_num, lines in block_lines.items():
+        if len(lines) < 3:
+            continue
+        # Check if x-coordinates of first word per line are clustered (column-like)
+        x_starts = [line[0]["left"] for line in lines]
+        x_span = max(x_starts) - min(x_starts)
+        # If multiple rows have words starting at consistent x positions, it's a table
+        # Use a simple heuristic: avg line word count >= 2 and span is small
+        avg_words = sum(len(l) for l in lines) / len(lines)
+        if avg_words >= 2 and x_span < img_width * 0.6:
+            xs = [w["left"] for line in lines for w in line]
+            ys = [w["top"] for line in lines for w in line]
+            ws = [w["width"] for line in lines for w in line]
+            hs = [w["height"] for line in lines for w in line]
+            x0 = max(0, min(xs) - 10)
+            y0 = max(0, min(ys) - 10)
+            x1 = min(img_width, max(x + w for x, w in zip(xs, ws)) + 10)
+            y1 = min(img_height, max(y + h for y, h in zip(ys, hs)) + 10)
+            region_area = (x1 - x0) * (y1 - y0)
+            if region_area > 5000:
+                table_regions.append((x0, y0, x1, y1))
+
+    # --- Figure detection ---
+    # Tile the page into a grid; tiles with near-zero OCR word density = figure candidate
+    figure_regions = []
+    tile_h = img_height // 6
+    tile_w = img_width
+
+    for row in range(6):
+        tile_y0 = row * tile_h
+        tile_y1 = min(img_height, (row + 1) * tile_h)
+        tile_area = tile_w * (tile_y1 - tile_y0)
+
+        # Words in this tile
+        tile_words = [w for w in words if tile_y0 <= w["top"] < tile_y1]
+        word_area = sum(w["width"] * w["height"] for w in tile_words)
+        density = word_area / tile_area if tile_area > 0 else 1.0
+
+        # Low text density + large tile = likely figure
+        if density < 0.03 and tile_area > img_width * img_height * 0.08:
+            # Expand vertically to merge adjacent empty tiles
+            if figure_regions and figure_regions[-1][3] == tile_y0:
+                # Extend previous region
+                prev = figure_regions[-1]
+                figure_regions[-1] = (prev[0], prev[1], prev[2], tile_y1)
+            else:
+                figure_regions.append((0, tile_y0, img_width, tile_y1))
+
+    # Remove figure regions that overlap significantly with table regions
+    filtered_figures = []
+    for freg in figure_regions:
+        fx0, fy0, fx1, fy1 = freg
+        overlaps = False
+        for treg in table_regions:
+            tx0, ty0, tx1, ty1 = treg
+            inter_y = min(fy1, ty1) - max(fy0, ty0)
+            if inter_y > (fy1 - fy0) * 0.3:
+                overlaps = True
+                break
+        if not overlaps:
+            filtered_figures.append(freg)
+
+    return {"tables": table_regions, "figures": filtered_figures}
+
+
+def _extract_text_markdown(tsv_data: list, table_regions: list) -> list:
+    """Convert Tesseract TSV word data into structured markdown elements with y-positions.
+
+    Returns list of (y_position, markdown_string) tuples, sorted top-to-bottom.
+    Skips words that fall inside detected table regions.
+    """
+    from collections import defaultdict
+
+    def in_table(x, y):
+        for (tx0, ty0, tx1, ty1) in table_regions:
+            if tx0 <= x <= tx1 and ty0 <= y <= ty1:
+                return True
+        return False
+
+    # Group words into lines, skipping table regions
+    line_groups = defaultdict(list)
+    for row in tsv_data:
+        if row["level"] != 5 or row["conf"] <= 0 or not row["text"].strip():
+            continue
+        if in_table(row["left"], row["top"]):
+            continue
+        key = (row["block_num"], row["par_num"], row["line_num"])
+        line_groups[key].append(row)
+
+    elements = []
+    for key in sorted(line_groups.keys()):
+        words = sorted(line_groups[key], key=lambda w: w["left"])
+        line_text = " ".join(w["text"] for w in words).strip()
+        if not line_text:
+            continue
+        y_pos = words[0]["top"]
+        avg_h = sum(w["height"] for w in words) / len(words)
+
+        # Heuristic heading detection from character height
+        if avg_h >= 28:
+            md = f"# {line_text}"
+        elif avg_h >= 22:
+            md = f"## {line_text}"
+        elif avg_h >= 18:
+            md = f"### {line_text}"
+        else:
+            md = line_text
+
+        elements.append((y_pos, md))
+
+    return elements
+
+
+def build_page_ast(image_path: str, fitz_page=None) -> dict:
+    """Hybrid OCR pipeline for a single page.
+
+    Strategy:
+    - If fitz_page has native text (digital PDF) → use PyMuPDF fast extraction
+    - Otherwise (scanned PDF) → Tesseract for text, VLM for table/figure crops
+
+    All figures are saved as cropped PNGs and embedded in-place.
     """
     minio_client = get_minio_client()
+    page_name = os.path.basename(image_path).replace(".png", "")
 
     with tempfile.TemporaryDirectory() as tmpdir:
         local_image_path = os.path.join(tmpdir, "page.png")
-
-        # Download page image from MinIO
         minio_client.fget_object("kito-processed-documents", image_path, local_image_path)
 
-        # Base64 encode the image
-        with open(local_image_path, "rb") as image_file:
-            base64_image = base64.b64encode(image_file.read()).decode("utf-8")
+        # ── AUTO-DETECT: Digital PDF page? ──────────────────────────────────
+        if fitz_page is not None:
+            native_text = fitz_page.get_text().strip()
+            if len(native_text) > 50:
+                logger.info(f"Digital page detected for {image_path} ({len(native_text)} chars)")
+                content = _extract_digital_page(fitz_page)
+                return {"page": image_path, "content": content, "figures": []}
 
-        # Call VLM with retry
-        headers = {
-            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
-            "Content-Type": "application/json"
+        # ── SCANNED page: Tesseract + VLM on crops ───────────────────────────
+        logger.info(f"Scanned page — running Tesseract OCR for {image_path}")
+        pil_img = Image.open(local_image_path)
+        img_w, img_h = pil_img.size
+
+        # Run Tesseract in TSV mode (word-level bounding boxes + confidence)
+        tsv_raw = pytesseract.image_to_data(pil_img, lang="eng", output_type=pytesseract.Output.DICT)
+
+        # Convert TSV dict to list of row dicts for easier processing
+        n = len(tsv_raw["level"])
+        tsv_rows = []
+        for i in range(n):
+            tsv_rows.append({
+                "level":    tsv_raw["level"][i],
+                "block_num": tsv_raw["block_num"][i],
+                "par_num":  tsv_raw["par_num"][i],
+                "line_num": tsv_raw["line_num"][i],
+                "word_num": tsv_raw["word_num"][i],
+                "left":     tsv_raw["left"][i],
+                "top":      tsv_raw["top"][i],
+                "width":    tsv_raw["width"][i],
+                "height":   tsv_raw["height"][i],
+                "conf":     int(tsv_raw["conf"][i]) if tsv_raw["conf"][i] != "-1" else -1,
+                "text":     tsv_raw["text"][i] or "",
+            })
+
+        # Detect table and figure candidate regions
+        regions = _detect_regions(tsv_rows, img_w, img_h)
+        table_regions = regions["tables"]
+        figure_regions = regions["figures"]
+        logger.info(f"{image_path}: {len(table_regions)} table candidates, {len(figure_regions)} figure candidates")
+
+        # ── Assemble structured elements (y_pos, markdown) ───────────────────
+        elements = _extract_text_markdown(tsv_rows, table_regions)
+
+        # ── Process TABLE candidates via VLM ─────────────────────────────────
+        for idx, (tx0, ty0, tx1, ty1) in enumerate(table_regions):
+            crop = pil_img.crop((tx0, ty0, tx1, ty1))
+            prompt = (
+                "This is a cropped region from a document page. "
+                "Extract the table as a markdown table using | col | syntax. "
+                "Output ONLY the markdown table rows, no explanation, no commentary."
+            )
+            table_md = _call_vlm_on_crop(crop, prompt)
+            # Strip any thinking that leaked in
+            table_md = re.sub(r'<think>.*?</think>', '', table_md, flags=re.DOTALL).strip()
+            # Only keep lines that look like markdown table rows
+            table_lines = [l for l in table_md.splitlines() if l.strip().startswith("|")]
+            if table_lines:
+                md = "\n".join(table_lines)
+                # Add separator row if missing
+                if len(table_lines) >= 2 and not re.match(r'\|[-| ]+\|', table_lines[1]):
+                    cols = table_lines[0].count("|") - 1
+                    sep = "|" + "|".join(["---"] * cols) + "|"
+                    table_lines.insert(1, sep)
+                    md = "\n".join(table_lines)
+                elements.append((ty0, md))
+                logger.info(f"Table extracted at y={ty0} with {len(table_lines)} rows")
+            else:
+                logger.warning(f"VLM returned no table rows for crop at ({tx0},{ty0})")
+
+        # ── Process FIGURE candidates via VLM ────────────────────────────────
+        saved_figures = []
+        for idx, (fx0, fy0, fx1, fy1) in enumerate(figure_regions):
+            crop = pil_img.crop((fx0, fy0, fx1, fy1))
+            crop_w, crop_h = crop.size
+
+            # Skip tiny crops
+            if crop_w < 80 or crop_h < 80:
+                continue
+
+            confirm_prompt = (
+                "This is a cropped region from a document page. "
+                "Reply with YES if this contains a figure, diagram, chart, graph, or photograph. "
+                "Reply with NO if this is blank space, a page header, footer, or just text. "
+                "Then on a new line, if YES, write a short caption describing the figure."
+            )
+            vlm_answer = _call_vlm_on_crop(crop, confirm_prompt)
+            vlm_answer = re.sub(r'<think>.*?</think>', '', vlm_answer, flags=re.DOTALL).strip()
+
+            if not vlm_answer.upper().startswith("YES"):
+                logger.info(f"Figure crop at ({fx0},{fy0}) rejected by VLM")
+                continue
+
+            # Parse caption from second line if present
+            lines = vlm_answer.strip().splitlines()
+            caption = lines[1].strip() if len(lines) > 1 else "Figure"
+            caption = caption.lstrip("-•: ").strip() or "Figure"
+
+            # Save the cropped figure PNG to MinIO
+            fig_filename = f"{page_name}_fig{idx}.png"
+            fig_local = os.path.join(tmpdir, fig_filename)
+            crop.save(fig_local, format="PNG")
+            minio_client.fput_object("kito-processed-documents", fig_filename, fig_local)
+
+            # Add figure reference to elements at correct y-position
+            elements.append((fy0, f"__FIGURE__{fig_filename}__CAPTION__{caption}"))
+            saved_figures.append(fig_filename)
+            logger.info(f"Figure saved: {fig_filename} — '{caption}'")
+
+        # ── Sort all elements by y-position (preserves reading order) ─────────
+        elements.sort(key=lambda e: e[0])
+        content_parts = [md for _, md in elements]
+        content = "\n\n".join(content_parts)
+
+        logger.info(f"Page {image_path}: {len(content)} chars, {len(saved_figures)} figures")
+        return {
+            "page": image_path,
+            "content": content,
+            "figures": saved_figures
         }
-
-        payload = {
-            "model": "builder",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Extract all content from this document page as clean, well-structured markdown.\n\nFormatting rules:\n- Use # for main headings, ## for subheadings, ### for sub-subheadings\n- Use **bold** for emphasized or important text\n- Use *italic* for titles, terms, or light emphasis\n- Format tables using proper markdown table syntax with | column | separators | and header row separator |---|---|\n- Use - for bullet lists and 1. 2. 3. for numbered lists\n- For any figure, diagram, chart, graph, or image on the page, output: ![Figure: detailed description of what the figure shows](figure)\n- Preserve the original document structure and reading order exactly\n- Do NOT add any commentary or explanation, only extract the content"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 8192
-        }
-
-        # Retry with exponential backoff
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(
-                    f"{BUILDER_VL_ENDPOINT}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                    timeout=300
-                )
-
-                if response.status_code == 200:
-                    result = response.json()
-                    message = result["choices"][0]["message"]
-
-                    # Qwen3-VL separates thinking into 'reasoning' and answer into 'content'.
-                    # For OCR tasks, the extracted text may end up in either field.
-                    content = message.get("content", "").strip()
-                    reasoning = message.get("reasoning", "").strip()
-
-                    # If content is empty, use reasoning (common with Qwen3-VL)
-                    if not content and reasoning:
-                        content = reasoning
-
-                    # Strip any <think> tags
-                    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-
-                    logger.info(f"VLM returned {len(content)} chars for {image_path}")
-                    return {
-                        "page": image_path,
-                        "content": content
-                    }
-                else:
-                    logger.error(f"VLM call failed (attempt {attempt + 1}): {response.status_code} {response.text}")
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"VLM request error (attempt {attempt + 1}): {e}")
-
-            if attempt < max_retries - 1:
-                wait_time = 2 ** (attempt + 1)
-                logger.info(f"Retrying VLM call in {wait_time}s...")
-                time.sleep(wait_time)
-
-        raise Exception(f"VLM call failed after {max_retries} attempts for {image_path}")
-
-
-def replace_figure_markers(content: str, page_images: list, image_dir: str) -> str:
-    """Replace VLM figure markers with actual image paths.
-    
-    VLM outputs:  ![Figure: description](figure)
-    We replace with: ![Figure: description](/tmp/actual_image.png)
-    
-    Images are matched to markers in order of appearance.
-    """
-    if not page_images:
-        return content
-
-    # Find all figure markers: ![Figure: ...](figure) or ![Figure: ...](...)
-    pattern = r'!\[([^\]]*)\]\(figure\)'
-    markers = list(re.finditer(pattern, content))
-
-    if not markers:
-        # Try a broader pattern for any image-like markdown the VLM might output
-        pattern = r'!\[([^\]]*[Ff]igure[^\]]*)\]\([^\)]*\)'
-        markers = list(re.finditer(pattern, content))
-
-    # Replace markers with actual image paths (in reverse to preserve positions)
-    for i, match in enumerate(reversed(markers)):
-        if i >= len(page_images):
-            break
-        img_idx = len(markers) - 1 - i
-        if img_idx < len(page_images):
-            img_path = os.path.join(image_dir, page_images[img_idx])
-            replacement = f"![{match.group(1)}]({img_path})"
-            content = content[:match.start()] + replacement + content[match.end():]
-
-    return content
 
 
 def generate_document(pages_ast: list, format_type: str, extracted_images: dict = None) -> str:
-    """Generate a professional DOCX or PDF from page ASTs using pypandoc (pandoc).
-    
+    """Generate a professional DOCX from page ASTs using pypandoc (pandoc).
+
     Handles:
-    - Full markdown rendering (bold, italic, tables, lists, code blocks)
-    - Embedded images from extracted PDF figures
+    - Full markdown rendering (bold, italic, tables, lists)
+    - Inline figure images cropped from page scans — embedded at exact positions
     - Professional styling via reference document template
-    
+
     Returns the MinIO object name.
     """
-    if extracted_images is None:
-        extracted_images = {}
-
     minio_client = get_minio_client()
 
-    # Ensure generated bucket exists
     if not minio_client.bucket_exists("kito-generated-artifacts"):
         minio_client.make_bucket("kito-generated-artifacts")
 
     file_id = str(uuid.uuid4())
-    # pypandoc always outputs DOCX for "docx" format
     filename = f"document_{file_id}.docx"
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 1. Download all extracted images to local temp directory
         images_dir = os.path.join(tmpdir, "images")
         os.makedirs(images_dir, exist_ok=True)
 
-        all_page_images = {}
-        for page_idx, img_filenames in extracted_images.items():
-            local_images = []
-            for img_filename in img_filenames:
-                try:
-                    local_img_path = os.path.join(images_dir, img_filename)
-                    minio_client.fget_object("kito-processed-documents", img_filename, local_img_path)
-                    local_images.append(img_filename)
-                except Exception as e:
-                    logger.warning(f"Failed to download image {img_filename}: {e}")
-            all_page_images[page_idx] = local_images
+        # Collect all figure filenames referenced in ASTs
+        all_figure_filenames = set()
+        for page_ast in pages_ast:
+            for fig in page_ast.get("figures", []):
+                all_figure_filenames.add(fig)
+            # Also scan content for __FIGURE__ markers
+            for m in re.finditer(r'__FIGURE__([^_]+)__CAPTION__', page_ast.get("content", "")):
+                all_figure_filenames.add(m.group(1))
 
-        # 2. Combine all page markdown with figure markers replaced
+        # Download all figure crops from MinIO
+        available_figures = {}
+        for fig_filename in all_figure_filenames:
+            local_fig = os.path.join(images_dir, fig_filename)
+            try:
+                minio_client.fget_object("kito-processed-documents", fig_filename, local_fig)
+                available_figures[fig_filename] = local_fig
+                logger.info(f"Downloaded figure: {fig_filename}")
+            except Exception as e:
+                logger.warning(f"Could not download figure {fig_filename}: {e}")
+
+        # Assemble full markdown — convert __FIGURE__ markers to proper image syntax
         full_markdown_parts = []
-        for i, page_ast in enumerate(pages_ast):
+        for page_ast in pages_ast:
             content = page_ast.get("content", "")
 
-            # Strip any VLM thinking tags
-            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
-            content = content.strip()
+            # Strip any stray think tags
+            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
 
-            # Replace figure markers with actual image paths
-            page_imgs = all_page_images.get(i, [])
-            if page_imgs:
-                content = replace_figure_markers(content, page_imgs, images_dir)
+            # Replace __FIGURE__filename__CAPTION__caption with pandoc image syntax
+            def replace_figure(m):
+                fig_name = m.group(1)
+                caption = m.group(2)
+                if fig_name in available_figures:
+                    img_path = available_figures[fig_name]
+                    return f"\n\n![{caption}]({img_path})\n\n"
+                return f"\n\n*[Figure: {caption}]*\n\n"
 
-            if content:
+            content = re.sub(
+                r'__FIGURE__(.+?)__CAPTION__(.+?)(?=\n|$)',
+                replace_figure,
+                content
+            )
+
+            if content.strip():
                 full_markdown_parts.append(content)
 
         full_markdown = "\n\n---\n\n".join(full_markdown_parts)
 
-        # 3. Write combined markdown to temp file
+        # Write markdown to temp file
         md_path = os.path.join(tmpdir, "input.md")
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(full_markdown)
 
-        # 4. Convert markdown to DOCX using pypandoc
+        # Convert to DOCX via pandoc
         local_path = os.path.join(tmpdir, filename)
-
         extra_args = [
             f"--reference-doc={REFERENCE_DOC_PATH}",
             "--wrap=none",
@@ -766,18 +1011,12 @@ def generate_document(pages_ast: list, format_type: str, extracted_images: dict 
         ]
 
         try:
-            pypandoc.convert_file(
-                md_path,
-                to="docx",
-                outputfile=local_path,
-                extra_args=extra_args
-            )
+            pypandoc.convert_file(md_path, to="docx", outputfile=local_path, extra_args=extra_args)
             logger.info(f"pypandoc conversion successful: {local_path}")
         except Exception as e:
             logger.error(f"pypandoc conversion failed: {e}")
             raise Exception(f"Document generation failed: {e}")
 
-        # 5. Upload to MinIO
         minio_client.fput_object("kito-generated-artifacts", filename, local_path)
         logger.info(f"Generated and uploaded artifact: {filename}")
 
@@ -975,19 +1214,20 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             # Upload raw file to MinIO for archival
             minio_client.fput_object("kito-raw-documents", raw_filename, local_pdf_path)
 
-            # 2. Split PDF into pages and extract embedded images (in-process)
+            # 2. Split PDF into pages (render each to PNG, stored in MinIO)
             update_job_status(job_id, "splitting")
             logger.info(f"[Job {job_id}] Splitting PDF and extracting images...")
+
+            # Keep fitz doc open — we pass individual pages to build_page_ast for auto-detection
+            fitz_doc = fitz.open(local_pdf_path)
             split_result = split_pdf(local_pdf_path, doc_id)
             page_image_paths = split_result["pages"]
-            extracted_images = split_result["images"]
 
             if not page_image_paths:
                 raise Exception("No pages extracted from PDF")
 
             total_pages = len(page_image_paths)
-            total_images = sum(len(imgs) for imgs in extracted_images.values())
-            post_message_to_slack(channel_id, f"📑 Split into {total_pages} pages ({total_images} figures found). Starting text extraction...")
+            post_message_to_slack(channel_id, f"📑 Split into {total_pages} pages. Starting text extraction (Hybrid OCR)...")
 
             # 3. Enqueue all pages
             enqueue_pages(job_id, page_image_paths)
@@ -1006,7 +1246,9 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                 page_idx = page_task['page_index']
                 try:
                     logger.info(f"[Job {job_id}] Processing page {page_idx + 1}/{total_pages}...")
-                    ast = build_page_ast(page_task["image_path"])
+                    # Pass fitz_page for auto-detect (digital vs scanned)
+                    fitz_page = fitz_doc[page_idx] if page_idx < len(fitz_doc) else None
+                    ast = build_page_ast(page_task["image_path"], fitz_page=fitz_page)
                     mark_page_completed(page_task["id"], json.dumps(ast))
 
                     with progress_lock:
@@ -1051,7 +1293,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             # 6. Generate final document with embedded images (in-process)
             update_job_status(job_id, "generating")
             logger.info(f"[Job {job_id}] Generating DOCX document...")
-            object_name = generate_document(pages_ast, format_type, extracted_images)
+            object_name = generate_document(pages_ast, format_type)
 
             # 7. Download from MinIO and upload to Slack
             update_job_status(job_id, "uploading")
