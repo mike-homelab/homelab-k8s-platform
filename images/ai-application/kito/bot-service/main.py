@@ -21,11 +21,6 @@ from minio import Minio
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-# Docling — enterprise-grade document intelligence
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractOcrOptions
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot-service")
 
@@ -40,6 +35,9 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 LITELLM_ENDPOINT = os.getenv("LITELLM_ENDPOINT", "http://litellm.ai-platform.svc:4000/v1")
 LITELLM_MASTER_KEY = os.getenv("LITELLM_MASTER_KEY", "sk-michael-homelab-llm-proxy")
 BUILDER_VL_ENDPOINT = os.getenv("BUILDER_VL_ENDPOINT", "http://builder.ai-platform.svc:11434/v1")
+# Docling sidecar runs in the builder pod (GPU-accelerated, port 8100)
+DOCLING_SERVICE_URL = os.getenv("DOCLING_SERVICE_URL", "http://builder.ai-platform.svc:8100")
+
 
 # ===== CLIENTS =====
 
@@ -924,64 +922,52 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
 
 
 
-def process_with_docling(pdf_path: str, doc_id: str, images_dir: str) -> str:
-    """Convert PDF to markdown using Docling's enterprise document intelligence pipeline.
+def call_docling_service(pdf_path: str, doc_id: str, images_dir: str) -> str:
+    """Call the Docling GPU sidecar service to convert a PDF to markdown.
 
-    Docling provides:
-    - DocLayNet layout analysis (detects columns, headings, tables, figures, headers/footers)
-    - TableFormer table structure recognition (replaces VLM guessing)
-    - Tesseract OCR backend (reuses system Tesseract — no extra downloads)
-    - Correct reading order reconstruction for multi-column layouts
-    - Figure extraction as PNG images at actual positions
-
-    Returns a clean markdown string with local image references that pandoc can embed.
+    The service runs alongside Ollama in the builder pod on the RTX 5060 Ti.
+    It returns markdown with <!-- image --> placeholders + figures as base64.
+    We decode and save each figure locally so pandoc can embed them in DOCX.
     """
-    pipeline_options = PdfPipelineOptions()
-    pipeline_options.do_ocr = True
-    pipeline_options.do_table_structure = True
-    pipeline_options.generate_picture_images = True
-    pipeline_options.ocr_options = TesseractOcrOptions()  # Use system Tesseract binary
+    logger.info(f"Calling Docling service at {DOCLING_SERVICE_URL}/process-pdf")
 
-    converter = DocumentConverter(
-        format_options={
-            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
-        }
-    )
-
-    logger.info(f"Docling: starting conversion of {pdf_path}")
-    result = converter.convert(pdf_path)
-    doc = result.document
-
-    # Save extracted figures to images_dir so pandoc can embed them
-    fig_count = 0
-    try:
-        from docling_core.types.doc import PictureItem
-        for item, _level in doc.iterate_items():
-            if isinstance(item, PictureItem):
-                try:
-                    img = item.get_image(doc)
-                    if img:
-                        fig_path = os.path.join(images_dir, f"{doc_id}_fig_{fig_count}.png")
-                        img.save(fig_path, format="PNG")
-                        fig_count += 1
-                        logger.info(f"Docling: saved figure → {fig_path}")
-                except Exception as e:
-                    logger.warning(f"Docling: could not save figure {fig_count}: {e}")
-    except ImportError:
-        logger.warning("docling_core not available for figure extraction; continuing without figures")
-
-    # Export to markdown with images saved to images_dir and referenced by relative path
-    try:
-        from docling_core.types.doc import ImageRefMode
-        markdown = doc.export_to_markdown(
-            image_mode=ImageRefMode.REFERENCED,
-            artifacts_dir=Path(images_dir)
+    with open(pdf_path, "rb") as f:
+        response = requests.post(
+            f"{DOCLING_SERVICE_URL}/process-pdf",
+            files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
+            timeout=600  # 10 min max for large documents
         )
-    except (ImportError, TypeError):
-        # Fallback: export without explicit image mode
-        markdown = doc.export_to_markdown()
 
-    logger.info(f"Docling: conversion complete — {len(markdown)} chars, {fig_count} figures")
+    if response.status_code != 200:
+        raise Exception(f"Docling service error {response.status_code}: {response.text[:200]}")
+
+    data = response.json()
+    markdown = data["markdown"]
+    figures_b64 = data.get("figures", [])
+    page_count = data.get("page_count", "?")
+
+    logger.info(f"Docling service: {len(markdown)} chars, {len(figures_b64)} figures, {page_count} pages")
+
+    # Save each figure to images_dir so pandoc can embed them
+    fig_paths = []
+    for idx, fig_b64 in enumerate(figures_b64):
+        fig_path = os.path.join(images_dir, f"{doc_id}_fig_{idx}.png")
+        with open(fig_path, "wb") as f:
+            f.write(base64.b64decode(fig_b64))
+        fig_paths.append(fig_path)
+        logger.info(f"Saved figure {idx} → {fig_path}")
+
+    # Replace <!-- image --> placeholders with pandoc image syntax (in order)
+    fig_counter = [0]
+
+    def replace_img_placeholder(m):
+        idx = fig_counter[0]
+        fig_counter[0] += 1
+        if idx < len(fig_paths):
+            return f"\n\n![Figure {idx + 1}]({fig_paths[idx]})\n\n"
+        return ""  # placeholder with no matching figure — drop it
+
+    markdown = re.sub(r'<!-- image -->', replace_img_placeholder, markdown)
     return markdown
 
 
@@ -1229,10 +1215,10 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                 f"🔍 Running layout analysis + OCR (Docling)..."
             )
 
-            # 2. Process with Docling — one call, full pipeline
+            # 2. Process with Docling GPU sidecar
             update_job_status(job_id, "processing")
-            logger.info(f"[Job {job_id}] Starting Docling pipeline...")
-            markdown = process_with_docling(local_pdf_path, doc_id, images_dir)
+            logger.info(f"[Job {job_id}] Calling Docling service...")
+            markdown = call_docling_service(local_pdf_path, doc_id, images_dir)
 
             if not markdown.strip():
                 raise Exception("Docling returned empty content — PDF may be corrupt or password-protected")

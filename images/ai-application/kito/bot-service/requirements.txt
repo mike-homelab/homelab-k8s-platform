@@ -9,4 +9,3 @@ pymupdf
 python-docx
 pypandoc_binary
 Pillow
-docling

@@ -144,6 +144,46 @@ spec:
             - name: hf-cache
               mountPath: /models
 
+        # ── Docling sidecar — shares RTX 5060 Ti GPU with Ollama ───────────
+        # No nvidia.com/gpu request needed: all containers in a pod share
+        # the GPU device allocated by the pod (Ollama's nvidia.com/gpu: 1).
+        - name: docling-service
+          image: harbor.michaelhomelab.work/kito/docling-service:latest
+          imagePullPolicy: Always
+
+          env:
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"    # Same RTX 5060 Ti as Ollama
+
+          ports:
+            - name: docling
+              containerPort: 8100
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8100
+            initialDelaySeconds: 90   # Docling loads DocLayNet + TableFormer on startup
+            periodSeconds: 15
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8100
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            failureThreshold: 5
+
+          resources:
+            requests:
+              cpu: "2"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+            # GPU shared via pod — no separate nvidia.com/gpu needed
+
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
@@ -179,3 +219,6 @@ spec:
     - name: http
       port: 11434
       targetPort: http
+    - name: docling
+      port: 8100
+      targetPort: docling
