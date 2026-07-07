@@ -516,8 +516,9 @@ def split_pdf(pdf_path: str, doc_id: str) -> dict:
     with tempfile.TemporaryDirectory() as tmpdir:
         doc = fitz.open(pdf_path)
         for i, page in enumerate(doc):
-            # 1. Render full page as PNG (for VLM)
-            pix = page.get_pixmap(dpi=150)
+            # Render at 250 DPI — higher resolution significantly improves Tesseract OCR accuracy
+            # (150 DPI loses small font details; 250 DPI is the recommended OCR minimum)
+            pix = page.get_pixmap(dpi=250)
             page_filename = f"{doc_id}_page_{i}.png"
             page_path = os.path.join(tmpdir, page_filename)
             pix.save(page_path)
@@ -819,8 +820,10 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
         logger.info(f"Scanned page — running Tesseract OCR for {image_path}")
         pil_img = Image.open(local_image_path)
 
-        # Step 1: Get clean plain text via Tesseract (simple, fast, reliable)
-        ocr_text = pytesseract.image_to_string(pil_img, lang="eng").strip()
+        # Step 1: Get clean plain text via Tesseract
+        # oem 3 = best LSTM engine, psm 3 = auto page segmentation
+        tess_config = "--oem 3 --psm 3"
+        ocr_text = pytesseract.image_to_string(pil_img, lang="eng", config=tess_config).strip()
         logger.info(f"{image_path}: Tesseract extracted {len(ocr_text)} chars")
 
         # Step 2: ONE structured VLM call — detect tables and figures
