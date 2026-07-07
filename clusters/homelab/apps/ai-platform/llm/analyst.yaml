@@ -52,6 +52,7 @@ spec:
               cat <<EOF >/tmp/Modelfile
               FROM qwen3:14b
               PARAMETER num_ctx 81920
+              PARAMETER mmap false
               EOF
 
               ollama create analyst -f /tmp/Modelfile
@@ -76,7 +77,26 @@ spec:
           image: ollama/ollama:latest
           imagePullPolicy: Always
 
-          args: ["serve"]
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              # Start ollama in background
+              ollama serve &
+              OLLAMA_PID=$!
+
+              # Wait for HTTP server to be ready
+              until ollama list >/dev/null 2>&1; do
+                sleep 2
+              done
+
+              # Pre-load the model so first user request is instant.
+              # OLLAMA_KEEP_ALIVE=-1 keeps it in VRAM permanently after this.
+              echo "Pre-loading analyst model into VRAM..."
+              ollama run analyst "ready" >/dev/null 2>&1 || echo "Pre-load attempt finished (may need retry)"
+              echo "Model pre-load complete"
+
+              # Keep container alive — wait for ollama process
+              wait $OLLAMA_PID
 
           env:
             - name: CUDA_VISIBLE_DEVICES
@@ -101,7 +121,7 @@ spec:
               value: "-1"
 
             - name: OLLAMA_LOAD_TIMEOUT
-              value: "10m"   # llama-server needs time to allocate 81920-token KV cache
+              value: "30m"   # Longhorn network storage is slow for initial model load
 
             - name: OLLAMA_HOST
               value: "0.0.0.0:11434"
