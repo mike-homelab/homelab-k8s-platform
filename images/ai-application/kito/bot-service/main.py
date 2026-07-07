@@ -386,7 +386,7 @@ def build_page_ast(image_path: str) -> dict:
                     ]
                 }
             ],
-            "max_tokens": 32768
+            "max_tokens": 4096
         }
 
         # Retry with exponential backoff
