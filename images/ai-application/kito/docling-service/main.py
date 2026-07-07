@@ -226,6 +226,10 @@ def ask_vlm_for_table(page_img: Image.Image) -> str:
         resp.raise_for_status()
         content = resp.json()["message"]["content"].strip()
 
+        # Strip <think>...</think> chain-of-thought blocks (Qwen3-VL always emits these)
+        import re as _re
+        content = _re.sub(r'<think>.*?</think>', '', content, flags=_re.DOTALL).strip()
+
         if "NO_TABLE" in content.upper():
             return ""
 
@@ -342,22 +346,56 @@ def _process_pdf_sync(pdf_bytes: bytes) -> dict:
                 section += f"### Page {page_no}\n\n{recovered_tables[page_no]}\n\n"
             markdown += section
 
-        # Extract figures (images_scale=2.0 set in pipeline_options)
+        # Extract figures at 300 DPI directly from the ORIGINAL PDF
+        # (avoids double-rasterization quality loss from preprocessed PDF)
         figures = []
         try:
             from docling_core.types.doc import PictureItem
+            orig_fitz = fitz.open(raw_pdf)
+
             for item, _level in doc.iterate_items():
-                if isinstance(item, PictureItem):
+                if isinstance(item, PictureItem) and item.prov:
                     try:
-                        img = item.get_image(doc)
-                        if img:
-                            buf = io.BytesIO()
-                            img.save(buf, format="PNG")
-                            figures.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+                        prov = item.prov[0]
+                        page_no = prov.page_no - 1  # 0-indexed
+                        bbox = prov.bbox             # Docling bbox: (l, t, r, b) in pts
+
+                        fitz_page = orig_fitz[page_no]
+                        page_rect = fitz_page.rect   # full page rect in pts
+
+                        # Docling uses bottom-left origin; fitz uses top-left
+                        ph = page_rect.height
+                        crop_rect = fitz.Rect(
+                            bbox.l, ph - bbox.t,
+                            bbox.r, ph - bbox.b
+                        )
+                        # Clamp to page bounds
+                        crop_rect &= page_rect
+
+                        # Render the crop at 300 DPI (scale = 300/72)
+                        mat = fitz.Matrix(300 / 72, 300 / 72)
+                        pix = fitz_page.get_pixmap(matrix=mat, clip=crop_rect)
+                        img_bytes = pix.tobytes("png")
+                        figures.append(base64.b64encode(img_bytes).decode("utf-8"))
+                        logger.info(f"Extracted figure at 300 DPI from page {page_no + 1}")
+
                     except Exception as e:
-                        logger.warning(f"Figure extraction error: {e}")
+                        # Fall back to Docling's built-in extraction
+                        logger.warning(f"Direct figure crop failed: {e} — using Docling fallback")
+                        try:
+                            img = item.get_image(doc)
+                            if img:
+                                buf = io.BytesIO()
+                                img.save(buf, format="PNG")
+                                figures.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+                        except Exception:
+                            pass
+
+            orig_fitz.close()
+
         except ImportError:
-            pass
+            logger.warning("PictureItem not available — skipping figure extraction")
+
 
         page_count = len(list(doc.pages)) if hasattr(doc, "pages") else "?"
         logger.info(

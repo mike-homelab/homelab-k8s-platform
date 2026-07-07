@@ -922,6 +922,25 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
 
 
 
+def _clean_markdown(markdown: str) -> str:
+    """Clean the Docling/VLM markdown before passing to pandoc.
+
+    Removes:
+    - <think>...</think> blocks (Qwen3 chain-of-thought leakage)
+    - <!-- image --> placeholders that were not matched to a figure
+    - Excessive consecutive blank lines (> 2)
+    - HTML comment artifacts
+    """
+    import re as _re
+    # Strip <think>...</think> blocks (Qwen3-VL thinking tags)
+    markdown = _re.sub(r'<think>.*?</think>', '', markdown, flags=_re.DOTALL)
+    # Strip any remaining <!-- ... --> HTML comments (including <!-- image --> leftovers)
+    markdown = _re.sub(r'<!--.*?-->', '', markdown, flags=_re.DOTALL)
+    # Collapse 3+ consecutive blank lines to 2
+    markdown = _re.sub(r'\n{3,}', '\n\n', markdown)
+    return markdown.strip()
+
+
 def call_docling_service(pdf_path: str, doc_id: str, images_dir: str) -> str:
     """Call the Docling GPU sidecar service to convert a PDF to markdown.
 
@@ -935,7 +954,7 @@ def call_docling_service(pdf_path: str, doc_id: str, images_dir: str) -> str:
         response = requests.post(
             f"{DOCLING_SERVICE_URL}/process-pdf",
             files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
-            timeout=600  # 10 min max for large documents
+            timeout=600
         )
 
     if response.status_code != 200:
@@ -945,29 +964,39 @@ def call_docling_service(pdf_path: str, doc_id: str, images_dir: str) -> str:
     markdown = data["markdown"]
     figures_b64 = data.get("figures", [])
     page_count = data.get("page_count", "?")
+    vlm_recovered = data.get("vlm_tables_recovered", 0)
 
-    logger.info(f"Docling service: {len(markdown)} chars, {len(figures_b64)} figures, {page_count} pages")
+    logger.info(
+        f"Docling service: {len(markdown)} chars, {len(figures_b64)} figures, "
+        f"{vlm_recovered} VLM tables, {page_count} pages"
+    )
 
-    # Save each figure to images_dir so pandoc can embed them
-    fig_paths = []
+    # Save each figure to images_dir with simple names (no absolute paths in markdown)
+    fig_names = []
     for idx, fig_b64 in enumerate(figures_b64):
-        fig_path = os.path.join(images_dir, f"{doc_id}_fig_{idx}.png")
+        fig_name = f"fig_{idx:04d}.png"   # simple name — used as relative ref in markdown
+        fig_path = os.path.join(images_dir, fig_name)
         with open(fig_path, "wb") as f:
             f.write(base64.b64decode(fig_b64))
-        fig_paths.append(fig_path)
+        fig_names.append(fig_name)
         logger.info(f"Saved figure {idx} → {fig_path}")
 
-    # Replace <!-- image --> placeholders with pandoc image syntax (in order)
+    # Replace <!-- image --> placeholders with relative-path markdown image syntax
+    # Pandoc resolves these via --resource-path pointing to images_dir
     fig_counter = [0]
 
     def replace_img_placeholder(m):
         idx = fig_counter[0]
         fig_counter[0] += 1
-        if idx < len(fig_paths):
-            return f"\n\n![Figure {idx + 1}]({fig_paths[idx]})\n\n"
-        return ""  # placeholder with no matching figure — drop it
+        if idx < len(fig_names):
+            return f"\n\n![Figure {idx + 1}]({fig_names[idx]})\n\n"
+        return ""  # no matching figure — drop placeholder silently
 
     markdown = re.sub(r'<!-- image -->', replace_img_placeholder, markdown)
+
+    # Clean VLM thinking tags, leftover HTML comments, excess blank lines
+    markdown = _clean_markdown(markdown)
+
     return markdown
 
 
@@ -992,14 +1021,29 @@ def generate_document(markdown: str, format_type: str, images_dir: str) -> str:
             f.write(markdown)
 
         local_path = os.path.join(tmpdir, filename)
+
+        # Copy all images into pandoc's working directory so relative paths resolve
+        # (pandoc --resource-path only works for relative refs, not absolute paths)
+        import shutil
+        for fname in os.listdir(images_dir):
+            if fname.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+                shutil.copy2(os.path.join(images_dir, fname), os.path.join(tmpdir, fname))
+
         extra_args = [
             f"--reference-doc={REFERENCE_DOC_PATH}",
             "--wrap=none",
-            f"--resource-path={images_dir}"
+            f"--resource-path=.:{tmpdir}",   # . = cwd (tmpdir), also explicit tmpdir
         ]
 
         try:
-            pypandoc.convert_file(md_path, to="docx", outputfile=local_path, extra_args=extra_args)
+            pypandoc.convert_file(
+                md_path,
+                to="docx",
+                format="markdown",              # explicit — never auto-detect
+                outputfile=local_path,
+                extra_args=extra_args,
+                sandbox=False
+            )
             logger.info(f"pandoc conversion successful: {local_path}")
         except Exception as e:
             logger.error(f"pandoc conversion failed: {e}")
