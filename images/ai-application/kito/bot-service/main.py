@@ -599,7 +599,7 @@ def build_page_ast(image_path: str) -> dict:
                     "content": [
                         {
                             "type": "text",
-                            "text": "/no_think\nExtract all content from this document page as clean, well-structured markdown.\n\nFormatting rules:\n- Use # for main headings, ## for subheadings, ### for sub-subheadings\n- Use **bold** for emphasized or important text\n- Use *italic* for titles, terms, or light emphasis\n- Format tables using proper markdown table syntax with | column | separators | and header row separator |---|---|\n- Use - for bullet lists and 1. 2. 3. for numbered lists\n- For any figure, diagram, chart, graph, or image on the page, output: ![Figure: detailed description of what the figure shows](figure)\n- Preserve the original document structure and reading order exactly\n- Do NOT add any commentary or explanation, only extract the content"
+                            "text": "Extract all content from this document page as clean, well-structured markdown.\n\nFormatting rules:\n- Use # for main headings, ## for subheadings, ### for sub-subheadings\n- Use **bold** for emphasized or important text\n- Use *italic* for titles, terms, or light emphasis\n- Format tables using proper markdown table syntax with | column | separators | and header row separator |---|---|\n- Use - for bullet lists and 1. 2. 3. for numbered lists\n- For any figure, diagram, chart, graph, or image on the page, output: ![Figure: detailed description of what the figure shows](figure)\n- Preserve the original document structure and reading order exactly\n- Do NOT add any commentary or explanation, only extract the content"
                         },
                         {
                             "type": "image_url",
@@ -610,7 +610,7 @@ def build_page_ast(image_path: str) -> dict:
                     ]
                 }
             ],
-            "max_tokens": 4096
+            "max_tokens": 8192
         }
 
         # Retry with exponential backoff
@@ -626,7 +626,21 @@ def build_page_ast(image_path: str) -> dict:
 
                 if response.status_code == 200:
                     result = response.json()
-                    content = result["choices"][0]["message"]["content"]
+                    message = result["choices"][0]["message"]
+
+                    # Qwen3-VL separates thinking into 'reasoning' and answer into 'content'.
+                    # For OCR tasks, the extracted text may end up in either field.
+                    content = message.get("content", "").strip()
+                    reasoning = message.get("reasoning", "").strip()
+
+                    # If content is empty, use reasoning (common with Qwen3-VL)
+                    if not content and reasoning:
+                        content = reasoning
+
+                    # Strip any <think> tags
+                    content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
+
+                    logger.info(f"VLM returned {len(content)} chars for {image_path}")
                     return {
                         "page": image_path,
                         "content": content
