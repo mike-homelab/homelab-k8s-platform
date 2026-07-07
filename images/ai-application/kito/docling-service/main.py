@@ -250,26 +250,53 @@ def ask_vlm_for_table(page_img: Image.Image) -> str:
 
 
 def recover_missing_tables(doc, original_pdf: str) -> dict:
-    """Find pages where Docling found no table and ask VLM to recover them.
+    """Find pages where Docling found no table OR a malformed table, ask VLM to recover.
+
+    Two triggers for VLM:
+    1. Page has ZERO tables — Docling completely missed it (curved/faint borders)
+    2. Page has a table with < 2 columns or < 2 data rows — TableFormer gave up
 
     Returns {page_no (1-indexed): markdown_table_string}.
     """
-    pages_with_tables = set()
+    pages_need_vlm: set = set()
+    pages_with_good_tables: set = set()
+
     try:
         from docling_core.types.doc import TableItem
         for item, _ in doc.iterate_items():
-            if isinstance(item, TableItem) and item.prov:
-                pages_with_tables.add(item.prov[0].page_no)
-    except (ImportError, AttributeError):
-        logger.warning("Cannot inspect Docling table items — skipping VLM recovery")
+            if not isinstance(item, TableItem) or not item.prov:
+                continue
+            page_no = item.prov[0].page_no
+
+            # Inspect table quality
+            num_cols, num_rows = 0, 0
+            try:
+                if item.data:
+                    num_cols = getattr(item.data, "num_cols", 0) or 0
+                    num_rows = len(item.data.grid) if item.data.grid else 0
+            except Exception:
+                pass
+
+            if num_cols < 2 or num_rows < 2:
+                # Malformed table — VLM should try to replace it
+                logger.info(
+                    f"Page {page_no}: Docling table has {num_cols} cols x {num_rows} rows "
+                    f"(malformed) — flagging for VLM"
+                )
+                pages_need_vlm.add(page_no)
+            else:
+                pages_with_good_tables.add(page_no)
+
+    except (ImportError, AttributeError) as e:
+        logger.warning(f"Cannot inspect Docling table items: {e} — skipping VLM recovery")
         return {}
 
     fitz_doc = fitz.open(original_pdf)
     recovered = {}
 
     for page_no in range(1, len(fitz_doc) + 1):
-        if page_no in pages_with_tables:
-            continue
+        if page_no in pages_with_good_tables:
+            continue  # Already has a good Docling table
 
         pix = fitz_doc[page_no - 1].get_pixmap(dpi=200)
         img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
@@ -278,11 +305,12 @@ def recover_missing_tables(doc, original_pdf: str) -> dict:
         if pix.n == 4:
             img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
 
-        logger.info(f"Page {page_no}: no Docling table — asking VLM...")
+        reason = "malformed table" if page_no in pages_need_vlm else "no table"
+        logger.info(f"Page {page_no}: Docling {reason} — asking VLM...")
         table_md = ask_vlm_for_table(Image.fromarray(img_np))
         if table_md:
             recovered[page_no] = table_md
-            logger.info(f"Page {page_no}: VLM recovered a table")
+            logger.info(f"Page {page_no}: VLM recovered table ({len(table_md.splitlines())} rows)")
 
     fitz_doc.close()
     return recovered
