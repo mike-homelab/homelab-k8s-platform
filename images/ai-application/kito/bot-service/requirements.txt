@@ -8,6 +8,5 @@ requests
 pymupdf
 python-docx
 pypandoc_binary
-pytesseract
 Pillow
-numpy
+docling

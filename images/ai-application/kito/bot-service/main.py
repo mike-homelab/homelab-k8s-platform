@@ -9,11 +9,11 @@ import uuid
 import base64
 import time
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF — used for page count and archival
 import pypandoc
-import pytesseract
 from PIL import Image
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
@@ -21,6 +21,10 @@ from minio import Minio
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+# Docling — enterprise-grade document intelligence
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractOcrOptions
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot-service")
@@ -919,15 +923,74 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
         }
 
 
-def generate_document(pages_ast: list, format_type: str, extracted_images: dict = None) -> str:
-    """Generate a professional DOCX from page ASTs using pypandoc (pandoc).
 
-    Handles:
-    - Full markdown rendering (bold, italic, tables, lists)
-    - Inline figure images cropped from page scans — embedded at exact positions
-    - Professional styling via reference document template
+def process_with_docling(pdf_path: str, doc_id: str, images_dir: str) -> str:
+    """Convert PDF to markdown using Docling's enterprise document intelligence pipeline.
 
-    Returns the MinIO object name.
+    Docling provides:
+    - DocLayNet layout analysis (detects columns, headings, tables, figures, headers/footers)
+    - TableFormer table structure recognition (replaces VLM guessing)
+    - Tesseract OCR backend (reuses system Tesseract — no extra downloads)
+    - Correct reading order reconstruction for multi-column layouts
+    - Figure extraction as PNG images at actual positions
+
+    Returns a clean markdown string with local image references that pandoc can embed.
+    """
+    pipeline_options = PdfPipelineOptions()
+    pipeline_options.do_ocr = True
+    pipeline_options.do_table_structure = True
+    pipeline_options.generate_picture_images = True
+    pipeline_options.ocr_options = TesseractOcrOptions()  # Use system Tesseract binary
+
+    converter = DocumentConverter(
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)
+        }
+    )
+
+    logger.info(f"Docling: starting conversion of {pdf_path}")
+    result = converter.convert(pdf_path)
+    doc = result.document
+
+    # Save extracted figures to images_dir so pandoc can embed them
+    fig_count = 0
+    try:
+        from docling_core.types.doc import PictureItem
+        for item, _level in doc.iterate_items():
+            if isinstance(item, PictureItem):
+                try:
+                    img = item.get_image(doc)
+                    if img:
+                        fig_path = os.path.join(images_dir, f"{doc_id}_fig_{fig_count}.png")
+                        img.save(fig_path, format="PNG")
+                        fig_count += 1
+                        logger.info(f"Docling: saved figure → {fig_path}")
+                except Exception as e:
+                    logger.warning(f"Docling: could not save figure {fig_count}: {e}")
+    except ImportError:
+        logger.warning("docling_core not available for figure extraction; continuing without figures")
+
+    # Export to markdown with images saved to images_dir and referenced by relative path
+    try:
+        from docling_core.types.doc import ImageRefMode
+        markdown = doc.export_to_markdown(
+            image_mode=ImageRefMode.REFERENCED,
+            artifacts_dir=Path(images_dir)
+        )
+    except (ImportError, TypeError):
+        # Fallback: export without explicit image mode
+        markdown = doc.export_to_markdown()
+
+    logger.info(f"Docling: conversion complete — {len(markdown)} chars, {fig_count} figures")
+    return markdown
+
+
+def generate_document(markdown: str, format_type: str, images_dir: str) -> str:
+    """Convert a markdown string to DOCX using pandoc.
+
+    Accepts the markdown output from process_with_docling().
+    Images are referenced by local paths inside images_dir and embedded by pandoc.
+    Returns the MinIO object name of the generated DOCX.
     """
     minio_client = get_minio_client()
 
@@ -938,63 +1001,10 @@ def generate_document(pages_ast: list, format_type: str, extracted_images: dict 
     filename = f"document_{file_id}.docx"
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        images_dir = os.path.join(tmpdir, "images")
-        os.makedirs(images_dir, exist_ok=True)
-
-        # Collect all figure filenames referenced in ASTs
-        all_figure_filenames = set()
-        for page_ast in pages_ast:
-            for fig in page_ast.get("figures", []):
-                all_figure_filenames.add(fig)
-            # Also scan content for __FIGURE__ markers
-            for m in re.finditer(r'__FIGURE__([^_]+)__CAPTION__', page_ast.get("content", "")):
-                all_figure_filenames.add(m.group(1))
-
-        # Download all figure crops from MinIO
-        available_figures = {}
-        for fig_filename in all_figure_filenames:
-            local_fig = os.path.join(images_dir, fig_filename)
-            try:
-                minio_client.fget_object("kito-processed-documents", fig_filename, local_fig)
-                available_figures[fig_filename] = local_fig
-                logger.info(f"Downloaded figure: {fig_filename}")
-            except Exception as e:
-                logger.warning(f"Could not download figure {fig_filename}: {e}")
-
-        # Assemble full markdown — convert __FIGURE__ markers to proper image syntax
-        full_markdown_parts = []
-        for page_ast in pages_ast:
-            content = page_ast.get("content", "")
-
-            # Strip any stray think tags
-            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL).strip()
-
-            # Replace __FIGURE__filename__CAPTION__caption with pandoc image syntax
-            def replace_figure(m):
-                fig_name = m.group(1)
-                caption = m.group(2)
-                if fig_name in available_figures:
-                    img_path = available_figures[fig_name]
-                    return f"\n\n![{caption}]({img_path})\n\n"
-                return f"\n\n*[Figure: {caption}]*\n\n"
-
-            content = re.sub(
-                r'__FIGURE__(.+?)__CAPTION__(.+?)(?=\n|$)',
-                replace_figure,
-                content
-            )
-
-            if content.strip():
-                full_markdown_parts.append(content)
-
-        full_markdown = "\n\n---\n\n".join(full_markdown_parts)
-
-        # Write markdown to temp file
         md_path = os.path.join(tmpdir, "input.md")
         with open(md_path, "w", encoding="utf-8") as f:
-            f.write(full_markdown)
+            f.write(markdown)
 
-        # Convert to DOCX via pandoc
         local_path = os.path.join(tmpdir, filename)
         extra_args = [
             f"--reference-doc={REFERENCE_DOC_PATH}",
@@ -1004,15 +1014,17 @@ def generate_document(pages_ast: list, format_type: str, extracted_images: dict 
 
         try:
             pypandoc.convert_file(md_path, to="docx", outputfile=local_path, extra_args=extra_args)
-            logger.info(f"pypandoc conversion successful: {local_path}")
+            logger.info(f"pandoc conversion successful: {local_path}")
         except Exception as e:
-            logger.error(f"pypandoc conversion failed: {e}")
+            logger.error(f"pandoc conversion failed: {e}")
             raise Exception(f"Document generation failed: {e}")
 
         minio_client.fput_object("kito-generated-artifacts", filename, local_path)
-        logger.info(f"Generated and uploaded artifact: {filename}")
+        logger.info(f"Uploaded artifact: {filename}")
 
     return filename
+
+
 
 
 # ===== AGENT TOOLS DEFINITION =====
@@ -1174,125 +1186,74 @@ def run_agent(channel_id: str, user_message: str, files_metadata: list):
 # ===== DOCUMENT PROCESSING PIPELINE (with page queue) =====
 
 def process_document_pipeline(download_url: str, original_filename: str, channel_id: str, format_type: str):
-    """Full document processing pipeline using PostgreSQL page queue.
+    """Full document processing pipeline using Docling.
 
     Flow:
-    1. Download PDF from Slack → MinIO
-    2. Split PDF into per-page images (in-process)
-    3. Enqueue all pages into PostgreSQL page_tasks
-    4. Process pages one-by-one, calling VLM for each
-    5. Collect completed ASTs
-    6. Generate final document (in-process)
-    7. Upload result to Slack
+    1. Download PDF from Slack → MinIO (archival)
+    2. Run Docling on PDF (layout analysis, OCR, table structure, figure extraction)
+    3. Convert Docling markdown → DOCX via pandoc
+    4. Upload DOCX → Slack
     """
     job_id = str(uuid.uuid4())
     create_job(job_id, channel_id, original_filename, format_type)
 
     try:
         minio_client = get_minio_client()
-
         doc_id = str(uuid.uuid4())
         file_ext = os.path.splitext(original_filename)[1] or ".pdf"
         raw_filename = f"{doc_id}{file_ext}"
 
+        # Shared tmpdir: Docling writes figures here, pandoc reads them here
         with tempfile.TemporaryDirectory() as tmpdir:
             local_pdf_path = os.path.join(tmpdir, "raw.pdf")
+            images_dir = os.path.join(tmpdir, "images")
+            os.makedirs(images_dir, exist_ok=True)
 
-            # 1. Download from Slack
+            # 1. Download from Slack and archive to MinIO
             update_job_status(job_id, "downloading")
             logger.info(f"[Job {job_id}] Downloading from Slack...")
             download_slack_file(download_url, local_pdf_path)
-
-            # Upload raw file to MinIO for archival
             minio_client.fput_object("kito-raw-documents", raw_filename, local_pdf_path)
 
-            # 2. Split PDF into pages (render each to PNG, stored in MinIO)
-            update_job_status(job_id, "splitting")
-            logger.info(f"[Job {job_id}] Splitting PDF and extracting images...")
+            # Get page count for the status message
+            try:
+                fitz_doc = fitz.open(local_pdf_path)
+                total_pages = len(fitz_doc)
+                fitz_doc.close()
+            except Exception:
+                total_pages = "?"
 
-            # Keep fitz doc open — we pass individual pages to build_page_ast for auto-detection
-            fitz_doc = fitz.open(local_pdf_path)
-            split_result = split_pdf(local_pdf_path, doc_id)
-            page_image_paths = split_result["pages"]
+            post_message_to_slack(
+                channel_id,
+                f"📄 '{original_filename}' — {total_pages} pages detected.\n"
+                f"🔍 Running layout analysis + OCR (Docling)..."
+            )
 
-            if not page_image_paths:
-                raise Exception("No pages extracted from PDF")
+            # 2. Process with Docling — one call, full pipeline
+            update_job_status(job_id, "processing")
+            logger.info(f"[Job {job_id}] Starting Docling pipeline...")
+            markdown = process_with_docling(local_pdf_path, doc_id, images_dir)
 
-            total_pages = len(page_image_paths)
-            post_message_to_slack(channel_id, f"📑 Split into {total_pages} pages. Starting text extraction (Hybrid OCR)...")
+            if not markdown.strip():
+                raise Exception("Docling returned empty content — PDF may be corrupt or password-protected")
 
-            # 3. Enqueue all pages
-            enqueue_pages(job_id, page_image_paths)
+            word_count = len(markdown.split())
+            logger.info(f"[Job {job_id}] Docling done: {len(markdown)} chars, ~{word_count} words")
 
-            # 4. Process pages in parallel (3 concurrent VLM requests)
-            VLM_WORKERS = 2
-            update_job_status(job_id, "building_ast")
-            pending_pages = get_pending_pages(job_id)
-
-            # Thread-safe counters for progress tracking
-            progress_lock = threading.Lock()
-            progress = {"completed": 0, "failed": 0}
-
-            def process_single_page(page_task):
-                """Process a single page — called by each thread."""
-                page_idx = page_task['page_index']
-                try:
-                    logger.info(f"[Job {job_id}] Processing page {page_idx + 1}/{total_pages}...")
-                    # Pass fitz_page for auto-detect (digital vs scanned)
-                    fitz_page = fitz_doc[page_idx] if page_idx < len(fitz_doc) else None
-                    ast = build_page_ast(page_task["image_path"], fitz_page=fitz_page)
-                    mark_page_completed(page_task["id"], json.dumps(ast))
-
-                    with progress_lock:
-                        progress["completed"] += 1
-                        done = progress["completed"] + progress["failed"]
-                        # Progress update every 10 pages
-                        if done % 10 == 0 or done == total_pages:
-                            post_message_to_slack(
-                                channel_id,
-                                f"⏳ Progress: {progress['completed']}/{total_pages} pages extracted "
-                                f"({progress['failed']} failed) [🔄 {VLM_WORKERS}x parallel]"
-                            )
-                    return True
-
-                except Exception as e:
-                    mark_page_failed(page_task["id"], str(e))
-                    with progress_lock:
-                        progress["failed"] += 1
-                    logger.error(f"[Job {job_id}] Page {page_idx} failed: {e}")
-                    return False
-
-            with ThreadPoolExecutor(max_workers=VLM_WORKERS) as executor:
-                futures = {executor.submit(process_single_page, pt): pt for pt in pending_pages}
-                for future in as_completed(futures):
-                    future.result()  # propagate any unexpected exceptions
-
-            completed = progress["completed"]
-            failed = progress["failed"]
-
-            # 5. Collect completed ASTs
-            pages_ast = get_completed_asts(job_id)
-
-            if not pages_ast:
-                raise Exception("No pages were successfully processed")
-
-            if failed > 0:
-                post_message_to_slack(
-                    channel_id,
-                    f"⚠️ {failed}/{total_pages} pages failed. Generating document from {len(pages_ast)} successful pages..."
-                )
-
-            # 6. Generate final document with embedded images (in-process)
+            # 3. Generate DOCX
             update_job_status(job_id, "generating")
-            logger.info(f"[Job {job_id}] Generating DOCX document...")
-            object_name = generate_document(pages_ast, format_type)
+            logger.info(f"[Job {job_id}] Generating DOCX...")
+            object_name = generate_document(markdown, format_type, images_dir)
 
-            # 7. Download from MinIO and upload to Slack
+            # 4. Upload to Slack
             update_job_status(job_id, "uploading")
             local_out_path = os.path.join(tmpdir, object_name)
             minio_client.fget_object("kito-generated-artifacts", object_name, local_out_path)
 
-            comment = f"✅ Processed '{original_filename}' → {format_type.upper()} ({len(pages_ast)}/{total_pages} pages)"
+            comment = (
+                f"✅ Processed '{original_filename}' → {format_type.upper()}\n"
+                f"📊 {total_pages} pages · ~{word_count} words extracted"
+            )
             upload_file_to_slack(local_out_path, channel_id, object_name, comment)
 
         update_job_status(job_id, "completed")
@@ -1302,6 +1263,8 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
         logger.exception(f"[Job {job_id}] Pipeline failed")
         update_job_status(job_id, "failed", error=str(e))
         post_message_to_slack(channel_id, f"❌ Processing failed: {str(e)}")
+
+
 
 
 # ===== SLACK EVENT HANDLER =====
