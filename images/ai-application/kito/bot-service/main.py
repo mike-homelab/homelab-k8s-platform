@@ -993,7 +993,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             enqueue_pages(job_id, page_image_paths)
 
             # 4. Process pages in parallel (3 concurrent VLM requests)
-            VLM_WORKERS = 3
+            VLM_WORKERS = 2
             update_job_status(job_id, "building_ast")
             pending_pages = get_pending_pages(job_id)
 
