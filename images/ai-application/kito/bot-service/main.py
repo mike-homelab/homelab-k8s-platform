@@ -794,10 +794,11 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
     """Hybrid OCR pipeline for a single page.
 
     Strategy:
-    - If fitz_page has native text (digital PDF) → use PyMuPDF fast extraction
-    - Otherwise (scanned PDF) → Tesseract for text, VLM for table/figure crops
-
-    All figures are saved as cropped PNGs and embedded in-place.
+    1. Auto-detect digital vs scanned (PyMuPDF native text check)
+    2. For scanned pages:
+       a. Tesseract image_to_string → clean plain text
+       b. ONE VLM call to detect+extract tables and figures (structured JSON output)
+       c. Save figure crops as PNGs for embedding
     """
     minio_client = get_minio_client()
     page_name = os.path.basename(image_path).replace(".png", "")
@@ -814,110 +815,98 @@ def build_page_ast(image_path: str, fitz_page=None) -> dict:
                 content = _extract_digital_page(fitz_page)
                 return {"page": image_path, "content": content, "figures": []}
 
-        # ── SCANNED page: Tesseract + VLM on crops ───────────────────────────
+        # ── SCANNED page ─────────────────────────────────────────────────────
         logger.info(f"Scanned page — running Tesseract OCR for {image_path}")
         pil_img = Image.open(local_image_path)
-        img_w, img_h = pil_img.size
 
-        # Run Tesseract in TSV mode (word-level bounding boxes + confidence)
-        tsv_raw = pytesseract.image_to_data(pil_img, lang="eng", output_type=pytesseract.Output.DICT)
+        # Step 1: Get clean plain text via Tesseract (simple, fast, reliable)
+        ocr_text = pytesseract.image_to_string(pil_img, lang="eng").strip()
+        logger.info(f"{image_path}: Tesseract extracted {len(ocr_text)} chars")
 
-        # Convert TSV dict to list of row dicts for easier processing
-        n = len(tsv_raw["level"])
-        tsv_rows = []
-        for i in range(n):
-            tsv_rows.append({
-                "level":    tsv_raw["level"][i],
-                "block_num": tsv_raw["block_num"][i],
-                "par_num":  tsv_raw["par_num"][i],
-                "line_num": tsv_raw["line_num"][i],
-                "word_num": tsv_raw["word_num"][i],
-                "left":     tsv_raw["left"][i],
-                "top":      tsv_raw["top"][i],
-                "width":    tsv_raw["width"][i],
-                "height":   tsv_raw["height"][i],
-                "conf":     int(tsv_raw["conf"][i]) if tsv_raw["conf"][i] != "-1" else -1,
-                "text":     tsv_raw["text"][i] or "",
-            })
+        # Step 2: ONE structured VLM call — detect tables and figures
+        # Ask VLM to return JSON only. Short, focused prompt = reliable output.
+        struct_prompt = (
+            "Look at this document page image carefully.\n"
+            "Reply with ONLY valid JSON — no explanation, no markdown fences, no commentary.\n\n"
+            "Format:\n"
+            "{\n"
+            '  "has_table": true or false,\n'
+            '  "table_markdown": "| col | col |\\n|---|---|\\n| val | val |",\n'
+            '  "has_figure": true or false,\n'
+            '  "figure_bbox": [x, y, width, height],\n'
+            '  "figure_caption": "short description"\n'
+            "}\n\n"
+            "Rules:\n"
+            "- has_table: true only if there is a data table with rows and columns\n"
+            "- table_markdown: extract the FULL table as markdown with | separators\n"
+            "- has_figure: true only if there is a diagram, chart, graph, or photograph\n"
+            "- figure_bbox: pixel coordinates [x, y, width, height] of the figure region\n"
+            "- figure_caption: one sentence describing the figure\n"
+            "- If no table, set table_markdown to empty string\n"
+            "- If no figure, set figure_bbox to null and figure_caption to empty string"
+        )
 
-        # Detect table and figure candidate regions
-        regions = _detect_regions(tsv_rows, img_w, img_h)
-        table_regions = regions["tables"]
-        figure_regions = regions["figures"]
-        logger.info(f"{image_path}: {len(table_regions)} table candidates, {len(figure_regions)} figure candidates")
-
-        # ── Assemble structured elements (y_pos, markdown) ───────────────────
-        elements = _extract_text_markdown(tsv_rows, table_regions)
-
-        # ── Process TABLE candidates via VLM ─────────────────────────────────
-        for idx, (tx0, ty0, tx1, ty1) in enumerate(table_regions):
-            crop = pil_img.crop((tx0, ty0, tx1, ty1))
-            prompt = (
-                "This is a cropped region from a document page. "
-                "Extract the table as a markdown table using | col | syntax. "
-                "Output ONLY the markdown table rows, no explanation, no commentary."
-            )
-            table_md = _call_vlm_on_crop(crop, prompt)
-            # Strip any thinking that leaked in
-            table_md = re.sub(r'<think>.*?</think>', '', table_md, flags=re.DOTALL).strip()
-            # Only keep lines that look like markdown table rows
-            table_lines = [l for l in table_md.splitlines() if l.strip().startswith("|")]
-            if table_lines:
-                md = "\n".join(table_lines)
-                # Add separator row if missing
-                if len(table_lines) >= 2 and not re.match(r'\|[-| ]+\|', table_lines[1]):
-                    cols = table_lines[0].count("|") - 1
-                    sep = "|" + "|".join(["---"] * cols) + "|"
-                    table_lines.insert(1, sep)
-                    md = "\n".join(table_lines)
-                elements.append((ty0, md))
-                logger.info(f"Table extracted at y={ty0} with {len(table_lines)} rows")
-            else:
-                logger.warning(f"VLM returned no table rows for crop at ({tx0},{ty0})")
-
-        # ── Process FIGURE candidates via VLM ────────────────────────────────
         saved_figures = []
-        for idx, (fx0, fy0, fx1, fy1) in enumerate(figure_regions):
-            crop = pil_img.crop((fx0, fy0, fx1, fy1))
-            crop_w, crop_h = crop.size
+        table_markdown = ""
+        figure_block = ""
 
-            # Skip tiny crops
-            if crop_w < 80 or crop_h < 80:
-                continue
+        try:
+            vlm_raw = _call_vlm_on_crop(pil_img, struct_prompt)
+            # Strip any markdown code fences the model might add
+            vlm_raw = re.sub(r'```(?:json)?\s*', '', vlm_raw).strip().rstrip('`').strip()
+            # Strip any thinking leakage before the JSON
+            vlm_raw = re.sub(r'^.*?(\{)', r'\1', vlm_raw, flags=re.DOTALL)
 
-            confirm_prompt = (
-                "This is a cropped region from a document page. "
-                "Reply with YES if this contains a figure, diagram, chart, graph, or photograph. "
-                "Reply with NO if this is blank space, a page header, footer, or just text. "
-                "Then on a new line, if YES, write a short caption describing the figure."
-            )
-            vlm_answer = _call_vlm_on_crop(crop, confirm_prompt)
-            vlm_answer = re.sub(r'<think>.*?</think>', '', vlm_answer, flags=re.DOTALL).strip()
+            struct = json.loads(vlm_raw)
 
-            if not vlm_answer.upper().startswith("YES"):
-                logger.info(f"Figure crop at ({fx0},{fy0}) rejected by VLM")
-                continue
+            # Extract table if present
+            if struct.get("has_table") and struct.get("table_markdown", "").strip():
+                raw_table = struct["table_markdown"].strip()
+                # Keep only lines that look like markdown table rows
+                table_lines = [l for l in raw_table.splitlines() if l.strip().startswith("|")]
+                if len(table_lines) >= 2:
+                    # Ensure separator row exists after header
+                    if not re.match(r'\|[-| ]+\|', table_lines[1]):
+                        cols = table_lines[0].count("|") - 1
+                        sep = "|" + "|".join(["---"] * cols) + "|"
+                        table_lines.insert(1, sep)
+                    table_markdown = "\n".join(table_lines)
+                    logger.info(f"{image_path}: Table extracted ({len(table_lines)} rows)")
 
-            # Parse caption from second line if present
-            lines = vlm_answer.strip().splitlines()
-            caption = lines[1].strip() if len(lines) > 1 else "Figure"
-            caption = caption.lstrip("-•: ").strip() or "Figure"
+            # Extract figure if present
+            if struct.get("has_figure"):
+                bbox = struct.get("figure_bbox")
+                caption = struct.get("figure_caption", "Figure").strip() or "Figure"
+                img_w, img_h = pil_img.size
 
-            # Save the cropped figure PNG to MinIO
-            fig_filename = f"{page_name}_fig{idx}.png"
-            fig_local = os.path.join(tmpdir, fig_filename)
-            crop.save(fig_local, format="PNG")
-            minio_client.fput_object("kito-processed-documents", fig_filename, fig_local)
+                if bbox and len(bbox) == 4:
+                    fx, fy, fw, fh = [int(v) for v in bbox]
+                    # Clamp to image bounds
+                    fx = max(0, fx); fy = max(0, fy)
+                    fw = min(fw, img_w - fx); fh = min(fh, img_h - fy)
 
-            # Add figure reference to elements at correct y-position
-            elements.append((fy0, f"__FIGURE__{fig_filename}__CAPTION__{caption}"))
-            saved_figures.append(fig_filename)
-            logger.info(f"Figure saved: {fig_filename} — '{caption}'")
+                    if fw > 80 and fh > 80:
+                        crop = pil_img.crop((fx, fy, fx + fw, fy + fh))
+                        fig_filename = f"{page_name}_fig0.png"
+                        fig_local = os.path.join(tmpdir, fig_filename)
+                        crop.save(fig_local, format="PNG")
+                        minio_client.fput_object("kito-processed-documents", fig_filename, fig_local)
+                        figure_block = f"__FIGURE__{fig_filename}__CAPTION__{caption}"
+                        saved_figures.append(fig_filename)
+                        logger.info(f"{image_path}: Figure saved — '{caption}'")
 
-        # ── Sort all elements by y-position (preserves reading order) ─────────
-        elements.sort(key=lambda e: e[0])
-        content_parts = [md for _, md in elements]
-        content = "\n\n".join(content_parts)
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"{image_path}: VLM structured call failed ({e}) — using OCR text only")
+
+        # Step 3: Assemble final content
+        # Order: OCR text → table (if any) → figure (if any)
+        parts = [ocr_text]
+        if table_markdown:
+            parts.append(table_markdown)
+        if figure_block:
+            parts.append(figure_block)
+
+        content = "\n\n".join(p for p in parts if p.strip())
 
         logger.info(f"Page {image_path}: {len(content)} chars, {len(saved_figures)} figures")
         return {
