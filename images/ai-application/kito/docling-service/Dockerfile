@@ -6,7 +6,7 @@ WORKDIR /app
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
-# System deps: tesseract (OCR backend for Docling), python3.11, pip
+# System deps: tesseract (CLI OCR), OpenCV system libs, python3.11
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-dev \
@@ -15,26 +15,35 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     libgl1 \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
     && ln -sf /usr/bin/python3 /usr/bin/python
 
-# Install CUDA-enabled PyTorch FIRST so docling uses the GPU build
-# cu128 matches CUDA 12.8 on kubeworker02
+# Install CUDA-enabled PyTorch FIRST (cu128 matches kubeworker02 CUDA 12.8)
 RUN pip install --no-cache-dir torch torchvision \
     --index-url https://download.pytorch.org/whl/cu128
 
-# Install Docling and API server (torch already installed above, won't be replaced)
+# Install all runtime dependencies
+# - opencv-python-headless: Phase 1 (CLAHE, deskew) + Phase 3 (dewarp)
+# - pymupdf: high-DPI page rendering for preprocessing
+# - docling: layout analysis, TableFormer, OCR orchestration
 RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     python-multipart \
+    requests \
+    numpy \
+    opencv-python-headless \
+    pymupdf \
     docling \
     Pillow
 
 # Pre-download Docling ML models at build time — baked into image layer
-# Models: DocLayNet (layout ~300MB) + TableFormer (table structure ~150MB)
-# Uses Tesseract as OCR backend — no EasyOCR download needed
+# Avoids cold-start delay on pod startup
 RUN python -c "\
 from docling.document_converter import DocumentConverter, PdfFormatOption; \
 from docling.datamodel.base_models import InputFormat; \
@@ -43,6 +52,7 @@ opts = PdfPipelineOptions(); \
 opts.do_ocr = True; \
 opts.do_table_structure = True; \
 opts.generate_picture_images = True; \
+opts.images_scale = 2.0; \
 opts.ocr_options = TesseractCliOcrOptions(); \
 DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}); \
 print('Docling models pre-downloaded OK') \
