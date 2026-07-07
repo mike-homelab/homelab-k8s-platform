@@ -52,7 +52,7 @@ spec:
               cat <<EOF >/tmp/Modelfile
               FROM qwen3:14b
               PARAMETER num_ctx 81920
-              PARAMETER mmap false
+              PARAMETER use_mmap false
               EOF
 
               ollama create analyst -f /tmp/Modelfile
