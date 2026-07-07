@@ -17,7 +17,8 @@ data:
         litellm_params:
           model: "ollama_chat/analyst"
           api_base: "http://analyst.ai-platform.svc:11434"
-          num_ctx: 8192   # Analyst only routes tool calls — 8K context is ample
+          num_ctx: 81920
+          timeout: 300        # 5 min — allows cold model reload from disk into VRAM
           model_info:
             supports_function_calling: true
 
