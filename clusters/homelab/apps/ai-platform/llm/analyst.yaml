@@ -100,6 +100,9 @@ spec:
             - name: OLLAMA_KEEP_ALIVE
               value: "-1"
 
+            - name: OLLAMA_LOAD_TIMEOUT
+              value: "10m"   # llama-server needs time to allocate 81920-token KV cache
+
             - name: OLLAMA_HOST
               value: "0.0.0.0:11434"
 
