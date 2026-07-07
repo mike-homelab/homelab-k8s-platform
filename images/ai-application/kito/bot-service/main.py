@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import tempfile
 import logging
@@ -6,15 +7,17 @@ import requests
 import uuid
 import base64
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2
 import fitz  # PyMuPDF
+import pypandoc
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
 from minio import Minio
 from docx import Document
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from docx.shared import Pt, RGBColor, Inches, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot-service")
@@ -218,12 +221,184 @@ def get_completed_asts(job_id: str) -> list:
         conn.close()
 
 
+
+# ===== REFERENCE DOCUMENT FOR PANDOC =====
+
+REFERENCE_DOC_PATH = "/tmp/kito_reference.docx"
+
+
+def create_reference_doc():
+    """Generate a professional reference document for pandoc DOCX output.
+    This defines the styles that pandoc will use when converting markdown to DOCX.
+    """
+    doc = Document()
+
+    # ----- Normal style -----
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+    pf = style.paragraph_format
+    pf.space_after = Pt(6)
+    pf.line_spacing = 1.15
+
+    # ----- Heading 1 -----
+    style = doc.styles['Heading 1']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(22)
+    font.bold = True
+    font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+    pf = style.paragraph_format
+    pf.space_before = Pt(24)
+    pf.space_after = Pt(8)
+
+    # ----- Heading 2 -----
+    style = doc.styles['Heading 2']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(17)
+    font.bold = True
+    font.color.rgb = RGBColor(0x2E, 0x75, 0xB6)
+    pf = style.paragraph_format
+    pf.space_before = Pt(18)
+    pf.space_after = Pt(6)
+
+    # ----- Heading 3 -----
+    style = doc.styles['Heading 3']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(14)
+    font.bold = True
+    font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    pf = style.paragraph_format
+    pf.space_before = Pt(12)
+    pf.space_after = Pt(4)
+
+    # ----- Title -----
+    style = doc.styles['Title']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(28)
+    font.bold = True
+    font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+    # Set default page margins
+    for section in doc.sections:
+        section.top_margin = Cm(2.54)
+        section.bottom_margin = Cm(2.54)
+        section.left_margin = Cm(2.54)
+        section.right_margin = Cm(2.54)
+
+    doc.save(REFERENCE_DOC_PATH)
+    logger.info(f"Reference document created at {REFERENCE_DOC_PATH}")
+
+
+
+# ===== DATA CLEANUP (24-hour retention) =====
+
+RETENTION_HOURS = 24
+CLEANUP_INTERVAL_SECONDS = 3600  # Run every hour
+
+
+def cleanup_old_data():
+    """Delete PostgreSQL rows and MinIO objects older than RETENTION_HOURS."""
+    logger.info(f"Running cleanup: removing data older than {RETENTION_HOURS} hours...")
+
+    # 1. Cleanup PostgreSQL
+    try:
+        conn = get_db_conn()
+        with conn.cursor() as cur:
+            # Delete old page_tasks (child rows first due to FK)
+            cur.execute(
+                "DELETE FROM page_tasks WHERE created_at < NOW() - INTERVAL '%s hours'",
+                (RETENTION_HOURS,)
+            )
+            pages_deleted = cur.rowcount
+
+            # Delete old jobs
+            cur.execute(
+                "DELETE FROM jobs WHERE created_at < NOW() - INTERVAL '%s hours'",
+                (RETENTION_HOURS,)
+            )
+            jobs_deleted = cur.rowcount
+
+            # Delete old processed events
+            cur.execute(
+                "DELETE FROM processed_events WHERE processed_at < NOW() - INTERVAL '%s hours'",
+                (RETENTION_HOURS,)
+            )
+            events_deleted = cur.rowcount
+
+        conn.commit()
+        conn.close()
+        logger.info(
+            f"Cleanup DB: {events_deleted} events, {jobs_deleted} jobs, "
+            f"{pages_deleted} page_tasks deleted"
+        )
+    except Exception as e:
+        logger.error(f"Cleanup DB failed: {e}")
+
+    # 2. Cleanup MinIO buckets
+    from datetime import datetime, timezone, timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=RETENTION_HOURS)
+
+    buckets_to_clean = [
+        "kito-raw-documents",
+        "kito-processed-documents",
+        "kito-generated-artifacts"
+    ]
+
+    try:
+        minio_client = get_minio_client()
+        for bucket in buckets_to_clean:
+            if not minio_client.bucket_exists(bucket):
+                continue
+
+            objects_to_delete = []
+            for obj in minio_client.list_objects(bucket):
+                if obj.last_modified and obj.last_modified < cutoff:
+                    objects_to_delete.append(obj.object_name)
+
+            for obj_name in objects_to_delete:
+                minio_client.remove_object(bucket, obj_name)
+
+            if objects_to_delete:
+                logger.info(f"Cleanup MinIO: {len(objects_to_delete)} objects deleted from {bucket}")
+
+    except Exception as e:
+        logger.error(f"Cleanup MinIO failed: {e}")
+
+    logger.info("Cleanup completed")
+
+
+def _cleanup_scheduler():
+    """Background thread: runs cleanup_old_data every CLEANUP_INTERVAL_SECONDS."""
+    while True:
+        time.sleep(CLEANUP_INTERVAL_SECONDS)
+        try:
+            cleanup_old_data()
+        except Exception as e:
+            logger.error(f"Cleanup scheduler error: {e}")
+
+
 # ===== APP LIFECYCLE =====
 
 @asynccontextmanager
 async def lifespan(app):
-    """Initialize database on startup."""
+    """Initialize database, reference document, and cleanup scheduler on startup."""
     init_db()
+    create_reference_doc()
+
+    # Start background cleanup thread (daemon=True so it dies with the process)
+    cleanup_thread = threading.Thread(target=_cleanup_scheduler, daemon=True)
+    cleanup_thread.start()
+    logger.info(f"Cleanup scheduler started: every {CLEANUP_INTERVAL_SECONDS}s, retention {RETENTION_HOURS}h")
+
+    # Run cleanup once at startup to clear any stale data
+    threading.Thread(target=cleanup_old_data, daemon=True).start()
+
     yield
 
 app = FastAPI(title="Kito Slack Bot Service", lifespan=lifespan)
@@ -316,10 +491,15 @@ def post_message_to_slack(channel_id: str, text: str):
 
 # ===== IN-PROCESS TOOLS (formerly separate microservices) =====
 
-def split_pdf(pdf_path: str, doc_id: str) -> list:
-    """Split a PDF into per-page PNG images and upload to MinIO.
-    Returns list of MinIO object paths.
-    Formerly: pdf-splitter microservice.
+def split_pdf(pdf_path: str, doc_id: str) -> dict:
+    """Split a PDF into per-page PNG images AND extract embedded figures/images.
+    Returns: {
+        "pages": ["page_0.png", "page_1.png", ...],
+        "images": {
+            0: ["doc_id_page0_img0.png", ...],
+            3: ["doc_id_page3_img0.jpeg"]
+        }
+    }
     """
     minio_client = get_minio_client()
 
@@ -328,9 +508,12 @@ def split_pdf(pdf_path: str, doc_id: str) -> list:
         minio_client.make_bucket("kito-processed-documents")
 
     pages = []
+    extracted_images = {}
+
     with tempfile.TemporaryDirectory() as tmpdir:
         doc = fitz.open(pdf_path)
         for i, page in enumerate(doc):
+            # 1. Render full page as PNG (for VLM)
             pix = page.get_pixmap(dpi=150)
             page_filename = f"{doc_id}_page_{i}.png"
             page_path = os.path.join(tmpdir, page_filename)
@@ -338,9 +521,50 @@ def split_pdf(pdf_path: str, doc_id: str) -> list:
 
             minio_client.fput_object("kito-processed-documents", page_filename, page_path)
             pages.append(page_filename)
-            logger.info(f"Split and uploaded page {i} as {page_filename}")
 
-    return pages
+            # 2. Extract embedded images from this page
+            page_images = []
+            page_rect = page.rect
+            page_area = page_rect.width * page_rect.height
+
+            for img_index, img in enumerate(page.get_images(full=True)):
+                xref = img[0]
+                try:
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    image_ext = base_image["ext"]
+                    img_width = base_image.get("width", 0)
+                    img_height = base_image.get("height", 0)
+
+                    # Skip images that are basically the full page scan
+                    # (common in scanned PDFs where the whole page is one image)
+                    img_area = img_width * img_height
+                    if page_area > 0 and img_area > page_area * 0.85:
+                        continue
+
+                    # Skip very small images (likely artifacts/icons)
+                    if img_width < 50 or img_height < 50:
+                        continue
+
+                    img_filename = f"{doc_id}_page{i}_img{img_index}.{image_ext}"
+                    img_path = os.path.join(tmpdir, img_filename)
+
+                    with open(img_path, "wb") as f:
+                        f.write(image_bytes)
+
+                    minio_client.fput_object("kito-processed-documents", img_filename, img_path)
+                    page_images.append(img_filename)
+                    logger.info(f"Extracted image from page {i}: {img_filename} ({img_width}x{img_height})")
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract image {img_index} from page {i}: {e}")
+
+            if page_images:
+                extracted_images[i] = page_images
+
+            logger.info(f"Split page {i}: {page_filename} ({len(page_images)} images extracted)")
+
+    return {"pages": pages, "images": extracted_images}
 
 
 def build_page_ast(image_path: str) -> dict:
@@ -375,7 +599,7 @@ def build_page_ast(image_path: str) -> dict:
                     "content": [
                         {
                             "type": "text",
-                            "text": "Extract all text and structure from this document page. Output clean markdown content with clear headers, lists, and tables. Preserve the original structure as closely as possible."
+                            "text": "/no_think\nExtract all content from this document page as clean, well-structured markdown.\n\nFormatting rules:\n- Use # for main headings, ## for subheadings, ### for sub-subheadings\n- Use **bold** for emphasized or important text\n- Use *italic* for titles, terms, or light emphasis\n- Format tables using proper markdown table syntax with | column | separators | and header row separator |---|---|\n- Use - for bullet lists and 1. 2. 3. for numbered lists\n- For any figure, diagram, chart, graph, or image on the page, output: ![Figure: detailed description of what the figure shows](figure)\n- Preserve the original document structure and reading order exactly\n- Do NOT add any commentary or explanation, only extract the content"
                         },
                         {
                             "type": "image_url",
@@ -421,11 +645,52 @@ def build_page_ast(image_path: str) -> dict:
         raise Exception(f"VLM call failed after {max_retries} attempts for {image_path}")
 
 
-def generate_document(pages_ast: list, format_type: str) -> str:
-    """Generate a PDF or DOCX from AST data, upload to MinIO.
-    Returns the MinIO object name.
-    Formerly: artifact-generator microservice.
+def replace_figure_markers(content: str, page_images: list, image_dir: str) -> str:
+    """Replace VLM figure markers with actual image paths.
+    
+    VLM outputs:  ![Figure: description](figure)
+    We replace with: ![Figure: description](/tmp/actual_image.png)
+    
+    Images are matched to markers in order of appearance.
     """
+    if not page_images:
+        return content
+
+    # Find all figure markers: ![Figure: ...](figure) or ![Figure: ...](...)
+    pattern = r'!\[([^\]]*)\]\(figure\)'
+    markers = list(re.finditer(pattern, content))
+
+    if not markers:
+        # Try a broader pattern for any image-like markdown the VLM might output
+        pattern = r'!\[([^\]]*[Ff]igure[^\]]*)\]\([^\)]*\)'
+        markers = list(re.finditer(pattern, content))
+
+    # Replace markers with actual image paths (in reverse to preserve positions)
+    for i, match in enumerate(reversed(markers)):
+        if i >= len(page_images):
+            break
+        img_idx = len(markers) - 1 - i
+        if img_idx < len(page_images):
+            img_path = os.path.join(image_dir, page_images[img_idx])
+            replacement = f"![{match.group(1)}]({img_path})"
+            content = content[:match.start()] + replacement + content[match.end():]
+
+    return content
+
+
+def generate_document(pages_ast: list, format_type: str, extracted_images: dict = None) -> str:
+    """Generate a professional DOCX or PDF from page ASTs using pypandoc (pandoc).
+    
+    Handles:
+    - Full markdown rendering (bold, italic, tables, lists, code blocks)
+    - Embedded images from extracted PDF figures
+    - Professional styling via reference document template
+    
+    Returns the MinIO object name.
+    """
+    if extracted_images is None:
+        extracted_images = {}
+
     minio_client = get_minio_client()
 
     # Ensure generated bucket exists
@@ -433,69 +698,72 @@ def generate_document(pages_ast: list, format_type: str) -> str:
         minio_client.make_bucket("kito-generated-artifacts")
 
     file_id = str(uuid.uuid4())
-    filename = f"document_{file_id}.{format_type.lower()}"
+    # pypandoc always outputs DOCX for "docx" format
+    filename = f"document_{file_id}.docx"
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. Download all extracted images to local temp directory
+        images_dir = os.path.join(tmpdir, "images")
+        os.makedirs(images_dir, exist_ok=True)
+
+        all_page_images = {}
+        for page_idx, img_filenames in extracted_images.items():
+            local_images = []
+            for img_filename in img_filenames:
+                try:
+                    local_img_path = os.path.join(images_dir, img_filename)
+                    minio_client.fget_object("kito-processed-documents", img_filename, local_img_path)
+                    local_images.append(img_filename)
+                except Exception as e:
+                    logger.warning(f"Failed to download image {img_filename}: {e}")
+            all_page_images[page_idx] = local_images
+
+        # 2. Combine all page markdown with figure markers replaced
+        full_markdown_parts = []
+        for i, page_ast in enumerate(pages_ast):
+            content = page_ast.get("content", "")
+
+            # Strip any VLM thinking tags
+            content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+            content = content.strip()
+
+            # Replace figure markers with actual image paths
+            page_imgs = all_page_images.get(i, [])
+            if page_imgs:
+                content = replace_figure_markers(content, page_imgs, images_dir)
+
+            if content:
+                full_markdown_parts.append(content)
+
+        full_markdown = "\n\n---\n\n".join(full_markdown_parts)
+
+        # 3. Write combined markdown to temp file
+        md_path = os.path.join(tmpdir, "input.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(full_markdown)
+
+        # 4. Convert markdown to DOCX using pypandoc
         local_path = os.path.join(tmpdir, filename)
 
-        if format_type.lower() == "docx":
-            doc = Document()
-            doc.add_heading("Processed Document Output", 0)
+        extra_args = [
+            f"--reference-doc={REFERENCE_DOC_PATH}",
+            "--wrap=none",
+            f"--resource-path={images_dir}"
+        ]
 
-            for page_ast in pages_ast:
-                content = page_ast.get("content", "")
-                for line in content.split("\n"):
-                    if line.startswith("# "):
-                        doc.add_heading(line[2:], level=1)
-                    elif line.startswith("## "):
-                        doc.add_heading(line[3:], level=2)
-                    elif line.startswith("### "):
-                        doc.add_heading(line[4:], level=3)
-                    elif line.strip():
-                        doc.add_paragraph(line)
-                doc.add_page_break()
-
-            doc.save(local_path)
-
-        else:
-            # Default to PDF generation using ReportLab
-            doc = SimpleDocTemplate(local_path, pagesize=letter)
-            styles = getSampleStyleSheet()
-
-            normal_style = ParagraphStyle(
-                'CustomNormal',
-                parent=styles['Normal'],
-                fontSize=10,
-                leading=14,
-                spaceAfter=6
+        try:
+            pypandoc.convert_file(
+                md_path,
+                to="docx",
+                outputfile=local_path,
+                extra_args=extra_args
             )
-            h1_style = ParagraphStyle(
-                'CustomH1',
-                parent=styles['Heading1'],
-                fontSize=18,
-                leading=22,
-                spaceAfter=12,
-                keepWithNext=True
-            )
+            logger.info(f"pypandoc conversion successful: {local_path}")
+        except Exception as e:
+            logger.error(f"pypandoc conversion failed: {e}")
+            raise Exception(f"Document generation failed: {e}")
 
-            story = [Paragraph("Processed Document Output", styles['Title']), Spacer(1, 20)]
-
-            for page_ast in pages_ast:
-                content = page_ast.get("content", "")
-                for line in content.split("\n"):
-                    if line.startswith("# "):
-                        story.append(Paragraph(line[2:], h1_style))
-                    elif line.startswith("## "):
-                        story.append(Paragraph(line[3:], styles['Heading2']))
-                    elif line.startswith("### "):
-                        story.append(Paragraph(line[4:], styles['Heading3']))
-                    elif line.strip():
-                        story.append(Paragraph(line, normal_style))
-                story.append(Spacer(1, 15))
-
-            doc.build(story)
-
-        # Upload to MinIO
+        # 5. Upload to MinIO
         minio_client.fput_object("kito-generated-artifacts", filename, local_path)
         logger.info(f"Generated and uploaded artifact: {filename}")
 
@@ -648,6 +916,8 @@ def run_agent(channel_id: str, user_message: str, files_metadata: list):
         else:
             # No tool call — LLM responded directly (conversation mode)
             reply = message.get("content", "").strip()
+            # Strip any thinking tags the model may have included
+            reply = re.sub(r'<think>.*?</think>', '', reply, flags=re.DOTALL).strip()
             if reply:
                 post_message_to_slack(channel_id, reply)
 
@@ -691,44 +961,66 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             # Upload raw file to MinIO for archival
             minio_client.fput_object("kito-raw-documents", raw_filename, local_pdf_path)
 
-            # 2. Split PDF into pages (in-process)
+            # 2. Split PDF into pages and extract embedded images (in-process)
             update_job_status(job_id, "splitting")
-            logger.info(f"[Job {job_id}] Splitting PDF...")
-            page_image_paths = split_pdf(local_pdf_path, doc_id)
+            logger.info(f"[Job {job_id}] Splitting PDF and extracting images...")
+            split_result = split_pdf(local_pdf_path, doc_id)
+            page_image_paths = split_result["pages"]
+            extracted_images = split_result["images"]
 
             if not page_image_paths:
                 raise Exception("No pages extracted from PDF")
 
             total_pages = len(page_image_paths)
-            post_message_to_slack(channel_id, f"📑 Split into {total_pages} pages. Starting text extraction...")
+            total_images = sum(len(imgs) for imgs in extracted_images.values())
+            post_message_to_slack(channel_id, f"📑 Split into {total_pages} pages ({total_images} figures found). Starting text extraction...")
 
             # 3. Enqueue all pages
             enqueue_pages(job_id, page_image_paths)
 
-            # 4. Process pages one-by-one from the queue
+            # 4. Process pages in parallel (3 concurrent VLM requests)
+            VLM_WORKERS = 3
             update_job_status(job_id, "building_ast")
-            completed = 0
-            failed = 0
             pending_pages = get_pending_pages(job_id)
 
-            for page_task in pending_pages:
+            # Thread-safe counters for progress tracking
+            progress_lock = threading.Lock()
+            progress = {"completed": 0, "failed": 0}
+
+            def process_single_page(page_task):
+                """Process a single page — called by each thread."""
+                page_idx = page_task['page_index']
                 try:
-                    logger.info(f"[Job {job_id}] Processing page {page_task['page_index'] + 1}/{total_pages}...")
+                    logger.info(f"[Job {job_id}] Processing page {page_idx + 1}/{total_pages}...")
                     ast = build_page_ast(page_task["image_path"])
                     mark_page_completed(page_task["id"], json.dumps(ast))
-                    completed += 1
 
-                    # Progress update every 10 pages or at the last page
-                    if completed % 10 == 0 or completed == total_pages:
-                        post_message_to_slack(
-                            channel_id,
-                            f"⏳ Progress: {completed}/{total_pages} pages extracted ({failed} failed)"
-                        )
+                    with progress_lock:
+                        progress["completed"] += 1
+                        done = progress["completed"] + progress["failed"]
+                        # Progress update every 10 pages
+                        if done % 10 == 0 or done == total_pages:
+                            post_message_to_slack(
+                                channel_id,
+                                f"⏳ Progress: {progress['completed']}/{total_pages} pages extracted "
+                                f"({progress['failed']} failed) [🔄 {VLM_WORKERS}x parallel]"
+                            )
+                    return True
 
                 except Exception as e:
                     mark_page_failed(page_task["id"], str(e))
-                    failed += 1
-                    logger.error(f"[Job {job_id}] Page {page_task['page_index']} failed: {e}")
+                    with progress_lock:
+                        progress["failed"] += 1
+                    logger.error(f"[Job {job_id}] Page {page_idx} failed: {e}")
+                    return False
+
+            with ThreadPoolExecutor(max_workers=VLM_WORKERS) as executor:
+                futures = {executor.submit(process_single_page, pt): pt for pt in pending_pages}
+                for future in as_completed(futures):
+                    future.result()  # propagate any unexpected exceptions
+
+            completed = progress["completed"]
+            failed = progress["failed"]
 
             # 5. Collect completed ASTs
             pages_ast = get_completed_asts(job_id)
@@ -742,10 +1034,10 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                     f"⚠️ {failed}/{total_pages} pages failed. Generating document from {len(pages_ast)} successful pages..."
                 )
 
-            # 6. Generate final document (in-process)
+            # 6. Generate final document with embedded images (in-process)
             update_job_status(job_id, "generating")
-            logger.info(f"[Job {job_id}] Generating {format_type.upper()} document...")
-            object_name = generate_document(pages_ast, format_type)
+            logger.info(f"[Job {job_id}] Generating DOCX document...")
+            object_name = generate_document(pages_ast, format_type, extracted_images)
 
             # 7. Download from MinIO and upload to Slack
             update_job_status(job_id, "uploading")

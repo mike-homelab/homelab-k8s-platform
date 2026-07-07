@@ -91,7 +91,7 @@ spec:
               value: "16384"
 
             - name: OLLAMA_NUM_PARALLEL
-              value: "1"
+              value: "3"
 
             - name: OLLAMA_FLASH_ATTENTION
               value: "1"
