@@ -1147,7 +1147,7 @@ def run_agent(channel_id: str, user_message: str, files_metadata: list):
             f"{LITELLM_ENDPOINT}/chat/completions",
             json=payload,
             headers=headers,
-            timeout=120
+            timeout=300   # 5 min — allows for cold model reload from disk (~60-90s)
         )
 
         if response.status_code != 200:
