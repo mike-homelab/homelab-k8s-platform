@@ -782,9 +782,16 @@ async def slack_events(request: Request, background_tasks: BackgroundTasks):
         return {"status": "duplicate_skipped"}
 
     event = body.get("event", {})
+    event_subtype = event.get("subtype")
 
-    # Process user messages (not bot messages, not subtypes like edits/deletes)
-    if event.get("type") == "message" and not event.get("bot_id") and not event.get("subtype"):
+    # Log event details for debugging
+    logger.info(f"Event type: {event.get('type')}, subtype: {event_subtype}, bot_id: {event.get('bot_id')}, files: {len(event.get('files', []))}")
+
+    # Process user messages
+    # Allow: no subtype (plain message) and "file_share" (message with file upload)
+    # Block: bot messages, and subtypes like message_changed, message_deleted, etc.
+    ALLOWED_SUBTYPES = {None, "file_share"}
+    if event.get("type") == "message" and not event.get("bot_id") and event_subtype in ALLOWED_SUBTYPES:
         channel_id = event.get("channel")
         user_message = event.get("text", "")
         files = event.get("files", [])
