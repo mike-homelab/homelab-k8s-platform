@@ -38,12 +38,12 @@ RUN pip install --no-cache-dir \
 RUN python -c "\
 from docling.document_converter import DocumentConverter, PdfFormatOption; \
 from docling.datamodel.base_models import InputFormat; \
-from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractOcrOptions; \
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions; \
 opts = PdfPipelineOptions(); \
 opts.do_ocr = True; \
 opts.do_table_structure = True; \
 opts.generate_picture_images = True; \
-opts.ocr_options = TesseractOcrOptions(); \
+opts.ocr_options = TesseractCliOcrOptions(); \
 DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=opts)}); \
 print('Docling models pre-downloaded OK') \
 "

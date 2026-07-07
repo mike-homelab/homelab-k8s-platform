@@ -22,7 +22,7 @@ logger = logging.getLogger("docling-service")
 # ── Docling imports ─────────────────────────────────────────────────────────
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractOcrOptions
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
 
 # ── Global converter (loaded once at startup) ──────────────────────────────
 CONVERTER: DocumentConverter = None
@@ -35,7 +35,7 @@ def _build_converter() -> DocumentConverter:
     pipeline_options.do_ocr = True                      # OCR for scanned pages
     pipeline_options.do_table_structure = True          # TableFormer table extraction
     pipeline_options.generate_picture_images = True     # Extract figures as PIL images
-    pipeline_options.ocr_options = TesseractOcrOptions()  # Use system Tesseract binary
+    pipeline_options.ocr_options = TesseractCliOcrOptions()  # Calls tesseract binary (no C-API compilation needed)
 
     logger.info("Loading Docling models (DocLayNet + TableFormer)...")
     converter = DocumentConverter(
