@@ -11,9 +11,11 @@ import time
 import threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import urllib.parse
 import psycopg2
 import fitz  # PyMuPDF — used for page count and archival
 import pypandoc
+from pdf2docx import Converter as Pdf2DocxConverter
 from PIL import Image
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response, BackgroundTasks
@@ -89,6 +91,21 @@ def init_db():
                 error TEXT,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS pending_confirmations (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                download_url TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                pdf_type TEXT DEFAULT 'scanned',
+                total_pages INTEGER DEFAULT 0,
+                digital_pages INTEGER DEFAULT 0,
+                scanned_pages INTEGER DEFAULT 0,
+                format_type TEXT DEFAULT 'docx',
+                message_ts TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """)
     conn.commit()
@@ -336,11 +353,18 @@ def cleanup_old_data():
             )
             events_deleted = cur.rowcount
 
+            # Delete old pending confirmations (user never clicked a button)
+            cur.execute(
+                "DELETE FROM pending_confirmations WHERE created_at < NOW() - INTERVAL '%s hours'",
+                (RETENTION_HOURS,)
+            )
+            confirmations_deleted = cur.rowcount
+
         conn.commit()
         conn.close()
         logger.info(
             f"Cleanup DB: {events_deleted} events, {jobs_deleted} jobs, "
-            f"{pages_deleted} page_tasks deleted"
+            f"{pages_deleted} page_tasks, {confirmations_deleted} confirmations deleted"
         )
     except Exception as e:
         logger.error(f"Cleanup DB failed: {e}")
@@ -492,6 +516,349 @@ def post_message_to_slack(channel_id: str, text: str):
         "text": text
     }
     requests.post(url, headers=headers, json=payload, timeout=10)
+
+
+def post_interactive_message(channel_id: str, text: str, blocks: list) -> str:
+    """Post a Slack message with Block Kit interactive elements (buttons).
+
+    Returns the message timestamp (ts) for later updates.
+    """
+    url = "https://slack.com/api/chat.postMessage"
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "channel": channel_id,
+        "text": text,
+        "blocks": blocks
+    }
+    resp = requests.post(url, headers=headers, json=payload, timeout=10)
+    data = resp.json()
+    if data.get("ok"):
+        return data.get("ts", "")
+    logger.error(f"Interactive message failed: {data}")
+    return ""
+
+
+def update_slack_message(channel_id: str, message_ts: str, text: str, blocks: list = None):
+    """Update an existing Slack message (e.g., to remove buttons after click)."""
+    url = "https://slack.com/api/chat.update"
+    headers = {
+        "Authorization": f"Bearer {SLACK_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "channel": channel_id,
+        "ts": message_ts,
+        "text": text,
+    }
+    if blocks is not None:
+        payload["blocks"] = blocks
+    requests.post(url, headers=headers, json=payload, timeout=10)
+
+
+# ===== PDF TYPE DETECTION =====
+
+def detect_pdf_type(pdf_path: str) -> dict:
+    """Analyze PDF to determine if it's digital (has text layer) or scanned.
+
+    Strategy: Check every page using PyMuPDF text extraction.
+    A page is "digital" if it has >50 chars of extractable text.
+    The document is classified by majority vote across all pages.
+
+    Returns: {
+        "type": "digital" | "scanned",
+        "total_pages": int,
+        "digital_pages": int,
+        "scanned_pages": int,
+        "confidence": float  # ratio of majority type
+    }
+    """
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
+    digital_count = 0
+    scanned_count = 0
+
+    for page in doc:
+        text = page.get_text().strip()
+        if len(text) > 50:
+            digital_count += 1
+        else:
+            scanned_count += 1
+
+    doc.close()
+
+    if digital_count >= scanned_count:
+        pdf_type = "digital"
+        confidence = digital_count / total_pages if total_pages > 0 else 0
+    else:
+        pdf_type = "scanned"
+        confidence = scanned_count / total_pages if total_pages > 0 else 0
+
+    result = {
+        "type": pdf_type,
+        "total_pages": total_pages,
+        "digital_pages": digital_count,
+        "scanned_pages": scanned_count,
+        "confidence": round(confidence, 2)
+    }
+    logger.info(f"PDF type detection: {result}")
+    return result
+
+
+# ===== DIRECT DIGITAL PDF CONVERSION =====
+
+def convert_digital_pdf(pdf_path: str) -> str:
+    """Direct PDF→DOCX conversion for digital PDFs using pdf2docx.
+
+    Preserves original formatting: fonts, tables, images, layout.
+    Returns the MinIO object name of the generated DOCX.
+    """
+    minio_client = get_minio_client()
+
+    if not minio_client.bucket_exists("kito-generated-artifacts"):
+        minio_client.make_bucket("kito-generated-artifacts")
+
+    file_id = str(uuid.uuid4())
+    filename = f"document_{file_id}.docx"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        local_docx = os.path.join(tmpdir, filename)
+
+        logger.info(f"pdf2docx: converting {pdf_path} → {local_docx}")
+        cv = Pdf2DocxConverter(pdf_path)
+        cv.convert(local_docx)
+        cv.close()
+        logger.info(f"pdf2docx: conversion complete → {local_docx}")
+
+        minio_client.fput_object("kito-generated-artifacts", filename, local_docx)
+        logger.info(f"Uploaded digital artifact: {filename}")
+
+    return filename
+
+
+# ===== LLM MARKDOWN VALIDATION (Sliding Window) =====
+
+LLM_VALIDATION_PROMPT = """/no_think
+You are a document formatting validator. You receive markdown text extracted from
+a scanned PDF via OCR. Your job is to fix formatting issues WITHOUT changing the
+actual content meaning.
+
+You are given THREE sections:
+- PREVIOUS PAGE: context from the page before (read-only, do NOT output this)
+- CURRENT PAGE: the page you must validate and fix (output ONLY this page corrected)
+- NEXT PAGE: context from the page after (read-only, do NOT output this)
+
+Use the previous and next pages to understand context — for example, if a word
+is split at a page boundary, you can see how it continues on the next page.
+
+Fix these issues on the CURRENT PAGE:
+1. Split words: words broken across lines with hyphens (e.g., "docu-\\nment" → "document")
+2. OCR artifacts: common misreads like "rn"→"m", "l"→"1", "0"→"O" where context makes it clear
+3. Broken tables: fix misaligned columns, add missing separator rows
+4. Excessive whitespace: collapse multiple blank lines
+5. Heading hierarchy: ensure consistent markdown heading levels
+6. Garbled characters: fix encoding issues or character corruption
+
+Do NOT:
+- Change the meaning of any text
+- Add information that isn't there
+- Remove tables, figures, or structural elements
+- Rewrite or rephrase sentences
+- Output the previous or next page content
+
+Return ONLY the corrected CURRENT PAGE markdown. No explanations, no preamble."""
+
+
+def _split_markdown_by_page(markdown: str) -> list:
+    """Split Docling markdown into per-page chunks.
+
+    Docling inserts page break markers (horizontal rules or page headers).
+    If no clear page breaks are found, split by major heading boundaries
+    or by approximate word count chunks.
+    """
+    # Docling uses "---" horizontal rules as page separators
+    # Also try "## Page N" markers from VLM recovery sections
+    import re as _re
+
+    # Try splitting on horizontal rules (common Docling page separator)
+    parts = _re.split(r'\n---\n', markdown)
+    if len(parts) > 1:
+        return [p.strip() for p in parts if p.strip()]
+
+    # Fallback: split by top-level headings (# Heading)
+    parts = _re.split(r'\n(?=# )', markdown)
+    if len(parts) > 1:
+        return [p.strip() for p in parts if p.strip()]
+
+    # Last resort: split into ~3000 word chunks respecting paragraph boundaries
+    words = markdown.split()
+    if len(words) <= 3000:
+        return [markdown.strip()]
+
+    chunks = []
+    paragraphs = markdown.split('\n\n')
+    current_chunk = []
+    current_words = 0
+
+    for para in paragraphs:
+        para_words = len(para.split())
+        if current_words + para_words > 3000 and current_chunk:
+            chunks.append('\n\n'.join(current_chunk))
+            current_chunk = [para]
+            current_words = para_words
+        else:
+            current_chunk.append(para)
+            current_words += para_words
+
+    if current_chunk:
+        chunks.append('\n\n'.join(current_chunk))
+
+    return [c.strip() for c in chunks if c.strip()]
+
+
+def validate_markdown_with_llm(markdown: str) -> str:
+    """Use the analyst LLM to validate and fix OCR markdown before DOCX generation.
+
+    Processes markdown using a sliding window: for each page, the LLM receives
+    the previous page, current page, and next page as context. Only the current
+    page is validated and returned.
+
+    Returns the validated/corrected full markdown.
+    """
+    pages = _split_markdown_by_page(markdown)
+
+    if not pages:
+        logger.warning("No pages to validate — returning original markdown")
+        return markdown
+
+    logger.info(f"LLM validation: {len(pages)} page(s) to validate")
+    validated_pages = []
+
+    for i, current_page in enumerate(pages):
+        prev_page = pages[i - 1] if i > 0 else ""
+        next_page = pages[i + 1] if i < len(pages) - 1 else ""
+
+        # Build the prompt with sliding window context
+        user_content = ""
+        if prev_page:
+            user_content += f"=== PREVIOUS PAGE (read-only context) ===\n{prev_page}\n\n"
+        else:
+            user_content += "=== PREVIOUS PAGE ===\n(This is the first page — no previous page)\n\n"
+
+        user_content += f"=== CURRENT PAGE (validate and fix this) ===\n{current_page}\n\n"
+
+        if next_page:
+            user_content += f"=== NEXT PAGE (read-only context) ===\n{next_page}\n"
+        else:
+            user_content += "=== NEXT PAGE ===\n(This is the last page — no next page)\n"
+
+        # Call analyst LLM
+        headers = {
+            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "analyst",
+            "messages": [
+                {"role": "system", "content": LLM_VALIDATION_PROMPT},
+                {"role": "user", "content": user_content}
+            ],
+            "max_tokens": 8192,
+            "temperature": 0
+        }
+
+        try:
+            resp = requests.post(
+                f"{LITELLM_ENDPOINT}/chat/completions",
+                json=payload, headers=headers, timeout=300
+            )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                validated = result["choices"][0]["message"].get("content", "").strip()
+                # Strip any thinking tags that may leak
+                validated = re.sub(r'<think>.*?</think>', '', validated, flags=re.DOTALL).strip()
+
+                if validated:
+                    validated_pages.append(validated)
+                    logger.info(f"LLM validated page {i + 1}/{len(pages)}: {len(validated)} chars")
+                else:
+                    # LLM returned empty — keep original
+                    validated_pages.append(current_page)
+                    logger.warning(f"LLM returned empty for page {i + 1} — keeping original")
+            else:
+                logger.error(f"LLM validation failed for page {i + 1}: {resp.status_code}")
+                validated_pages.append(current_page)
+
+        except Exception as e:
+            logger.error(f"LLM validation error for page {i + 1}: {e}")
+            validated_pages.append(current_page)
+
+    final_markdown = "\n\n---\n\n".join(validated_pages)
+    logger.info(f"LLM validation complete: {len(final_markdown)} chars total")
+    return final_markdown
+
+
+# ===== PENDING CONFIRMATION HELPERS =====
+
+def create_pending_confirmation(conf_id: str, channel_id: str, download_url: str,
+                                 original_filename: str, pdf_info: dict,
+                                 format_type: str, message_ts: str):
+    """Store pending confirmation context in the database."""
+    conn = get_db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO pending_confirmations
+                   (id, channel_id, download_url, original_filename, pdf_type,
+                    total_pages, digital_pages, scanned_pages, format_type, message_ts)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                (conf_id, channel_id, download_url, original_filename,
+                 pdf_info["type"], pdf_info["total_pages"],
+                 pdf_info["digital_pages"], pdf_info["scanned_pages"],
+                 format_type, message_ts)
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_pending_confirmation(conf_id: str) -> dict:
+    """Retrieve a pending confirmation by ID."""
+    conn = get_db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT id, channel_id, download_url, original_filename, pdf_type,
+                          total_pages, digital_pages, scanned_pages, format_type, message_ts
+                   FROM pending_confirmations WHERE id = %s""",
+                (conf_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "id": row[0], "channel_id": row[1], "download_url": row[2],
+                    "original_filename": row[3], "pdf_type": row[4],
+                    "total_pages": row[5], "digital_pages": row[6],
+                    "scanned_pages": row[7], "format_type": row[8],
+                    "message_ts": row[9]
+                }
+            return None
+    finally:
+        conn.close()
+
+
+def delete_pending_confirmation(conf_id: str):
+    """Remove a pending confirmation after it's been acted on."""
+    conn = get_db_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM pending_confirmations WHERE id = %s", (conf_id,))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ===== IN-PROCESS TOOLS (formerly separate microservices) =====
@@ -1213,16 +1580,16 @@ def run_agent(channel_id: str, user_message: str, files_metadata: list):
         post_message_to_slack(channel_id, f"Sorry, something went wrong: {str(e)}")
 
 
-# ===== DOCUMENT PROCESSING PIPELINE (with page queue) =====
+# ===== DOCUMENT PROCESSING PIPELINE (Smart Detection) =====
 
 def process_document_pipeline(download_url: str, original_filename: str, channel_id: str, format_type: str):
-    """Full document processing pipeline using Docling.
+    """Smart document processing pipeline with digital/scanned detection.
 
     Flow:
     1. Download PDF from Slack → MinIO (archival)
-    2. Run Docling on PDF (layout analysis, OCR, table structure, figure extraction)
-    3. Convert Docling markdown → DOCX via pandoc
-    4. Upload DOCX → Slack
+    2. Detect PDF type (digital vs scanned)
+    3. Digital → direct pdf2docx conversion → upload to Slack
+    4. Scanned → notify user with interactive buttons → wait for confirmation
     """
     job_id = str(uuid.uuid4())
     create_job(job_id, channel_id, original_filename, format_type)
@@ -1233,11 +1600,8 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
         file_ext = os.path.splitext(original_filename)[1] or ".pdf"
         raw_filename = f"{doc_id}{file_ext}"
 
-        # Shared tmpdir: Docling writes figures here, pandoc reads them here
         with tempfile.TemporaryDirectory() as tmpdir:
             local_pdf_path = os.path.join(tmpdir, "raw.pdf")
-            images_dir = os.path.join(tmpdir, "images")
-            os.makedirs(images_dir, exist_ok=True)
 
             # 1. Download from Slack and archive to MinIO
             update_job_status(job_id, "downloading")
@@ -1245,21 +1609,170 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             download_slack_file(download_url, local_pdf_path)
             minio_client.fput_object("kito-raw-documents", raw_filename, local_pdf_path)
 
-            # Get page count for the status message
-            try:
-                fitz_doc = fitz.open(local_pdf_path)
-                total_pages = len(fitz_doc)
-                fitz_doc.close()
-            except Exception:
-                total_pages = "?"
+            # 2. Detect PDF type
+            update_job_status(job_id, "detecting")
+            logger.info(f"[Job {job_id}] Detecting PDF type...")
+            pdf_info = detect_pdf_type(local_pdf_path)
 
             post_message_to_slack(
                 channel_id,
-                f"📄 '{original_filename}' — {total_pages} pages detected.\n"
-                f"🔍 Running layout analysis + OCR (Docling)..."
+                f"📄 *'{original_filename}'* — {pdf_info['total_pages']} pages detected.\n"
+                f"🔎 Type: *{pdf_info['type'].upper()}* "
+                f"({pdf_info['digital_pages']} digital, {pdf_info['scanned_pages']} scanned pages)"
             )
 
-            # 2. Process with Docling GPU sidecar
+            if pdf_info["type"] == "digital":
+                # ── DIGITAL PATH: direct pdf2docx conversion ─────────────
+                update_job_status(job_id, "converting")
+                post_message_to_slack(
+                    channel_id,
+                    "✨ Digital PDF detected — using direct conversion for best formatting..."
+                )
+
+                try:
+                    object_name = convert_digital_pdf(local_pdf_path)
+                except Exception as e:
+                    # Fallback: if pdf2docx fails, try the Docling pipeline
+                    logger.warning(f"pdf2docx failed ({e}) — falling back to Docling pipeline")
+                    post_message_to_slack(
+                        channel_id,
+                        "⚠️ Direct conversion had issues — falling back to OCR pipeline..."
+                    )
+                    images_dir = os.path.join(tmpdir, "images")
+                    os.makedirs(images_dir, exist_ok=True)
+                    markdown = call_docling_service(local_pdf_path, doc_id, images_dir)
+                    markdown = validate_markdown_with_llm(markdown)
+                    object_name = generate_document(markdown, format_type, images_dir)
+
+                # Upload to Slack
+                update_job_status(job_id, "uploading")
+                local_out_path = os.path.join(tmpdir, object_name)
+                minio_client.fget_object("kito-generated-artifacts", object_name, local_out_path)
+
+                word_count = "N/A"
+                try:
+                    fitz_doc = fitz.open(local_pdf_path)
+                    word_count = sum(len(page.get_text().split()) for page in fitz_doc)
+                    fitz_doc.close()
+                except Exception:
+                    pass
+
+                comment = (
+                    f"✅ Converted '{original_filename}' → {format_type.upper()} (direct conversion)\n"
+                    f"📊 {pdf_info['total_pages']} pages · ~{word_count} words"
+                )
+                upload_file_to_slack(local_out_path, channel_id, object_name, comment)
+                update_job_status(job_id, "completed")
+                logger.info(f"[Job {job_id}] Digital pipeline completed successfully")
+
+            else:
+                # ── SCANNED PATH: ask user for confirmation ──────────────
+                update_job_status(job_id, "awaiting_confirmation")
+                conf_id = str(uuid.uuid4())
+
+                blocks = [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": (
+                                f"⚠️ *Scanned PDF Detected*\n\n"
+                                f"*File:* `{original_filename}`\n"
+                                f"*Pages:* {pdf_info['total_pages']} "
+                                f"({pdf_info['scanned_pages']} scanned, {pdf_info['digital_pages']} digital)\n\n"
+                                f"This document requires OCR (Optical Character Recognition) to extract text. "
+                                f"*Exact recreation of the original formatting is not possible* — "
+                                f"the output will be a best-effort reconstruction.\n\n"
+                                f"Would you like to proceed?"
+                            )
+                        }
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "✅ Proceed with OCR"},
+                                "style": "primary",
+                                "action_id": "ocr_proceed",
+                                "value": conf_id
+                            },
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "❌ Cancel"},
+                                "style": "danger",
+                                "action_id": "ocr_cancel",
+                                "value": conf_id
+                            }
+                        ]
+                    }
+                ]
+
+                fallback_text = (
+                    f"⚠️ Scanned PDF detected: '{original_filename}'. "
+                    f"OCR required — exact formatting recreation not possible. Proceed?"
+                )
+                message_ts = post_interactive_message(channel_id, fallback_text, blocks)
+
+                # Store the context so we can resume when user clicks a button
+                create_pending_confirmation(
+                    conf_id, channel_id, download_url, original_filename,
+                    pdf_info, format_type, message_ts
+                )
+                logger.info(f"[Job {job_id}] Awaiting user confirmation (conf_id={conf_id})")
+
+    except Exception as e:
+        logger.exception(f"[Job {job_id}] Pipeline failed")
+        update_job_status(job_id, "failed", error=str(e))
+        post_message_to_slack(channel_id, f"❌ Processing failed: {str(e)}")
+
+
+def process_scanned_pipeline(conf_id: str):
+    """Scanned document pipeline — triggered after user clicks 'Proceed'.
+
+    Flow:
+    1. Load context from pending_confirmations table
+    2. Download PDF from Slack (re-download since tmpdir is gone)
+    3. Run Docling pipeline (OCR + layout + table recovery)
+    4. LLM markdown validation (sliding window: prev + current + next page)
+    5. Generate DOCX from validated markdown via pandoc
+    6. Upload DOCX to Slack
+    """
+    conf = get_pending_confirmation(conf_id)
+    if not conf:
+        logger.error(f"Pending confirmation not found: {conf_id}")
+        return
+
+    channel_id = conf["channel_id"]
+    download_url = conf["download_url"]
+    original_filename = conf["original_filename"]
+    format_type = conf["format_type"]
+    total_pages = conf["total_pages"]
+
+    job_id = str(uuid.uuid4())
+    create_job(job_id, channel_id, original_filename, format_type)
+
+    try:
+        minio_client = get_minio_client()
+        doc_id = str(uuid.uuid4())
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            local_pdf_path = os.path.join(tmpdir, "raw.pdf")
+            images_dir = os.path.join(tmpdir, "images")
+            os.makedirs(images_dir, exist_ok=True)
+
+            # 1. Re-download from Slack
+            update_job_status(job_id, "downloading")
+            logger.info(f"[Job {job_id}] Re-downloading from Slack for OCR...")
+            download_slack_file(download_url, local_pdf_path)
+
+            post_message_to_slack(
+                channel_id,
+                f"🔍 Starting OCR pipeline for '{original_filename}' ({total_pages} pages)...\n"
+                f"⏱️ This may take a few minutes."
+            )
+
+            # 2. Run Docling GPU pipeline (OCR + layout + table recovery)
             update_job_status(job_id, "processing")
             logger.info(f"[Job {job_id}] Calling Docling service...")
             markdown = call_docling_service(local_pdf_path, doc_id, images_dir)
@@ -1270,31 +1783,42 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
             word_count = len(markdown.split())
             logger.info(f"[Job {job_id}] Docling done: {len(markdown)} chars, ~{word_count} words")
 
-            # 3. Generate DOCX
+            # 3. LLM markdown validation (sliding window)
+            update_job_status(job_id, "validating")
+            post_message_to_slack(
+                channel_id,
+                f"📝 OCR complete (~{word_count} words). Validating formatting with AI..."
+            )
+            logger.info(f"[Job {job_id}] Starting LLM markdown validation...")
+            markdown = validate_markdown_with_llm(markdown)
+            logger.info(f"[Job {job_id}] LLM validation complete: {len(markdown)} chars")
+
+            # 4. Generate DOCX from validated markdown
             update_job_status(job_id, "generating")
             logger.info(f"[Job {job_id}] Generating DOCX...")
             object_name = generate_document(markdown, format_type, images_dir)
 
-            # 4. Upload to Slack
+            # 5. Upload to Slack
             update_job_status(job_id, "uploading")
             local_out_path = os.path.join(tmpdir, object_name)
             minio_client.fget_object("kito-generated-artifacts", object_name, local_out_path)
 
             comment = (
-                f"✅ Processed '{original_filename}' → {format_type.upper()}\n"
-                f"📊 {total_pages} pages · ~{word_count} words extracted"
+                f"✅ Processed '{original_filename}' → {format_type.upper()} (OCR + AI validated)\n"
+                f"📊 {total_pages} pages · ~{word_count} words extracted\n"
+                f"🤖 Formatting validated and corrected by AI"
             )
             upload_file_to_slack(local_out_path, channel_id, object_name, comment)
 
         update_job_status(job_id, "completed")
-        logger.info(f"[Job {job_id}] Pipeline completed successfully")
+        delete_pending_confirmation(conf_id)
+        logger.info(f"[Job {job_id}] Scanned pipeline completed successfully")
 
     except Exception as e:
-        logger.exception(f"[Job {job_id}] Pipeline failed")
+        logger.exception(f"[Job {job_id}] Scanned pipeline failed")
         update_job_status(job_id, "failed", error=str(e))
-        post_message_to_slack(channel_id, f"❌ Processing failed: {str(e)}")
-
-
+        post_message_to_slack(channel_id, f"❌ OCR processing failed: {str(e)}")
+        delete_pending_confirmation(conf_id)
 
 
 # ===== SLACK EVENT HANDLER =====
@@ -1346,6 +1870,79 @@ async def slack_events(request: Request, background_tasks: BackgroundTasks):
     return {"status": "event_processed"}
 
 
+# ===== SLACK INTERACTIVITY HANDLER (Button Clicks) =====
+
+@app.post("/slack/interactivity")
+async def slack_interactivity(request: Request, background_tasks: BackgroundTasks):
+    """Handle Slack interactive component payloads (button clicks).
+
+    Slack sends interactivity payloads as form-encoded data with a 'payload' field
+    containing a JSON string. We must respond with HTTP 200 within 3 seconds.
+    """
+    form = await request.form()
+    raw_payload = form.get("payload", "")
+    if not raw_payload:
+        return Response(status_code=400, content="Missing payload")
+
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return Response(status_code=400, content="Invalid JSON payload")
+
+    logger.info(f"Interactivity payload type: {payload.get('type')}")
+
+    if payload.get("type") == "block_actions":
+        actions = payload.get("actions", [])
+        channel_id = payload.get("channel", {}).get("id", "")
+        message_ts = payload.get("message", {}).get("ts", "")
+        user_name = payload.get("user", {}).get("name", "unknown")
+
+        for action in actions:
+            action_id = action.get("action_id", "")
+            conf_id = action.get("value", "")
+
+            if action_id == "ocr_proceed":
+                logger.info(f"User {user_name} approved OCR for confirmation {conf_id}")
+
+                # Update the original message to remove buttons
+                update_slack_message(
+                    channel_id, message_ts,
+                    f"✅ OCR approved by {user_name}. Processing...",
+                    blocks=[{
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"✅ *OCR approved by {user_name}*. Processing started..."
+                        }
+                    }]
+                )
+
+                # Trigger the scanned pipeline in the background
+                background_tasks.add_task(process_scanned_pipeline, conf_id)
+
+            elif action_id == "ocr_cancel":
+                logger.info(f"User {user_name} cancelled OCR for confirmation {conf_id}")
+
+                # Update the original message to show cancellation
+                update_slack_message(
+                    channel_id, message_ts,
+                    f"❌ OCR cancelled by {user_name}.",
+                    blocks=[{
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"❌ *OCR cancelled by {user_name}*. No document was processed."
+                        }
+                    }]
+                )
+
+                # Clean up the pending confirmation
+                delete_pending_confirmation(conf_id)
+
+    return Response(status_code=200)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=3000)
+
