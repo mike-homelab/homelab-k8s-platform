@@ -806,122 +806,6 @@ def validate_markdown_with_llm(markdown: str) -> str:
     return final_markdown
 
 
-# ===== AZURE DOCUMENT INTELLIGENCE TABLE RECOVERY =====
-
-def check_table_malformed(table_md: str) -> bool:
-    lines = [l.strip() for l in table_md.strip().splitlines() if l.strip()]
-    if len(lines) < 3:
-        return True
-    header_cols = lines[0].count('|')
-    for line in lines:
-        if line.count('|') != header_cols:
-            return True
-    sep = lines[1]
-    # Check if it looks like a markdown separator row (e.g. |---|---|)
-    if not all(c in ('|', '-', ':', ' ') for c in sep):
-        return True
-    return False
-
-
-def recover_tables_with_azure_di(markdown: str, pdf_path: str) -> str:
-    """Analyze pages in markdown for tables, send pages with malformed tables to Azure DI Layout model."""
-    if not AZURE_DI_ENDPOINT or not AZURE_DI_KEY:
-        logger.info("Azure DI endpoint/key not set, skipping Azure table recovery")
-        return markdown
-
-    pages = _split_markdown_by_page(markdown)
-    if not pages:
-        return markdown
-
-    logger.info(f"Azure DI checking tables on {len(pages)} pages...")
-    recovered_pages = []
-
-    try:
-        client = DocumentIntelligenceClient(
-            endpoint=AZURE_DI_ENDPOINT,
-            credential=AzureKeyCredential(AZURE_DI_KEY)
-        )
-    except Exception as e:
-        logger.error(f"Failed to create Azure DocumentIntelligenceClient: {e}")
-        return markdown
-
-    for i, page_content in enumerate(pages):
-        # Find all table-like blocks
-        table_blocks = re.findall(r'((?:^[ \t]*\|[^\n]+\|[ \t]*\r?\n)+)', page_content, re.MULTILINE)
-        
-        needs_azure = False
-        if table_blocks:
-            for tb in table_blocks:
-                if check_table_malformed(tb):
-                    logger.info(f"Page {i+1}: Malformed table detected. Querying Azure DI...")
-                    needs_azure = True
-                    break
-        
-        if needs_azure:
-            try:
-                # Render the specific page from PDF to raw bytes (PNG)
-                doc = fitz.open(pdf_path)
-                page = doc[i]
-                pix = page.get_pixmap(dpi=300)
-                img_data = pix.tobytes("png")
-                doc.close()
-
-                # Call prebuilt-layout
-                poller = client.begin_analyze_document(
-                    model_id="prebuilt-layout",
-                    document=img_data
-                )
-                result = poller.result()
-
-                if result.tables:
-                    logger.info(f"Page {i+1}: Azure DI extracted {len(result.tables)} table(s)")
-                    azure_tables_md = []
-                    for table in result.tables:
-                        # Build grid mapping
-                        grid = {}
-                        max_row = 0
-                        max_col = 0
-                        for cell in table.cells:
-                            r_idx = cell.row_index
-                            c_idx = cell.column_index
-                            grid[(r_idx, c_idx)] = cell.content.replace("\n", " ").strip()
-                            max_row = max(max_row, r_idx)
-                            max_col = max(max_col, c_idx)
-
-                        # Construct MD Table
-                        lines = []
-                        for r in range(max_row + 1):
-                            row_cells = []
-                            for c in range(max_col + 1):
-                                row_cells.append(grid.get((r, c), ""))
-                            lines.append("| " + " | ".join(row_cells) + " |")
-                            if r == 0:
-                                lines.append("| " + " | ".join(["---"] * (max_col + 1)) + " |")
-                        
-                        azure_tables_md.append("\n".join(lines))
-
-                    # Replace the existing tables in the page markdown
-                    clean_lines = []
-                    for line in page_content.splitlines():
-                        if line.strip().startswith("|") and line.strip().endswith("|"):
-                            continue
-                        clean_lines.append(line)
-
-                    new_page_content = "\n".join(clean_lines).strip()
-                    new_page_content += "\n\n" + "\n\n".join(azure_tables_md)
-                    recovered_pages.append(new_page_content.strip())
-                else:
-                    logger.info(f"Page {i+1}: Azure DI found no tables")
-                    recovered_pages.append(page_content)
-
-            except Exception as e:
-                logger.error(f"Azure DI table recovery failed on page {i+1}: {e}")
-                recovered_pages.append(page_content)
-        else:
-            recovered_pages.append(page_content)
-
-    return "\n\n---\n\n".join(recovered_pages)
-
 
 
 # ===== PENDING CONFIRMATION HELPERS =====
@@ -1444,6 +1328,10 @@ def call_docling_service(pdf_path: str, doc_id: str, images_dir: str) -> str:
         response = requests.post(
             f"{DOCLING_SERVICE_URL}/process-pdf",
             files={"file": (os.path.basename(pdf_path), f, "application/pdf")},
+            data={
+                "azure_di_endpoint": AZURE_DI_ENDPOINT or "",
+                "azure_di_key": AZURE_DI_KEY or "",
+            },
             timeout=600
         )
 
@@ -1891,7 +1779,9 @@ def process_scanned_pipeline(conf_id: str):
 
             post_message_to_slack(
                 channel_id,
-                f"🔍 Starting OCR pipeline for '{original_filename}' ({total_pages} pages)...\n"
+                f"🔍 Starting hybrid OCR pipeline for '{original_filename}' ({total_pages} pages)...\n"
+                f"🏠 Simple pages → homelab AI\n"
+                f"☁️ Table/image pages → Azure Document Intelligence\n"
                 f"⏱️ This may take a few minutes."
             )
 
@@ -1915,17 +1805,6 @@ def process_scanned_pipeline(conf_id: str):
             logger.info(f"[Job {job_id}] Starting LLM markdown validation...")
             markdown = validate_markdown_with_llm(markdown)
             logger.info(f"[Job {job_id}] LLM validation complete: {len(markdown)} chars")
-
-            # 3.5. Azure DI Table Recovery (if configured)
-            if AZURE_DI_ENDPOINT and AZURE_DI_KEY:
-                update_job_status(job_id, "recovering_tables")
-                post_message_to_slack(
-                    channel_id,
-                    "📊 Recovering tables with Azure Document Intelligence..."
-                )
-                logger.info(f"[Job {job_id}] Starting Azure DI table recovery...")
-                markdown = recover_tables_with_azure_di(markdown, local_pdf_path)
-                logger.info(f"[Job {job_id}] Azure DI table recovery complete")
 
             # 4. Generate DOCX from validated markdown
             update_job_status(job_id, "generating")

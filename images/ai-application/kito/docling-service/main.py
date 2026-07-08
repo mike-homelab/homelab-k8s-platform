@@ -2,7 +2,7 @@
 docling-service — GPU-accelerated document intelligence API
 
 Phase 1: Image preprocessing  — CLAHE contrast + deskew before Docling
-Phase 2: VLM table recovery   — Qwen3-VL on localhost:11434 for curved/missing tables
+Phase 2: Page Content Detection & Routing (Azure DI vs Homelab)
 Phase 3: Page dewarp          — Cylindrical correction for book spine curvature
 """
 
@@ -16,11 +16,15 @@ import requests
 import numpy as np
 import cv2
 import fitz  # PyMuPDF — for high-DPI page rendering in preprocessing
+import pytesseract
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from azure.ai.documentintelligence import DocumentIntelligenceClient
+from azure.core.credentials import AzureKeyCredential
+
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import JSONResponse
 
 logging.basicConfig(level=logging.INFO)
@@ -30,10 +34,6 @@ logger = logging.getLogger("docling-service")
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractCliOcrOptions
-
-# Ollama endpoint — localhost because docling-service is a sidecar in the builder pod
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "builder")  # qwen3-vl:8b with 64K context
 
 # ── Global converter ────────────────────────────────────────────────────────
 CONVERTER: DocumentConverter = None
@@ -185,135 +185,211 @@ def preprocess_pdf(input_pdf: str, output_pdf: str, render_dpi: int = 300) -> st
 
 
 # =============================================================================
-# PHASE 2 — VLM Table Recovery (Qwen3-VL on localhost)
+# PHASE 2 — Page Content Detection & Routing (Azure DI vs Homelab)
 # =============================================================================
 
-def _encode_pil(pil_img: Image.Image) -> str:
-    buf = io.BytesIO()
-    pil_img.save(buf, format="PNG")
-    return base64.b64encode(buf.getvalue()).decode("utf-8")
+def render_page_gray(fitz_page, dpi=150) -> np.ndarray:
+    pix = fitz_page.get_pixmap(dpi=dpi)
+    img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, pix.n)
+    if pix.n == 4:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
+    if img_np.ndim == 3:
+        img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2GRAY)
+    return img_np
+
+def detect_table_by_lines(gray_img: np.ndarray) -> bool:
+    _, binary = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+    v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 40))
+    h_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
+    v_lines = cv2.morphologyEx(binary, cv2.MORPH_OPEN, v_kernel)
+    grid = cv2.bitwise_and(h_lines, v_lines)
+    contours, _ = cv2.findContours(grid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    page_area = gray_img.shape[0] * gray_img.shape[1]
+    return any(cv2.contourArea(c) > page_area * 0.005 for c in contours)
+
+def detect_table_by_text_columns(gray_img: np.ndarray) -> bool:
+    data = pytesseract.image_to_data(gray_img, output_type=pytesseract.Output.DICT)
+    words = []
+    for i in range(len(data['level'])):
+        if data['text'][i].strip():
+            words.append({"x": data['left'][i], "y": data['top'][i], "text": data['text'][i]})
+    
+    # Group words by row (y-coordinate)
+    rows = {}
+    for w in words:
+        y = w['y']
+        # Find existing row within 5px
+        found_row = next((r for r in rows if abs(r - y) <= 5), None)
+        if found_row is None:
+            rows[y] = []
+            found_row = y
+        rows[found_row].append(w['x'])
+        
+    # Sort and check for column alignment
+    sorted_rows = sorted(rows.keys())
+    consecutive_table_rows = 0
+    for i in range(len(sorted_rows) - 2):
+        row1_xs = sorted(rows[sorted_rows[i]])
+        row2_xs = sorted(rows[sorted_rows[i+1]])
+        row3_xs = sorted(rows[sorted_rows[i+2]])
+        
+        if len(row1_xs) >= 3 and len(row2_xs) >= 3 and len(row3_xs) >= 3:
+            # Check if they align within 15px
+            aligned = True
+            for j in range(3):
+                if max(abs(row1_xs[j] - row2_xs[j]), abs(row2_xs[j] - row3_xs[j])) > 15:
+                    aligned = False
+                    break
+            if aligned:
+                consecutive_table_rows += 1
+                if consecutive_table_rows >= 1: # 3 consecutive rows is 1 triplet
+                    return True
+    return False
+
+def detect_figure_region(gray_img: np.ndarray) -> bool:
+    _, binary = cv2.threshold(gray_img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    page_area = gray_img.shape[0] * gray_img.shape[1]
+    
+    for i in range(1, num_labels):
+        x, y, w, h, area = stats[i]
+        
+        # 1. Area > 2% of page
+        if area < page_area * 0.02:
+            continue
+            
+        # 2. Aspect ratio
+        aspect_ratio = w / float(h)
+        if aspect_ratio < 0.2 or aspect_ratio > 5.0:
+            continue
+            
+        # 3. Fill density
+        box_area = w * h
+        fill_ratio = area / float(box_area)
+        if fill_ratio > 0.7:
+            continue
+            
+        return True
+    return False
+
+def classify_page(fitz_page) -> str:
+    """Returns 'azure' or 'homelab'."""
+    img = render_page_gray(fitz_page, dpi=150)
+    if detect_table_by_lines(img):
+        return "azure"
+    if detect_table_by_text_columns(img):
+        return "azure"
+    if detect_figure_region(img):
+        return "azure"
+    return "homelab"
 
 
-def ask_vlm_for_table(page_img: Image.Image) -> str:
-    """Ask Qwen3-VL to extract a table from a page image.
-
-    Returns clean markdown table string, or "" if no table found.
-    Calls localhost:11434 — zero network hop (same pod).
-    """
-    payload = {
-        "model": OLLAMA_MODEL,
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/png;base64,{_encode_pil(page_img)}"}},
-                {"type": "text",
-                 "text": (
-                     "Look at this scanned document page carefully.\n"
-                     "If there is a data table — even with curved, faint, or missing borders — "
-                     "extract ALL rows and columns as a complete markdown table using | col | syntax.\n"
-                     "If there is NO table, reply with exactly: NO_TABLE\n"
-                     "Output ONLY the markdown table or NO_TABLE. No explanation."
-                 )}
-            ]
-        }],
-        "stream": False,
-        "options": {"temperature": 0, "num_ctx": 8192}
-    }
-
-    try:
-        resp = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
-        resp.raise_for_status()
-        content = resp.json()["message"]["content"].strip()
-
-        # Strip <think>...</think> chain-of-thought blocks (Qwen3-VL always emits these)
-        import re as _re
-        content = _re.sub(r'<think>.*?</think>', '', content, flags=_re.DOTALL).strip()
-
-        if "NO_TABLE" in content.upper():
-            return ""
-
-        table_lines = [l for l in content.splitlines() if l.strip().startswith("|")]
-        if len(table_lines) < 2:
-            return ""
-
-        # Ensure separator row after header
-        if not any(c == "-" for c in table_lines[1]):
-            cols = table_lines[0].count("|") - 1
-            table_lines.insert(1, "|" + "|".join(["---"] * cols) + "|")
-
-        return "\n".join(table_lines)
-
-    except Exception as e:
-        logger.warning(f"VLM table recovery request failed: {e}")
-        return ""
-
-
-def recover_missing_tables(doc, original_pdf: str) -> dict:
-    """Find pages where Docling found no table OR a malformed table, ask VLM to recover.
-
-    Two triggers for VLM:
-    1. Page has ZERO tables — Docling completely missed it (curved/faint borders)
-    2. Page has a table with < 2 columns or < 2 data rows — TableFormer gave up
-
-    Returns {page_no (1-indexed): markdown_table_string}.
-    """
-    pages_need_vlm: set = set()
-    pages_with_good_tables: set = set()
-
-    try:
-        from docling_core.types.doc import TableItem
-        for item, _ in doc.iterate_items():
-            if not isinstance(item, TableItem) or not item.prov:
-                continue
-            page_no = item.prov[0].page_no
-
-            # Inspect table quality
-            num_cols, num_rows = 0, 0
+def process_page_with_azure_di(fitz_page, azure_client) -> dict:
+    pix = fitz_page.get_pixmap(dpi=300)
+    img_data = pix.tobytes("png")
+    
+    poller = azure_client.begin_analyze_document(
+        model_id="prebuilt-layout",
+        document=img_data
+    )
+    result = poller.result()
+    
+    markdown = ""
+    figures = []
+    
+    # Simple formatting based on paragraphs and tables. We sort by y-coordinate.
+    items = []
+    if result.paragraphs:
+        for p in result.paragraphs:
+            y = p.bounding_regions[0].polygon[1] if p.bounding_regions else 0
+            items.append((y, "p", p.content))
+            
+    if result.tables:
+        for table in result.tables:
+            y = table.bounding_regions[0].polygon[1] if table.bounding_regions else 0
+            # Construct MD Table
+            grid = {}
+            max_row = 0
+            max_col = 0
+            for cell in table.cells:
+                grid[(cell.row_index, cell.column_index)] = cell.content.replace("\n", " ").strip()
+                max_row = max(max_row, cell.row_index)
+                max_col = max(max_col, cell.column_index)
+                
+            lines = []
+            for r in range(max_row + 1):
+                row_cells = [grid.get((r, c), "") for c in range(max_col + 1)]
+                lines.append("| " + " | ".join(row_cells) + " |")
+                if r == 0:
+                    lines.append("| " + " | ".join(["---"] * (max_col + 1)) + " |")
+            items.append((y, "table", "\n".join(lines)))
+            
+    if result.figures:
+        for fig in result.figures:
+            y = fig.bounding_regions[0].polygon[1] if fig.bounding_regions else 0
+            items.append((y, "figure", fig))
+            
+    items.sort(key=lambda x: x[0])
+    
+    md_parts = []
+    for _, item_type, item_data in items:
+        if item_type in ("p", "table"):
+            md_parts.append(item_data)
+        elif item_type == "figure":
+            # Extract figure image using polygon
+            poly = item_data.bounding_regions[0].polygon
+            x_coords = [p for i, p in enumerate(poly) if i % 2 == 0]
+            y_coords = [p for i, p in enumerate(poly) if i % 2 == 1]
+            x0, x1 = min(x_coords), max(x_coords)
+            y0, y1 = min(y_coords), max(y_coords)
+            
+            # Crop image
+            # convert from azure layout points (inches) to pixels. Azure returns coordinates in inches if image.
+            # actually for images, the coordinates are in pixels
+            rect = fitz.Rect(x0, y0, x1, y1)
             try:
-                if item.data:
-                    num_cols = getattr(item.data, "num_cols", 0) or 0
-                    num_rows = len(item.data.grid) if item.data.grid else 0
-            except Exception:
-                pass
+                fig_pix = fitz_page.get_pixmap(dpi=300, clip=rect)
+                figures.append(base64.b64encode(fig_pix.tobytes("png")).decode("utf-8"))
+                md_parts.append(f"<!-- image placeholder -->")
+            except Exception as e:
+                logger.warning(f"Failed to extract figure: {e}")
+                
+    markdown = "\n\n".join(md_parts)
+    return {"markdown": markdown, "figures": figures}
 
-            if num_cols < 2 or num_rows < 2:
-                # Malformed table — VLM should try to replace it
-                logger.info(
-                    f"Page {page_no}: Docling table has {num_cols} cols x {num_rows} rows "
-                    f"(malformed) — flagging for VLM"
-                )
-                pages_need_vlm.add(page_no)
-            else:
-                pages_with_good_tables.add(page_no)
 
-    except (ImportError, AttributeError) as e:
-        logger.warning(f"Cannot inspect Docling table items: {e} — skipping VLM recovery")
-        return {}
-
-    fitz_doc = fitz.open(original_pdf)
-    recovered = {}
-
-    for page_no in range(1, len(fitz_doc) + 1):
-        if page_no in pages_with_good_tables:
-            continue  # Already has a good Docling table
-
-        pix = fitz_doc[page_no - 1].get_pixmap(dpi=200)
-        img_np = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
-            pix.height, pix.width, pix.n
-        )
-        if pix.n == 4:
-            img_np = cv2.cvtColor(img_np, cv2.COLOR_RGBA2RGB)
-
-        reason = "malformed table" if page_no in pages_need_vlm else "no table"
-        logger.info(f"Page {page_no}: Docling {reason} — asking VLM...")
-        table_md = ask_vlm_for_table(Image.fromarray(img_np))
-        if table_md:
-            recovered[page_no] = table_md
-            logger.info(f"Page {page_no}: VLM recovered table ({len(table_md.splitlines())} rows)")
-
-    fitz_doc.close()
-    return recovered
+def process_page_with_homelab(fitz_page, tmpdir) -> dict:
+    doc = fitz.open()
+    doc.insert_pdf(fitz.Document(stream=fitz_page.parent.write(), filetype="pdf"), from_page=fitz_page.number, to_page=fitz_page.number)
+    page_pdf_path = os.path.join(tmpdir, f"page_{fitz_page.number}.pdf")
+    doc.save(page_pdf_path)
+    doc.close()
+    
+    result = CONVERTER.convert(page_pdf_path)
+    docling_doc = result.document
+    
+    try:
+        from docling_core.types.doc import ImageRefMode
+        markdown = docling_doc.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER)
+    except (ImportError, TypeError):
+        markdown = docling_doc.export_to_markdown()
+        
+    figures = []
+    # fallback to get_image
+    try:
+        from docling_core.types.doc import PictureItem
+        for item, _ in docling_doc.iterate_items():
+            if isinstance(item, PictureItem):
+                img = item.get_image(docling_doc)
+                if img:
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    figures.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+    except ImportError:
+        pass
+        
+    return {"markdown": markdown, "figures": figures}
 
 
 # =============================================================================
@@ -329,8 +405,18 @@ def health():
 # Core processing endpoint
 # =============================================================================
 
-def _process_pdf_sync(pdf_bytes: bytes) -> dict:
-    """Full 3-phase pipeline: preprocess -> Docling -> VLM table recovery -> export."""
+def _process_pdf_sync(pdf_bytes: bytes, azure_di_endpoint: str = "", azure_di_key: str = "") -> dict:
+    """Full pipeline: preprocess -> per-page routing -> merge markdown."""
+    azure_client = None
+    if azure_di_endpoint and azure_di_key:
+        try:
+            azure_client = DocumentIntelligenceClient(
+                endpoint=azure_di_endpoint,
+                credential=AzureKeyCredential(azure_di_key)
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize Azure DI client: {e}")
+
     with tempfile.TemporaryDirectory() as tmpdir:
         raw_pdf = os.path.join(tmpdir, "raw.pdf")
         enhanced_pdf = os.path.join(tmpdir, "enhanced.pdf")
@@ -342,106 +428,64 @@ def _process_pdf_sync(pdf_bytes: bytes) -> dict:
         logger.info("Phase 1+3: dewarping + enhancing PDF pages...")
         try:
             preprocess_pdf(raw_pdf, enhanced_pdf, render_dpi=300)
-            source_for_docling = enhanced_pdf
+            source_for_processing = enhanced_pdf
         except Exception as e:
             logger.warning(f"Preprocessing failed ({e}) — using original PDF")
-            source_for_docling = raw_pdf
+            source_for_processing = raw_pdf
 
-        # Docling conversion on preprocessed PDF
-        logger.info("Docling: converting...")
-        result = CONVERTER.convert(source_for_docling)
-        doc = result.document
+        fitz_doc = fitz.open(source_for_processing)
+        page_markdowns = []
+        all_figures = []
+        azure_pages = 0
+        homelab_pages = 0
+        
+        for page_idx, fitz_page in enumerate(fitz_doc):
+            route = classify_page(fitz_page)
+            logger.info(f"Page {page_idx+1}: classified={route}")
+            
+            if route == "azure" and azure_client:
+                try:
+                    res = process_page_with_azure_di(fitz_page, azure_client)
+                    logger.info(f"Page {page_idx+1}: Azure DI extracted {len(res.get('figures', []))} figures")
+                    page_markdowns.append(res["markdown"])
+                    all_figures.extend(res["figures"])
+                    azure_pages += 1
+                except Exception as e:
+                    logger.error(f"Azure DI failed on page {page_idx+1}: {e} - falling back to homelab")
+                    res = process_page_with_homelab(fitz_page, tmpdir)
+                    page_markdowns.append(res["markdown"])
+                    all_figures.extend(res["figures"])
+                    homelab_pages += 1
+            else:
+                res = process_page_with_homelab(fitz_page, tmpdir)
+                page_markdowns.append(res["markdown"])
+                all_figures.extend(res["figures"])
+                homelab_pages += 1
+                
+        fitz_doc.close()
 
-        # Phase 2: VLM table recovery for pages Docling missed
-        logger.info("Phase 2: VLM table recovery check...")
-        try:
-            recovered_tables = recover_missing_tables(doc, raw_pdf)
-        except Exception as e:
-            logger.warning(f"VLM table recovery error ({e})")
-            recovered_tables = {}
+        final_markdown = "\n\n---\n\n".join(page_markdowns)
 
-        # Export markdown with image placeholders
-        try:
-            from docling_core.types.doc import ImageRefMode
-            markdown = doc.export_to_markdown(image_mode=ImageRefMode.PLACEHOLDER)
-        except (ImportError, TypeError):
-            markdown = doc.export_to_markdown()
-
-        # Append VLM-recovered tables with page reference
-        if recovered_tables:
-            section = "\n\n---\n\n## Tables (VLM-recovered)\n\n"
-            for page_no in sorted(recovered_tables):
-                section += f"### Page {page_no}\n\n{recovered_tables[page_no]}\n\n"
-            markdown += section
-
-        # Extract figures at 300 DPI directly from the ORIGINAL PDF
-        # (avoids double-rasterization quality loss from preprocessed PDF)
-        figures = []
-        try:
-            from docling_core.types.doc import PictureItem
-            orig_fitz = fitz.open(raw_pdf)
-
-            for item, _level in doc.iterate_items():
-                if isinstance(item, PictureItem) and item.prov:
-                    try:
-                        prov = item.prov[0]
-                        page_no = prov.page_no - 1  # 0-indexed
-                        bbox = prov.bbox             # Docling bbox: (l, t, r, b) in pts
-
-                        fitz_page = orig_fitz[page_no]
-                        page_rect = fitz_page.rect   # full page rect in pts
-
-                        # Docling uses bottom-left origin; fitz uses top-left
-                        ph = page_rect.height
-                        crop_rect = fitz.Rect(
-                            bbox.l, ph - bbox.t,
-                            bbox.r, ph - bbox.b
-                        )
-                        # Clamp to page bounds
-                        crop_rect &= page_rect
-
-                        # Render the crop at 300 DPI (scale = 300/72)
-                        mat = fitz.Matrix(300 / 72, 300 / 72)
-                        pix = fitz_page.get_pixmap(matrix=mat, clip=crop_rect)
-                        img_bytes = pix.tobytes("png")
-                        figures.append(base64.b64encode(img_bytes).decode("utf-8"))
-                        logger.info(f"Extracted figure at 300 DPI from page {page_no + 1}")
-
-                    except Exception as e:
-                        # Fall back to Docling's built-in extraction
-                        logger.warning(f"Direct figure crop failed: {e} — using Docling fallback")
-                        try:
-                            img = item.get_image(doc)
-                            if img:
-                                buf = io.BytesIO()
-                                img.save(buf, format="PNG")
-                                figures.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
-                        except Exception:
-                            pass
-
-            orig_fitz.close()
-
-        except ImportError:
-            logger.warning("PictureItem not available — skipping figure extraction")
-
-
-        page_count = len(list(doc.pages)) if hasattr(doc, "pages") else "?"
         logger.info(
-            f"Complete — {len(markdown)} chars, {len(figures)} figures, "
-            f"{len(recovered_tables)} VLM-recovered tables, {page_count} pages"
+            f"Complete — {len(final_markdown)} chars, {len(all_figures)} figures, "
+            f"{azure_pages} azure pages, {homelab_pages} homelab pages"
         )
 
         return {
-            "markdown": markdown,
-            "figures": figures,
-            "figure_count": len(figures),
-            "page_count": page_count,
-            "vlm_tables_recovered": len(recovered_tables)
+            "markdown": final_markdown,
+            "figures": all_figures,
+            "figure_count": len(all_figures),
+            "page_count": azure_pages + homelab_pages,
+            "vlm_tables_recovered": 0
         }
 
 
 @app.post("/process-pdf")
-async def process_pdf(file: UploadFile = File(...)):
+async def process_pdf(
+    file: UploadFile = File(...),
+    azure_di_endpoint: str = Form(""),
+    azure_di_key: str = Form("")
+):
     if CONVERTER is None:
         raise HTTPException(status_code=503, detail="Models still loading — retry shortly")
     if not file.filename.lower().endswith(".pdf"):
@@ -450,7 +494,7 @@ async def process_pdf(file: UploadFile = File(...)):
     try:
         pdf_bytes = await file.read()
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(EXECUTOR, _process_pdf_sync, pdf_bytes)
+        result = await loop.run_in_executor(EXECUTOR, _process_pdf_sync, pdf_bytes, azure_di_endpoint, azure_di_key)
         return JSONResponse(content=result)
     except Exception as e:
         logger.exception("Processing failed")
