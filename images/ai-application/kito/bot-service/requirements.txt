@@ -9,4 +9,4 @@ pymupdf
 python-docx
 pypandoc_binary
 Pillow
-pdf2docx-plus
+pdf2docx
