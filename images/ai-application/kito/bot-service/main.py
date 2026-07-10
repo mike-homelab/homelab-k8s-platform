@@ -1540,6 +1540,24 @@ def run_agent(channel_id: str, user_message: str, files_metadata: list):
         # Check if LLM wants to call a tool
         tool_calls = message.get("tool_calls")
 
+        # Fallback for models (like qwen2.5-coder in Ollama) that return tool calls as JSON in the content field
+        if not tool_calls and message.get("content"):
+            content_str = message.get("content", "").strip()
+            try:
+                # Strip markdown code blocks if present
+                cleaned_content = re.sub(r'^```json\s*|```$', '', content_str, flags=re.IGNORECASE).strip()
+                parsed = json.loads(cleaned_content)
+                if isinstance(parsed, dict) and "name" in parsed and "arguments" in parsed:
+                    tool_calls = [{
+                        "function": {
+                            "name": parsed["name"],
+                            "arguments": json.dumps(parsed["arguments"]) if isinstance(parsed["arguments"], dict) else parsed["arguments"]
+                        }
+                    }]
+                    logger.info(f"Successfully parsed fallback tool call from content: {parsed['name']}")
+            except Exception:
+                pass
+
         if tool_calls:
             for tool_call in tool_calls:
                 fn_name = tool_call["function"]["name"]
