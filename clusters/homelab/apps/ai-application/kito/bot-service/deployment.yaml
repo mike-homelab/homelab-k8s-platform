@@ -30,6 +30,12 @@ spec:
           value: "3000"
         - name: DATABASE_URL
           value: "postgresql://postgres:postgres@postgres.kito.svc:5432/kito"
+        - name: LANGFUSE_HOST
+          value: "http://langfuse.ai-platform.svc:3000"
+        - name: LANGFUSE_PUBLIC_KEY
+          value: "pk-lf-c696e432-5183-47fb-81d4-cb34ce3a03cc"
+        - name: LANGFUSE_SECRET_KEY
+          value: "sk-lf-62703832-cb7d-4333-9e30-6c55a7b9dbee"
         - name: BUILDER_VL_ENDPOINT
           value: "http://builder.ai-platform.svc:11434/v1"
         - name: DOCLING_SERVICE_URL

@@ -356,7 +356,19 @@ def process_page_with_azure_di(fitz_page, azure_client) -> dict:
                 logger.warning(f"Failed to extract figure: {e}")
                 
     markdown = "\n\n".join(md_parts)
-    return {"markdown": markdown, "figures": figures}
+    
+    # Simple JSON representation for reconstruction
+    json_data = {
+        "provider": "azure",
+        "items": []
+    }
+    for y, item_type, item_data in items:
+        if item_type == "p":
+            json_data["items"].append({"type": "paragraph", "content": item_data})
+        elif item_type == "table":
+            json_data["items"].append({"type": "table", "content": item_data})
+            
+    return {"markdown": markdown, "figures": figures, "json_data": json_data}
 
 
 def process_page_with_homelab(fitz_page, tmpdir) -> dict:
@@ -389,7 +401,11 @@ def process_page_with_homelab(fitz_page, tmpdir) -> dict:
     except ImportError:
         pass
         
-    return {"markdown": markdown, "figures": figures}
+    json_data = {}
+    if hasattr(docling_doc, 'export_to_dict'):
+        json_data = docling_doc.export_to_dict()
+        
+    return {"markdown": markdown, "figures": figures, "json_data": {"provider": "docling", "doc": json_data}}
 
 
 # =============================================================================
@@ -435,6 +451,7 @@ def _process_pdf_sync(pdf_bytes: bytes, azure_di_endpoint: str = "", azure_di_ke
 
         fitz_doc = fitz.open(source_for_processing)
         page_markdowns = []
+        page_jsons = []
         all_figures = []
         azure_pages = 0
         homelab_pages = 0
@@ -448,17 +465,20 @@ def _process_pdf_sync(pdf_bytes: bytes, azure_di_endpoint: str = "", azure_di_ke
                     res = process_page_with_azure_di(fitz_page, azure_client)
                     logger.info(f"Page {page_idx+1}: Azure DI extracted {len(res.get('figures', []))} figures")
                     page_markdowns.append(res["markdown"])
+                    page_jsons.append(res.get("json_data", {}))
                     all_figures.extend(res["figures"])
                     azure_pages += 1
                 except Exception as e:
                     logger.error(f"Azure DI failed on page {page_idx+1}: {e} - falling back to homelab")
                     res = process_page_with_homelab(fitz_page, tmpdir)
                     page_markdowns.append(res["markdown"])
+                    page_jsons.append(res.get("json_data", {}))
                     all_figures.extend(res["figures"])
                     homelab_pages += 1
             else:
                 res = process_page_with_homelab(fitz_page, tmpdir)
                 page_markdowns.append(res["markdown"])
+                page_jsons.append(res.get("json_data", {}))
                 all_figures.extend(res["figures"])
                 homelab_pages += 1
                 
@@ -474,6 +494,7 @@ def _process_pdf_sync(pdf_bytes: bytes, azure_di_endpoint: str = "", azure_di_ke
         return {
             "markdown": final_markdown,
             "figures": all_figures,
+            "json_data": page_jsons,
             "figure_count": len(all_figures),
             "page_count": azure_pages + homelab_pages,
             "vlm_tables_recovered": 0

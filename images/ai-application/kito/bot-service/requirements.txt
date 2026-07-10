@@ -12,3 +12,4 @@ Pillow
 pdf2docx
 azure-ai-documentintelligence
 azure-core
+langfuse
