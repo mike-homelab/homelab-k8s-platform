@@ -167,14 +167,14 @@ spec:
 
   volumeClaimTemplates:
     - metadata:
-      name: hf-cache
-    spec:
-      storageClassName: longhorn
-      accessModes:
-        - ReadWriteOnce
-      resources:
-        requests:
-          storage: 120Gi
+        name: hf-cache
+      spec:
+        storageClassName: longhorn
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 120Gi
 ---
 apiVersion: v1
 kind: Service
