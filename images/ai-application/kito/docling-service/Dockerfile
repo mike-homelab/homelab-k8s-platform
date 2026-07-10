@@ -40,7 +40,8 @@ RUN pip install --no-cache-dir \
     opencv-python-headless \
     pymupdf \
     docling \
-    Pillow
+    Pillow \
+    pytesseract
 
 # Pre-download Docling ML models at build time — baked into image layer
 # Avoids cold-start delay on pod startup
