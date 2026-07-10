@@ -1,5 +1,5 @@
 resources:
   - otel-configmap.yaml
-  - analyst.yaml
+  - coder.yaml
   - builder.yaml
   - perception.yaml
