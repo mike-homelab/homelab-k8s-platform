@@ -20,6 +20,8 @@ spec:
           ports:
             - containerPort: 3000
           env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=1228"
             - name: DATABASE_URL
               value: "postgresql://langfuse:langfuse-password-123@langfuse-db:5432/langfuse"
             - name: NEXTAUTH_URL
