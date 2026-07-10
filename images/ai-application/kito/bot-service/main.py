@@ -25,7 +25,7 @@ from minio import Minio
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from langfuse.decorators import observe
+from langfuse import observe
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("bot-service")
