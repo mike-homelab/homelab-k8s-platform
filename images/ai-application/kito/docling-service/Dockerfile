@@ -41,7 +41,9 @@ RUN pip install --no-cache-dir \
     pymupdf \
     docling \
     Pillow \
-    pytesseract
+    pytesseract \
+    azure-ai-documentintelligence \
+    azure-core
 
 # Pre-download Docling ML models at build time — baked into image layer
 # Avoids cold-start delay on pod startup
