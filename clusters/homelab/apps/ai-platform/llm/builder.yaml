@@ -178,10 +178,10 @@ spec:
           resources:
             requests:
               cpu: "2"
-              memory: 2Gi
+              memory: 8Gi
             limits:
               cpu: "4"
-              memory: 4Gi
+              memory: 12Gi
             # GPU shared via pod — no separate nvidia.com/gpu needed
 
   volumeClaimTemplates:
