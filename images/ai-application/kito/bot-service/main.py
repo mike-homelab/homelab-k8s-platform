@@ -1439,7 +1439,7 @@ def orchestrate_deep_restructuring(conf_id: str):
         current_words = 0
         for para in paragraphs:
             para_words = len(para.split())
-            if current_words + para_words > 3000 and current_chunk:
+            if current_words + para_words > 20000 and current_chunk:
                 chunks.append('\\n\\n'.join(current_chunk))
                 current_chunk = [para]
                 current_words = para_words
@@ -1457,15 +1457,16 @@ def orchestrate_deep_restructuring(conf_id: str):
         
         for i, chunk in enumerate(chunks):
             payload = {
-                "model": "builder",
+                "model": "analyst",
                 "messages": [
                     {"role": "system", "content": REFINE_PROMPT},
                     {"role": "user", "content": f"Here is the section to process:\\n\\n{chunk}"}
                 ],
-                "temperature": 0.2
+                "temperature": 0.2,
+                "max_tokens": 32768
             }
             try:
-                resp = requests.post(f"{BUILDER_VL_ENDPOINT}/chat/completions", json=payload, headers=headers, timeout=600)
+                resp = requests.post(f"{LITELLM_ENDPOINT}/chat/completions", json=payload, headers=headers, timeout=600)
                 if resp.status_code == 200:
                     msg = resp.json()["choices"][0]["message"]
                     content = msg.get("content", "").strip()
