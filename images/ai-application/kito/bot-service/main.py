@@ -112,9 +112,16 @@ def init_db():
                 scanned_pages INTEGER DEFAULT 0,
                 format_type TEXT DEFAULT 'docx',
                 message_ts TEXT,
+                doc_id TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        
+        # Migration for existing table
+        cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='pending_confirmations' AND column_name='doc_id'")
+        if not cur.fetchone():
+            cur.execute("ALTER TABLE pending_confirmations ADD COLUMN doc_id TEXT")
+            
     conn.commit()
     conn.close()
     logger.info("Database tables initialized")
@@ -649,7 +656,7 @@ def convert_digital_pdf(pdf_path: str) -> str:
 
 def create_pending_confirmation(conf_id: str, channel_id: str, download_url: str,
                                  original_filename: str, pdf_info: dict,
-                                 format_type: str, message_ts: str):
+                                 format_type: str, message_ts: str, doc_id: str = None):
     """Store pending confirmation context in the database."""
     conn = get_db_conn()
     try:
@@ -657,12 +664,12 @@ def create_pending_confirmation(conf_id: str, channel_id: str, download_url: str
             cur.execute(
                 """INSERT INTO pending_confirmations
                    (id, channel_id, download_url, original_filename, pdf_type,
-                    total_pages, digital_pages, scanned_pages, format_type, message_ts)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    total_pages, digital_pages, scanned_pages, format_type, message_ts, doc_id)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (conf_id, channel_id, download_url, original_filename,
                  pdf_info["type"], pdf_info["total_pages"],
                  pdf_info["digital_pages"], pdf_info["scanned_pages"],
-                 format_type, message_ts)
+                 format_type, message_ts, doc_id)
             )
         conn.commit()
     finally:
@@ -676,7 +683,7 @@ def get_pending_confirmation(conf_id: str) -> dict:
         with conn.cursor() as cur:
             cur.execute(
                 """SELECT id, channel_id, download_url, original_filename, pdf_type,
-                          total_pages, digital_pages, scanned_pages, format_type, message_ts
+                          total_pages, digital_pages, scanned_pages, format_type, message_ts, doc_id
                    FROM pending_confirmations WHERE id = %s""",
                 (conf_id,)
             )
@@ -687,7 +694,7 @@ def get_pending_confirmation(conf_id: str) -> dict:
                     "original_filename": row[3], "pdf_type": row[4],
                     "total_pages": row[5], "digital_pages": row[6],
                     "scanned_pages": row[7], "format_type": row[8],
-                    "message_ts": row[9]
+                    "message_ts": row[9], "doc_id": row[10]
                 }
             return None
     finally:
@@ -1130,6 +1137,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                     images_dir = os.path.join(tmpdir, "images")
                     os.makedirs(images_dir, exist_ok=True)
                     markdown, _ = call_docling_service(local_pdf_path, doc_id, images_dir)
+                    cache_markdown_and_images(minio_client, doc_id, markdown, images_dir)
                     object_name = generate_document(markdown, format_type, images_dir)
 
                 # Upload to Slack
@@ -1150,9 +1158,48 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                     f"📊 {pdf_info['total_pages']} pages · ~{word_count} words"
                 )
                 upload_file_to_slack(local_out_path, channel_id, object_name, comment)
-                update_job_status(job_id, "completed")
-                logger.info(f"[Job {job_id}] Digital pipeline completed successfully")
+                
+                # Add interactivity for digital PDFs too
+                conf_id = str(uuid.uuid4())
+                blocks = [
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"Are you satisfied with this conversion for `{original_filename}`?"
+                        }
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "✅ Satisfied"},
+                                "style": "primary",
+                                "action_id": "ocr_satisfied",
+                                "value": conf_id
+                            },
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "🔄 Unsatisfied (Try Azure DI)"},
+                                "style": "danger",
+                                "action_id": "ocr_unsatisfied",
+                                "value": conf_id
+                            }
+                        ]
+                    }
+                ]
 
+                fallback_text = f"Are you satisfied with this conversion for '{original_filename}'?"
+                message_ts = post_interactive_message(channel_id, fallback_text, blocks)
+
+                create_pending_confirmation(
+                    conf_id, channel_id, download_url, original_filename,
+                    pdf_info, format_type, message_ts, doc_id
+                )
+                
+                update_job_status(job_id, "completed")
+                logger.info(f"[Job {job_id}] Digital pipeline completed successfully, awaiting satisfaction (conf_id={conf_id})")
             else:
                 # ── SCANNED PATH: Docling -> Editable PDF -> pdf2docx ──────────────
                 update_job_status(job_id, "processing")
@@ -1168,7 +1215,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                 # 1. Run Docling GPU pipeline to get Markdown
                 logger.info(f"[Job {job_id}] Calling Docling service for Markdown...")
                 markdown, _ = call_docling_service(local_pdf_path, doc_id, images_dir)
-                
+                cache_markdown_and_images(minio_client, doc_id, markdown, images_dir)                
                 # 2. Use pandoc to convert Markdown to DOCX directly
                 object_name = generate_document(markdown, format_type, images_dir)
                 
@@ -1216,7 +1263,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                 # Store the context so we can fall back to Azure DI if needed
                 create_pending_confirmation(
                     conf_id, channel_id, download_url, original_filename,
-                    pdf_info, format_type, message_ts
+                    pdf_info, format_type, message_ts, doc_id
                 )
                 logger.info(f"[Job {job_id}] Scanned pipeline complete, awaiting satisfaction (conf_id={conf_id})")
                 update_job_status(job_id, "completed")
@@ -1275,18 +1322,176 @@ def fallback_to_azure_di(conf_id: str):
             local_out_path = os.path.join(tmpdir, object_name)
             minio_client.fget_object("kito-generated-artifacts", object_name, local_out_path)
 
-            comment = f"✅ Fallback completed for '{original_filename}' via Azure Document Intelligence"
+            comment = f"🔄 Fallback completed for '{original_filename}' via Azure Document Intelligence"
             upload_file_to_slack(local_out_path, channel_id, object_name, comment)
 
+            # Prompt for refinement
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"Would you like to deep-refine and restructure this document with AI?"
+                    }
+                },
+                {
+                    "type": "actions",
+                    "elements": [
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "✨ Yes, refine it"},
+                            "style": "primary",
+                            "action_id": "refine_yes",
+                            "value": conf_id
+                        },
+                        {
+                            "type": "button",
+                            "text": {"type": "plain_text", "text": "❌ No, it's fine"},
+                            "action_id": "refine_no",
+                            "value": conf_id
+                        }
+                    ]
+                }
+            ]
+            post_interactive_message(channel_id, "Would you like to refine the document?", blocks)
+
         update_job_status(job_id, "completed")
-        delete_pending_confirmation(conf_id)
-        logger.info(f"[Job {job_id}] Fallback pipeline completed successfully")
+        logger.info(f"[Job {job_id}] Fallback pipeline completed successfully, awaiting refinement decision")
 
     except Exception as e:
         logger.exception(f"[Job {job_id}] Fallback pipeline failed")
         update_job_status(job_id, "failed", error=str(e))
         post_message_to_slack(channel_id, f"❌ Fallback processing failed: {str(e)}")
         delete_pending_confirmation(conf_id)
+
+
+# ===== DEEP RESTRUCTURING ORCHESTRATION =====
+
+REFINE_PROMPT = """/no_think
+Please review and analyze the content of this entire document. Organize the information logically by creating clear hierarchical headings (Heading 1, Heading 2), bulleted lists, and concise summaries where necessary. Convert any unstructured data into clean tables, ensure uniform paragraph spacing, and remove any weird OCR artifacts or line breaks from the original scanned PDF. Do not output anything other than the refined markdown."""
+
+def cache_markdown_and_images(minio_client, doc_id, markdown, images_dir):
+    """Upload markdown and images to MinIO for later refinement."""
+    if not minio_client.bucket_exists("kito-processed-documents"):
+        minio_client.make_bucket("kito-processed-documents")
+        
+    with tempfile.TemporaryDirectory() as tmpdir:
+        md_path = os.path.join(tmpdir, "raw.md")
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(markdown)
+        minio_client.fput_object("kito-processed-documents", f"{doc_id}/raw.md", md_path)
+    
+    if os.path.exists(images_dir):
+        for img in os.listdir(images_dir):
+            if img.endswith(".png"):
+                img_path = os.path.join(images_dir, img)
+                minio_client.fput_object("kito-processed-documents", f"{doc_id}/{img}", img_path)
+
+@observe()
+def orchestrate_deep_restructuring(conf_id: str):
+    """Chunk the cached markdown and rewrite using the builder LLM."""
+    conf = get_pending_confirmation(conf_id)
+    if not conf:
+        logger.error(f"Pending confirmation not found: {conf_id}")
+        return
+        
+    doc_id = conf["doc_id"]
+    channel_id = conf["channel_id"]
+    original_filename = conf["original_filename"]
+    format_type = conf["format_type"]
+    
+    minio_client = get_minio_client()
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        md_local_path = os.path.join(tmpdir, "raw.md")
+        images_dir = os.path.join(tmpdir, "images")
+        os.makedirs(images_dir, exist_ok=True)
+        
+        try:
+            minio_client.fget_object("kito-processed-documents", f"{doc_id}/raw.md", md_local_path)
+            # Try to get images if they exist
+            objects = minio_client.list_objects("kito-processed-documents", prefix=f"{doc_id}/")
+            for obj in objects:
+                if obj.object_name.endswith(".png"):
+                    img_name = os.path.basename(obj.object_name)
+                    img_local_path = os.path.join(images_dir, img_name)
+                    minio_client.fget_object("kito-processed-documents", obj.object_name, img_local_path)
+        except Exception as e:
+            logger.warning(f"Cached markdown not found for {doc_id}. Running docling on raw PDF for refinement...")
+            raw_pdf_path = os.path.join(tmpdir, "raw.pdf")
+            try:
+                minio_client.fget_object("kito-raw-documents", f"{doc_id}.pdf", raw_pdf_path)
+                post_message_to_slack(channel_id, "⏳ Running initial extraction before refinement...")
+                markdown, _ = call_docling_service(raw_pdf_path, doc_id, images_dir)
+                with open(md_local_path, "w", encoding="utf-8") as f:
+                    f.write(markdown)
+            except Exception as inner_e:
+                logger.error(f"Could not retrieve raw PDF for {doc_id}: {inner_e}")
+                post_message_to_slack(channel_id, "❌ Sorry, I couldn't find the cached document for refinement.")
+                return
+                
+        with open(md_local_path, "r", encoding="utf-8") as f:
+            raw_markdown = f.read()
+
+        paragraphs = raw_markdown.split('\\n\\n')
+        chunks = []
+        current_chunk = []
+        current_words = 0
+        for para in paragraphs:
+            para_words = len(para.split())
+            if current_words + para_words > 3000 and current_chunk:
+                chunks.append('\\n\\n'.join(current_chunk))
+                current_chunk = [para]
+                current_words = para_words
+            else:
+                current_chunk.append(para)
+                current_words += para_words
+        if current_chunk:
+            chunks.append('\\n\\n'.join(current_chunk))
+            
+        refined_chunks = []
+        headers = {
+            "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        for i, chunk in enumerate(chunks):
+            payload = {
+                "model": "builder",
+                "messages": [
+                    {"role": "system", "content": REFINE_PROMPT},
+                    {"role": "user", "content": f"Here is the section to process:\\n\\n{chunk}"}
+                ],
+                "temperature": 0.2
+            }
+            try:
+                resp = requests.post(f"{BUILDER_VL_ENDPOINT}/chat/completions", json=payload, headers=headers, timeout=600)
+                if resp.status_code == 200:
+                    msg = resp.json()["choices"][0]["message"]
+                    content = msg.get("content", "").strip()
+                    content = re.sub(r'^```(?:markdown)?\\s*|```$', '', content, flags=re.IGNORECASE).strip()
+                    refined_chunks.append(content)
+                else:
+                    logger.error(f"Refinement chunk {i} failed: {resp.status_code}")
+                    refined_chunks.append(chunk)
+            except Exception as e:
+                logger.error(f"Refinement chunk {i} error: {e}")
+                refined_chunks.append(chunk)
+                
+        final_markdown = "\\n\\n".join(refined_chunks)
+        
+        try:
+            object_name = generate_document(final_markdown, format_type, images_dir)
+            local_out_path = os.path.join(tmpdir, object_name)
+            minio_client.fget_object("kito-generated-artifacts", object_name, local_out_path)
+            
+            comment = f"✨ Here is the deeply refined and restructured version of '{original_filename}'"
+            upload_file_to_slack(local_out_path, channel_id, object_name, comment)
+        except Exception as e:
+            logger.exception("Failed to generate refined document")
+            post_message_to_slack(channel_id, f"❌ Failed to generate refined document: {e}")
+            
+    delete_pending_confirmation(conf_id)
 
 
 # ===== SLACK EVENT HANDLER =====
@@ -1372,19 +1577,40 @@ async def slack_interactivity(request: Request, background_tasks: BackgroundTask
             if action_id == "ocr_satisfied":
                 logger.info(f"User {user_name} satisfied with OCR for confirmation {conf_id}")
 
-                # Update the original message to remove buttons
-                update_slack_message(
-                    channel_id, message_ts,
-                    f"✅ Process marked as Satisfied by {user_name}.",
-                    blocks=[{
+                # Update the original message to remove buttons and prompt for refinement
+                blocks = [
+                    {
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"✅ *Conversion satisfied by {user_name}*."
+                            "text": f"✅ *Conversion satisfied by {user_name}*.\nWould you like to deep-refine and restructure this document with AI?"
                         }
-                    }]
+                    },
+                    {
+                        "type": "actions",
+                        "elements": [
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "✨ Yes, refine it"},
+                                "style": "primary",
+                                "action_id": "refine_yes",
+                                "value": conf_id
+                            },
+                            {
+                                "type": "button",
+                                "text": {"type": "plain_text", "text": "❌ No, it's fine"},
+                                "action_id": "refine_no",
+                                "value": conf_id
+                            }
+                        ]
+                    }
+                ]
+                
+                update_slack_message(
+                    channel_id, message_ts,
+                    f"Process marked as Satisfied by {user_name}. Would you like to refine the document?",
+                    blocks=blocks
                 )
-                delete_pending_confirmation(conf_id)
 
             elif action_id == "ocr_unsatisfied":
                 logger.info(f"User {user_name} unsatisfied with OCR for confirmation {conf_id}")
@@ -1392,18 +1618,48 @@ async def slack_interactivity(request: Request, background_tasks: BackgroundTask
                 # Update the original message to show fallback
                 update_slack_message(
                     channel_id, message_ts,
-                    f"⚠️ marked Unsatisfied by {user_name}. Trying Azure DI fallback...",
+                    f"🔄 marked Unsatisfied by {user_name}. Trying Azure DI fallback...",
                     blocks=[{
                         "type": "section",
                         "text": {
                             "type": "mrkdwn",
-                            "text": f"⚠️ *Unsatisfied by {user_name}*. Triggering Azure fallback..."
+                            "text": f"🔄 *Unsatisfied by {user_name}*. Triggering Azure fallback..."
                         }
                     }]
                 )
 
                 # Trigger the fallback pipeline in the background
                 background_tasks.add_task(fallback_to_azure_di, conf_id)
+                
+            elif action_id == "refine_yes":
+                logger.info(f"User {user_name} requested refinement for {conf_id}")
+                update_slack_message(
+                    channel_id, message_ts,
+                    f"✨ Deep restructuring initiated by {user_name}...",
+                    blocks=[{
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"✨ *Refinement started by {user_name}*. This will take a few minutes..."
+                        }
+                    }]
+                )
+                background_tasks.add_task(orchestrate_deep_restructuring, conf_id)
+                
+            elif action_id == "refine_no":
+                logger.info(f"User {user_name} declined refinement for {conf_id}")
+                update_slack_message(
+                    channel_id, message_ts,
+                    f"✅ Process complete.",
+                    blocks=[{
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"✅ *Conversion complete*."
+                        }
+                    }]
+                )
+                delete_pending_confirmation(conf_id)
 
     return Response(status_code=200)
 
