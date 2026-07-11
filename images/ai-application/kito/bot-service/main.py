@@ -1367,8 +1367,67 @@ def fallback_to_azure_di(conf_id: str):
 
 # ===== DEEP RESTRUCTURING ORCHESTRATION =====
 
+BLUEPRINT_PROMPT = """/no_think
+You are analyzing a raw Markdown document extracted from a scanned PDF.
+Your task is to produce a concise document blueprint in Markdown format.
+
+Output ONLY the following fields — nothing else:
+
+## Tone
+(one line: e.g., "formal technical", "academic", "business report")
+
+## Key Acronyms
+(bullet list of any defined or implied acronyms and their meanings)
+
+## Document Structure
+(numbered list of all top-level headings found in the document)
+
+## Key Entities
+(bullet list of recurring proper nouns, product names, or technical terms)
+"""
+
 REFINE_PROMPT = """/no_think
-Please review and analyze the content of this entire document. Organize the information logically by creating clear hierarchical headings (Heading 1, Heading 2), bulleted lists, and concise summaries where necessary. Convert any unstructured data into clean tables, ensure uniform paragraph spacing, and remove any weird OCR artifacts or line breaks from the original scanned PDF. Do not output anything other than the refined markdown."""
+You are performing a deep structural refinement of one section of a Markdown document.
+
+You will be given:
+1. A DOCUMENT BLUEPRINT defining the global tone, acronyms, structure, and key entities.
+2. A TARGET SECTION which is the only section you must rewrite.
+
+Rules:
+- Output ONLY the rewritten TARGET SECTION in clean, valid Markdown.
+- Do not output any other sections, commentary, or the blueprint itself.
+- Fix all OCR artifacts (broken words, stray characters, bad line breaks).
+- Convert unstructured data to Markdown tables where appropriate.
+- Match the tone and terminology defined in the DOCUMENT BLUEPRINT exactly.
+- Preserve the original heading of the TARGET SECTION.
+"""
+
+def split_by_headings(markdown: str, max_words: int = 20000) -> list[str]:
+    """Split markdown by H1/H2 headings. Falls back to paragraph split if a
+    section exceeds max_words."""
+    raw_sections = re.split(r'(?=\n#{1,2}\s)', markdown)
+    chunks = []
+    for sec in raw_sections:
+        sec = sec.strip()
+        if not sec:
+            continue
+        if len(sec.split()) > max_words:
+            # Fallback: split oversized section by paragraphs
+            paras = sec.split('\n\n')
+            buf, buf_words = [], 0
+            for p in paras:
+                w = len(p.split())
+                if buf_words + w > max_words and buf:
+                    chunks.append('\n\n'.join(buf))
+                    buf, buf_words = [p], w
+                else:
+                    buf.append(p)
+                    buf_words += w
+            if buf:
+                chunks.append('\n\n'.join(buf))
+        else:
+            chunks.append(sec)
+    return chunks
 
 def cache_markdown_and_images(minio_client, doc_id, markdown, images_dir):
     """Upload markdown and images to MinIO for later refinement."""
@@ -1433,34 +1492,46 @@ def orchestrate_deep_restructuring(conf_id: str):
         with open(md_local_path, "r", encoding="utf-8") as f:
             raw_markdown = f.read()
 
-        paragraphs = raw_markdown.split('\\n\\n')
-        chunks = []
-        current_chunk = []
-        current_words = 0
-        for para in paragraphs:
-            para_words = len(para.split())
-            if current_words + para_words > 20000 and current_chunk:
-                chunks.append('\\n\\n'.join(current_chunk))
-                current_chunk = [para]
-                current_words = para_words
-            else:
-                current_chunk.append(para)
-                current_words += para_words
-        if current_chunk:
-            chunks.append('\\n\\n'.join(current_chunk))
-            
-        refined_chunks = []
+        chunks = split_by_headings(raw_markdown)
+        
         headers = {
             "Authorization": f"Bearer {LITELLM_MASTER_KEY}",
             "Content-Type": "application/json"
         }
         
-        for i, chunk in enumerate(chunks):
+        # Pass 1: Blueprint
+        post_message_to_slack(channel_id, "🧠 Generating document blueprint for global coherence...")
+        blueprint_payload = {
+            "model": "analyst",
+            "messages": [
+                {"role": "system", "content": BLUEPRINT_PROMPT},
+                {"role": "user", "content": raw_markdown}
+            ],
+            "temperature": 0.1,
+            "max_tokens": 2048
+        }
+        
+        try:
+            resp = requests.post(f"{LITELLM_ENDPOINT}/chat/completions", json=blueprint_payload, headers=headers, timeout=600)
+            if resp.status_code == 200:
+                blueprint = resp.json()["choices"][0]["message"]["content"].strip()
+                logger.info(f"Generated blueprint: {blueprint}")
+            else:
+                logger.error(f"Blueprint generation failed: {resp.status_code}")
+                blueprint = "No blueprint available."
+        except Exception as e:
+            logger.error(f"Blueprint error: {e}")
+            blueprint = "No blueprint available."
+
+        post_message_to_slack(channel_id, f"✍️ Restructuring document section by section ({len(chunks)} sections)...")
+
+        def refine_chunk(chunk_index, chunk_text):
+            user_content = f"## DOCUMENT BLUEPRINT\n{blueprint}\n\n## TARGET SECTION\n{chunk_text}"
             payload = {
                 "model": "analyst",
                 "messages": [
                     {"role": "system", "content": REFINE_PROMPT},
-                    {"role": "user", "content": f"Here is the section to process:\\n\\n{chunk}"}
+                    {"role": "user", "content": user_content}
                 ],
                 "temperature": 0.2,
                 "max_tokens": 32768
@@ -1470,16 +1541,23 @@ def orchestrate_deep_restructuring(conf_id: str):
                 if resp.status_code == 200:
                     msg = resp.json()["choices"][0]["message"]
                     content = msg.get("content", "").strip()
-                    content = re.sub(r'^```(?:markdown)?\\s*|```$', '', content, flags=re.IGNORECASE).strip()
-                    refined_chunks.append(content)
+                    return re.sub(r'^```(?:markdown)?\s*|```$', '', content, flags=re.IGNORECASE).strip()
                 else:
-                    logger.error(f"Refinement chunk {i} failed: {resp.status_code}")
-                    refined_chunks.append(chunk)
+                    logger.error(f"Refinement chunk {chunk_index} failed: {resp.status_code}")
+                    return chunk_text
             except Exception as e:
-                logger.error(f"Refinement chunk {i} error: {e}")
-                refined_chunks.append(chunk)
+                logger.error(f"Refinement chunk {chunk_index} error: {e}")
+                return chunk_text
+
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {executor.submit(refine_chunk, i, chunk): i for i, chunk in enumerate(chunks)}
+            results = {}
+            for future in as_completed(futures):
+                i = futures[future]
+                results[i] = future.result()
                 
-        final_markdown = "\\n\\n".join(refined_chunks)
+        refined_chunks = [results[i] for i in sorted(results)]
+        final_markdown = "\n\n".join(refined_chunks)
         
         try:
             object_name = generate_document(final_markdown, format_type, images_dir)
