@@ -1722,7 +1722,7 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                     )
                     images_dir = os.path.join(tmpdir, "images")
                     os.makedirs(images_dir, exist_ok=True)
-                    markdown = call_docling_service(local_pdf_path, doc_id, images_dir)
+                    markdown, _ = call_docling_service(local_pdf_path, doc_id, images_dir)
                     markdown = validate_markdown_with_llm(markdown)
                     object_name = generate_document(markdown, format_type, images_dir)
 
@@ -1759,16 +1759,15 @@ def process_document_pipeline(download_url: str, original_filename: str, channel
                 images_dir = os.path.join(tmpdir, "images")
                 os.makedirs(images_dir, exist_ok=True)
                 
-                # 1. Run Docling GPU pipeline to get JSON
-                logger.info(f"[Job {job_id}] Calling Docling service for JSON...")
-                markdown, json_data = call_docling_service(local_pdf_path, doc_id, images_dir)
+                # 1. Run Docling GPU pipeline to get Markdown
+                logger.info(f"[Job {job_id}] Calling Docling service for Markdown...")
+                markdown, _ = call_docling_service(local_pdf_path, doc_id, images_dir)
                 
-                # 2. Reconstitute editable PDF
-                editable_pdf = os.path.join(tmpdir, "editable.pdf")
-                reconstitute_pdf_from_json(json_data, editable_pdf)
+                # 2. Validate markdown with LLM to fix OCR artifacts
+                markdown = validate_markdown_with_llm(markdown)
                 
-                # 3. Use pdf2docx
-                object_name = convert_digital_pdf(editable_pdf)
+                # 3. Use pandoc to convert Markdown to DOCX directly
+                object_name = generate_document(markdown, format_type, images_dir)
                 
                 # 4. Upload to Slack with approval buttons
                 update_job_status(job_id, "uploading")
