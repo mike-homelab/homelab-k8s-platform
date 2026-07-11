@@ -1386,7 +1386,7 @@ def reconstitute_pdf_from_json(json_data: list, output_pdf_path: str):
     doc = fitz.open()
     for page_data in json_data:
         # Default A4 page
-        page = doc.new_page(width=fitz.PaperSize("A4")[0], height=fitz.PaperSize("A4")[1])
+        page = doc.new_page(width=fitz.paper_size("A4")[0], height=fitz.paper_size("A4")[1])
         y_cursor = 50
         
         provider = page_data.get("provider", "unknown")
@@ -1407,7 +1407,7 @@ def reconstitute_pdf_from_json(json_data: list, output_pdf_path: str):
                     y_cursor += 50
                     
                 if y_cursor > page.rect.height - 50:
-                    page = doc.new_page(width=fitz.PaperSize("A4")[0], height=fitz.PaperSize("A4")[1])
+                    page = doc.new_page(width=fitz.paper_size("A4")[0], height=fitz.paper_size("A4")[1])
                     y_cursor = 50
         
         elif provider == "docling":
@@ -1420,7 +1420,7 @@ def reconstitute_pdf_from_json(json_data: list, output_pdf_path: str):
                     rc = page.insert_textbox(rect, content, fontsize=11, fontname="helv")
                     y_cursor += 20
                     if y_cursor > page.rect.height - 50:
-                        page = doc.new_page(width=fitz.PaperSize("A4")[0], height=fitz.PaperSize("A4")[1])
+                        page = doc.new_page(width=fitz.paper_size("A4")[0], height=fitz.paper_size("A4")[1])
                         y_cursor = 50
         
         else:
