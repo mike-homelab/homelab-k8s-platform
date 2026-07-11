@@ -13,18 +13,11 @@ data:
           num_ctx: 32768
           model_info:
             supports_function_calling: true
-      - model_name: "coder"
-        litellm_params:
-          model: "ollama_chat/coder"
-          api_base: "http://coder.ai-platform.svc:11434"
-          num_ctx: 32768
-          model_info:
-            supports_function_calling: true
       - model_name: "analyst"
         litellm_params:
-          model: "ollama_chat/coder"
-          api_base: "http://coder.ai-platform.svc:11434"
-          num_ctx: 32768
+          model: "ollama_chat/analyst"
+          api_base: "http://analyst.ai-platform.svc:11434"
+          num_ctx: 262144
           timeout: 300        # 5 min — allows cold model reload from disk into VRAM
           model_info:
             supports_function_calling: true
@@ -32,4 +25,5 @@ data:
     litellm_settings:
       drop_params: true
       set_verbose: true
+      cors: true
       callbacks: ["prometheus", "langfuse"]

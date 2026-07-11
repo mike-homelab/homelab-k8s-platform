@@ -2,19 +2,19 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: coder
+  name: analyst
   namespace: ai-platform
 spec:
-  serviceName: coder
+  serviceName: analyst
   replicas: 1
   selector:
     matchLabels:
-      app: coder
+      app: analyst
 
   template:
     metadata:
       labels:
-        app: coder
+        app: analyst
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/metrics/"
@@ -45,17 +45,17 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling qwen2.5-coder:14b..."
+              echo "Pulling qwen3.5:9b..."
 
-              ollama pull qwen2.5-coder:14b
+              ollama pull qwen3.5:9b
 
               cat <<EOF >/tmp/Modelfile
-              FROM qwen2.5-coder:14b
-              PARAMETER num_ctx 32768
+              FROM qwen3.5:9b
+              PARAMETER num_ctx 262144
               PARAMETER use_mmap false
               EOF
 
-              ollama create coder -f /tmp/Modelfile
+              ollama create analyst -f /tmp/Modelfile
 
               kill $SERVER_PID
 
@@ -91,8 +91,8 @@ spec:
 
               # Pre-load the model so first user request is instant.
               # OLLAMA_KEEP_ALIVE=-1 keeps it in VRAM permanently after this.
-              echo "Pre-loading coder model into VRAM..."
-              ollama run coder "ready" >/dev/null 2>&1 || echo "Pre-load attempt finished (may need retry)"
+              echo "Pre-loading analyst model into VRAM..."
+              ollama run analyst "ready" >/dev/null 2>&1 || echo "Pre-load attempt finished (may need retry)"
               echo "Model pre-load complete"
 
               # Keep container alive — wait for ollama process
@@ -106,7 +106,7 @@ spec:
               value: /models
 
             - name: OLLAMA_NUM_CTX
-              value: "32768"
+              value: "262144"
 
             - name: OLLAMA_NUM_PARALLEL
               value: "1"
@@ -179,7 +179,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: coder
+  name: analyst
   namespace: ai-platform
 
   annotations:
@@ -191,7 +191,7 @@ spec:
   type: ClusterIP
 
   selector:
-    app: coder
+    app: analyst
 
   ports:
     - name: http
