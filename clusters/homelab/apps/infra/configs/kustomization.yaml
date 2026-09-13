@@ -1,3 +1,4 @@
 resources:
   - https-route.yaml
   - node-sysctl-fix.yaml
+  - azure-keyvault-store.yaml

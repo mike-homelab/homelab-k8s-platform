@@ -1,0 +1,19 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: azure-keyvault
+spec:
+  provider:
+    azurekv:
+      authType: ServicePrincipal
+      vaultUrl: "https://kv-mhomelab-eastus.vault.azure.net"
+      tenantId: "0af59592-b763-44a8-8f51-e9aabe8704a4"
+      authSecretRef:
+        clientId:
+          name: azure-kv-creds
+          namespace: external-secrets
+          key: ClientID
+        clientSecret:
+          name: azure-kv-creds
+          namespace: external-secrets
+          key: ClientSecret

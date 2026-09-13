@@ -22,6 +22,12 @@ variable "daily_quota_gb" {
   default     = 0.4
 }
 
+variable "key_vault_name" {
+  type        = string
+  description = "Name of the Azure Key Vault"
+  default     = "kv-mhomelab-eastus"
+}
+
 variable "tags" {
   type        = map(string)
   description = "Resource tags applied to all provisioned resources"

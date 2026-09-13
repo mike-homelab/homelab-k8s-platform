@@ -13,3 +13,18 @@ output "workspace_primary_key" {
   value       = azurerm_log_analytics_workspace.law.primary_shared_key
   sensitive   = true
 }
+
+output "key_vault_id" {
+  description = "The Resource ID of the Key Vault"
+  value       = azurerm_key_vault.kv.id
+}
+
+output "key_vault_uri" {
+  description = "The URI of the Key Vault for External Secrets Operator"
+  value       = azurerm_key_vault.kv.vault_uri
+}
+
+output "key_vault_name" {
+  description = "The name of the Key Vault"
+  value       = azurerm_key_vault.kv.name
+}
