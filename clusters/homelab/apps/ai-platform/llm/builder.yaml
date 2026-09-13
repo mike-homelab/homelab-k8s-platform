@@ -47,13 +47,13 @@ spec:
                 sleep 2
               done
 
-              echo "Pulling qwen3.5:9b..."
+              echo "Pulling qwen2.5-coder:7b..."
 
-              ollama pull qwen3.5:9b
+              ollama pull qwen2.5-coder:7b
 
               cat <<EOF >/tmp/Modelfile
-              FROM qwen3.5:9b
-              PARAMETER num_ctx 32768
+              FROM qwen2.5-coder:7b
+              PARAMETER num_ctx 65536
               EOF
 
               ollama create builder -f /tmp/Modelfile
@@ -88,7 +88,7 @@ spec:
               value: /models
 
             - name: OLLAMA_NUM_CTX
-              value: "32768"
+              value: "65536"
 
             - name: OLLAMA_NUM_PARALLEL
               value: "2"
@@ -144,46 +144,6 @@ spec:
             - name: hf-cache
               mountPath: /models
 
-        # ── Docling sidecar — shares RTX 5060 Ti GPU with Ollama ───────────
-        # No nvidia.com/gpu request needed: all containers in a pod share
-        # the GPU device allocated by the pod (Ollama's nvidia.com/gpu: 1).
-        - name: docling-service
-          image: harbor.michaelhomelab.work/kito/docling-service:latest
-          imagePullPolicy: Always
-
-          env:
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0"    # Same RTX 5060 Ti as Ollama
-
-          ports:
-            - name: docling
-              containerPort: 8100
-
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8100
-            initialDelaySeconds: 90   # Docling loads DocLayNet + TableFormer on startup
-            periodSeconds: 15
-            failureThreshold: 6
-
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8100
-            initialDelaySeconds: 120
-            periodSeconds: 20
-            failureThreshold: 5
-
-          resources:
-            requests:
-              cpu: "2"
-              memory: 8Gi
-            limits:
-              cpu: "4"
-              memory: 12Gi
-            # GPU shared via pod — no separate nvidia.com/gpu needed
-
   volumeClaimTemplates:
     - metadata:
         name: hf-cache
@@ -219,6 +179,3 @@ spec:
     - name: http
       port: 11434
       targetPort: http
-    - name: docling
-      port: 8100
-      targetPort: docling
