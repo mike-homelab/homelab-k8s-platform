@@ -1,4 +1,2 @@
 resources:
   - namespace.yaml
-  - ai-inference-dashboard-configmap.yaml
-  - dcgm-exporter-servicemonitor.yaml
